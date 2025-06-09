@@ -11,10 +11,10 @@ exports.createProduct = async (req, res) => {
       dimensions,
       quantity,
       pricePerPiece,
-      totalPiecesPerBox
+      totalPiecesPerBox,
+      discountPercentage // 🎯 New field for discount
     } = req.body;
 
-    // 🧪 Log incoming body for debug
     console.log('📦 Incoming product data:', req.body);
 
     // Validate required fields
@@ -28,6 +28,7 @@ exports.createProduct = async (req, res) => {
     const parsedPrice = Number(pricePerPiece);
     const parsedTotal = Number(totalPiecesPerBox);
     const parsedQty = Number(quantity) || 0;
+    const parsedDiscount = Number(discountPercentage) || 0;
 
     if (isNaN(parsedPrice) || isNaN(parsedTotal)) {
       return res.status(400).json({
@@ -35,6 +36,18 @@ exports.createProduct = async (req, res) => {
         message: '❌ pricePerPiece and totalPiecesPerBox must be valid numbers'
       });
     }
+
+    if (parsedDiscount < 0 || parsedDiscount > 100) {
+      return res.status(400).json({
+        success: false,
+        message: '❌ discountPercentage must be between 0 and 100'
+      });
+    }
+
+    const mrpPerBox = parsedPrice * parsedTotal;
+    const discountedPricePerBox = parsedDiscount > 0
+      ? mrpPerBox - (mrpPerBox * parsedDiscount / 100)
+      : mrpPerBox;
 
     const images = req.files?.images || [];
 
@@ -51,7 +64,9 @@ exports.createProduct = async (req, res) => {
       quantity: parsedQty,
       pricePerPiece: parsedPrice,
       totalPiecesPerBox: parsedTotal,
-      mrpPerBox: parsedPrice * parsedTotal,
+      mrpPerBox,
+      discountPercentage: parsedDiscount,
+      finalPricePerBox: discountedPricePerBox,
       images: uploadedImages
     });
 
@@ -71,6 +86,7 @@ exports.createProduct = async (req, res) => {
     });
   }
 };
+
 
 exports.getAllProducts = async (req, res) => {
   try {
