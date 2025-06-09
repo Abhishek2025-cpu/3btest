@@ -1,0 +1,4 @@
+# .gitignore file at the root
+gcs-key.json
+node_modules/
+.env
