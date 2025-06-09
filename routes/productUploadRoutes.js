@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const productController = require('../controllers/productUploadController');
+const productController = require('../controllar/productUploadController');//updated
 const { uploadProduct } = require('../middleware/upload');
 
 router.post('/add', uploadProduct.fields([
