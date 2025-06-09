@@ -14,9 +14,9 @@ exports.createProduct = async (req, res) => {
       totalPiecesPerBox
     } = req.body;
 
-    if (!categoryId || !name || !pricePerPiece || !totalPiecesPerBox) {
-      return res.status(400).json({ success: false, message: '❌ Required fields missing' });
-    }
+    // if (!categoryId || !name || !pricePerPiece || !totalPiecesPerBox) {
+    //   return res.status(400).json({ success: false, message: '❌ Required fields missing' });
+    // }
 
     const images = req.files?.images || [];
     const uploadedImages = await Promise.all(
