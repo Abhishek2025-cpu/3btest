@@ -24,16 +24,12 @@ exports.uploadBufferToGCS = (buffer, filename, folder = 'uploads') => {
     stream.on('error', err => reject(err));
 
     stream.on('finish', () => {
-      file.makePublic()
-        .then(() => {
-          resolve(`https://storage.googleapis.com/${bucket.name}/${gcsFileName}`);
-        })
-        .catch((err) => {
-          console.error('Error making file public:', err);
-          reject(err);
-        });
+      // Skip makePublic() because UBLA is enabled
+      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`;
+      resolve(publicUrl);
     });
 
     stream.end(buffer);
   });
 };
+
