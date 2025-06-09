@@ -21,6 +21,9 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 // Connect to MongoDB
 connectDB();
 
+// Routes
+const productUploadRoutes = require('./routes/productUploadRoutes');
+app.use('/api/products', productUploadRoutes);
 
 
 
@@ -31,5 +34,5 @@ connectDB();
 app.get('/', (req, res) => res.send('API is running...'));
 
 // Start server
-const PORT = process.env.PORT || 2025;
+const PORT = process.env.PORT || 2000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
