@@ -3,7 +3,8 @@ const path = require('path');
 const uuid = require('uuid').v4;
 
 const storage = new Storage({
-  keyFilename: path.join(__dirname, '../config/gcloud-key.json'),
+ keyFilename: path.resolve('gcs-key.json'),
+
   projectId: 'b-profiles-461910'
 });
 
