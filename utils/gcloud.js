@@ -24,9 +24,14 @@ exports.uploadBufferToGCS = (buffer, filename, folder = 'uploads') => {
     stream.on('error', err => reject(err));
 
     stream.on('finish', () => {
-      file.makePublic().then(() => {
-        resolve(`https://storage.googleapis.com/${bucket.name}/${gcsFileName}`);
-      });
+      file.makePublic()
+        .then(() => {
+          resolve(`https://storage.googleapis.com/${bucket.name}/${gcsFileName}`);
+        })
+        .catch((err) => {
+          console.error('Error making file public:', err);
+          reject(err);
+        });
     });
 
     stream.end(buffer);
