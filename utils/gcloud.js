@@ -8,7 +8,7 @@ const storage = new Storage({
   projectId: 'b-profiles-461910'
 });
 
-const bucket = storage.bucket('product-images-2025');
+const bucket = storage.bucket('3bprofiles-products');
 
 exports.uploadBufferToGCS = (buffer, filename, folder = 'uploads') => {
   return new Promise((resolve, reject) => {
