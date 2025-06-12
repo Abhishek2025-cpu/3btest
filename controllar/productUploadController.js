@@ -50,16 +50,16 @@ exports.createProduct = async (req, res) => {
     });
 
     // Build colorImageMap as Map
-    const colorImageMap = new Map();
-    colorImageFiles.forEach((file) => {
-      const match = filenameToImageMap[file.originalname];
-      if (match) {
-        colorImageMap.set(file.originalname, {
-          id: match.id,
-          url: match.url
-        });
-      }
+   const colorImageMap = new Map();
+colorImageFiles.forEach((file) => {
+  const matched = filenameToImageMap[file.originalname];
+  if (matched) {
+    colorImageMap.set(file.originalname, {
+      id: matched.id,
+      url: matched.url
     });
+  }
+});
 
     const mrpPerBox = parsedPrice * parsedTotal;
     const discountedPricePerBox =
@@ -78,10 +78,9 @@ const product = new Product({
   mrpPerBox,
   discountPercentage: parsedDiscount,
   finalPricePerBox: discountedPricePerBox,
-  images: uploadedImages.map(({ id, url }) => ({ id, url })),
-  colorImageMap: Object.fromEntries(colorImageMap) // ✅ FIX: convert Map to plain object
+  images: uploadedImages,
+  colorImageMap: Object.fromEntries(colorImageMap) // ✅ This is important
 });
-
 
     await product.save();
 

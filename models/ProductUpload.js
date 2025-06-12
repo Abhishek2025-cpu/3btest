@@ -1,20 +1,24 @@
 const mongoose = require('mongoose');
 
-const productSchema = new mongoose.Schema({
-  categoryId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    ref: 'Category'
+const imageSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true },
+    url: { type: String, required: true }
   },
+  { _id: false } // Prevents Mongoose from adding _id inside map value
+);
+
+const productSchema = new mongoose.Schema({
+  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   name: { type: String, required: true },
   about: { type: String },
   dimensions: [String],
   quantity: { type: Number, default: 0 },
   pricePerPiece: { type: Number, required: true },
   totalPiecesPerBox: { type: Number, required: true },
-  mrpPerBox: { type: Number },
+  mrpPerBox: { type: Number, required: true },
   discountPercentage: { type: Number, default: 0 },
-  finalPricePerBox: { type: Number },
+  finalPricePerBox: { type: Number, required: true },
   images: [
     {
       id: { type: String, required: true },
@@ -23,11 +27,7 @@ const productSchema = new mongoose.Schema({
   ],
   colorImageMap: {
     type: Map,
-    of: {
-      id: String,
-      url: String
-    },
-    default: () => new Map()
+    of: imageSchema // 👈 key change
   }
 }, { timestamps: true });
 
