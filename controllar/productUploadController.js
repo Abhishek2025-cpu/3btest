@@ -101,69 +101,24 @@ const product = new Product({
 
 
 
-exports.getOrders = async (req, res) => {
+exports.getAllProducts = async (req, res) => {
   try {
-    const orders = await Order.find()
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name email number')
-      .populate('products.productId');
-
-    const formattedOrders = orders.map(order => {
-      const populatedOrder = order.toObject();
-
-      // Add totalAmount calculation
-      populatedOrder.totalAmount = order.products.reduce(
-        (sum, item) => sum + (item.priceAtPurchase * item.quantity),
-        0
-      );
-
-      // Add product details and ensure image
-      populatedOrder.user = populatedOrder.userId;
-      delete populatedOrder.userId;
-
-      populatedOrder.products = populatedOrder.products.map(item => {
-        const product = item.productId || {};
-        const colorImageMap = product.colorImageMap || {};
-        const images = product.images || [];
-
-        // Try to fetch color-specific image
-        let image = colorImageMap[item.color];
-
-        // If not found, fallback to first product image
-        if (!image && images.length > 0) {
-          image = images[0];
-        }
-
-        return {
-          productId: product._id,
-          productName: product.name,
-          quantity: item.quantity,
-          color: item.color,
-          priceAtPurchase: item.priceAtPurchase,
-          image: image || {}, // ensure it’s not undefined
-          orderId: item.orderId,
-          currentStatus: item.currentStatus
-        };
-      });
-
-      return populatedOrder;
-    });
+    const products = await Product.find().sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
-      count: formattedOrders.length,
-      orders: formattedOrders
+      message: '✅ Products fetched successfully',
+      products
     });
-  } catch (error) {
-    console.error('Error fetching orders:', error);
+  } catch (err) {
+    console.error('❌ Error fetching products:', err);
     res.status(500).json({
       success: false,
-      message: 'Server error fetching orders.',
-      error: error.message
+      message: '❌ Failed to fetch products',
+      error: err.message
     });
   }
 };
-
 
 
 
