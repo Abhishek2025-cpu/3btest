@@ -14,7 +14,7 @@ router.get('/all-category', categoryController.getCategories);
 router.get('/category/:id', categoryController.getCategoryById);
 
 // Update a category (with optional new images and removal of some images)
-router.put('/update/:id', upload.array('images'), categoryController.updateCategory);
+router.put('/update/:id', uploadProduct.array('images'), categoryController.updateCategory);
 
 // Delete category by ID
 router.delete('/delete/:id', categoryController.deleteCategory);
