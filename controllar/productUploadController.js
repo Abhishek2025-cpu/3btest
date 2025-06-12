@@ -103,7 +103,7 @@ const product = new Product({
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 }).lean();
+    const products = await ProductUpload.find().sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
