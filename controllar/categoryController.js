@@ -1,7 +1,7 @@
 const Category = require('../models/Category');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
-const uploadBufferToGCS = require('../utils/uploadBufferToGCS'); // ✅ Your GCS utility
+const uploadBufferToGCS = require('../utils/gcloud'); // ✅ Your GCS utility
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
