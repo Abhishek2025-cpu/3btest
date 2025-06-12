@@ -180,23 +180,40 @@ exports.getOrdersByUserId = async (req, res) => {
       .populate('userId', 'name email number')
       .populate('products.productId', 'name price dimensions discount');
 
-    if (!orders.length) {
-      return res.status(404).json({ success: false, message: 'No orders found for this user.' });
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No orders found for this user.',
+      });
     }
 
-    const formattedOrders = orders.map(order => ({
-      ...order.toObject(),
-      totalAmount: order.products.reduce((sum, item) => sum + (item.priceAtPurchase * item.quantity), 0)
-    }));
+    const formattedOrders = orders.map(order => {
+      const orderObj = order.toObject();
 
-    res.status(200).json({
+      const totalAmount = order.products.reduce((sum, item) => {
+        return sum + (item.priceAtPurchase * item.quantity);
+      }, 0);
+
+      // Optional: Sanitize or format data here as needed
+
+      return {
+        ...orderObj,
+        totalAmount,
+      };
+    });
+
+    return res.status(200).json({
       success: true,
       count: formattedOrders.length,
-      orders: formattedOrders
+      orders: formattedOrders,
     });
   } catch (error) {
     console.error('Error fetching user orders:', error);
-    res.status(500).json({ success: false, message: 'Server error fetching user orders.', error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Server error fetching user orders.',
+      error: error.message,
+    });
   }
 };
 
