@@ -4,8 +4,10 @@ const productController = require('../controllar/productUploadController');//upd
 const { uploadProduct } = require('../middleware/upload');
 
 router.post('/add', uploadProduct.fields([
-  { name: 'images', maxCount: 10 }
+  { name: 'images', maxCount: 10 },
+  { name: 'colorImages', maxCount: 5 }
 ]), productController.createProduct);
+
 
 router.get('/all', productController.getAllProducts);
 
