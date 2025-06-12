@@ -1,35 +1,40 @@
-const Category = require('../models/Category');
-const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
-const crypto = require('crypto');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
-async function generateCategoryId() {
-  const lastCat = await Category.findOne().sort({ createdAt: -1 });
-  if (!lastCat) return 'CAT001';
+const crypto = require('crypto');
 
-  const lastNum = parseInt(lastCat.categoryId.replace('CAT', '')) + 1;
-  return `CAT${String(lastNum).padStart(3, '0')}`;
-}
-
-exports.createCategory = async (req, res) => {
+exports.createProduct = async (req, res) => {
   try {
-    console.log("➡️ Received request:", req.body);
-    console.log("➡️ Files received:", req.files);
+    const {
+      categoryId,
+      name,
+      about,
+      dimensions,
+      quantity,
+      pricePerPiece,
+      totalPiecesPerBox,
+      discountPercentage
+    } = req.body;
 
-    const { name, position } = req.body;
+    const parsedPrice = Number(pricePerPiece);
+    const parsedTotal = Number(totalPiecesPerBox);
+    const parsedQty = Number(quantity) || 0;
+    const parsedDiscount = Number(discountPercentage) || 0;
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'At least one image is required' });
+    if (!categoryId || !name || isNaN(parsedPrice) || isNaN(parsedTotal)) {
+      return res.status(400).json({
+        success: false,
+        message: '❌ Required fields missing or invalid'
+      });
     }
 
-    const categoryId = await generateCategoryId();
-    console.log("🆔 Generated Category ID:", categoryId);
+    const allImageFiles = req.files?.images || [];
+    const colorImageFiles = req.files?.colorImages || [];
 
-    // Upload images to Google Cloud Storage
+    // Upload all images
     const uploadedImages = await Promise.all(
-      req.files.map(async (file) => {
-        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'category-images');
+      allImageFiles.map(async (file) => {
+        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'product-images');
         return {
           id: crypto.randomUUID(),
           url,
@@ -38,23 +43,59 @@ exports.createCategory = async (req, res) => {
       })
     );
 
-    const category = new Category({
-      categoryId,
-      name,
-      images: uploadedImages,
-      position: position !== undefined ? Number(position) : null,
+    // Build filename -> {id, url} map
+    const filenameToImageMap = {};
+    uploadedImages.forEach(({ id, url, originalname }) => {
+      filenameToImageMap[originalname] = { id, url };
     });
 
-    await category.save();
+    // Build colorImageMap as Map
+const colorImageMap = new Map();
+colorImageFiles.forEach((file) => {
+  const matched = filenameToImageMap[file.originalname];
+  if (matched) {
+    colorImageMap.set(file.originalname, {
+      id: matched.id,
+      url: matched.url
+    });
+  }
+});
+
+    const mrpPerBox = parsedPrice * parsedTotal;
+    const discountedPricePerBox =
+      parsedDiscount > 0
+        ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
+        : mrpPerBox;
+
+const product = new Product({
+  categoryId,
+  name,
+  about,
+  dimensions: dimensions ? dimensions.split(',') : [],
+  quantity: parsedQty,
+  pricePerPiece: parsedPrice,
+  totalPiecesPerBox: parsedTotal,
+  mrpPerBox,
+  discountPercentage: parsedDiscount,
+  finalPricePerBox: discountedPricePerBox,
+  images: uploadedImages,
+    colorImageMap: Object.fromEntries(colorImageMap)
+});
+
+    await product.save();
 
     res.status(201).json({
-      message: '✅ Category created successfully',
-      category
+      success: true,
+      message: '✅ Product created successfully',
+      product
     });
-
-  } catch (error) {
-    console.error("❌ Error creating category:", error);
-    res.status(500).json({ message: '❌ Category creation failed', error: error.message });
+  } catch (err) {
+    console.error('❌ Error creating product:', err);
+    res.status(500).json({
+      success: false,
+      message: '❌ Internal server error',
+      error: err.message
+    });
   }
 };
 

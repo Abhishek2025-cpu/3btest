@@ -1,7 +1,7 @@
 const Category = require('../models/Category');
 const mongoose = require('mongoose');
-const Product = require('../models/Product');
-const cloudinary = require('../utils/cloudinary');
+const Product = require('../models/ProductUpload');
+const uploadBufferToGCS = require('../utils/uploadBufferToGCS'); // ✅ Your GCS utility
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
@@ -10,8 +10,6 @@ async function generateCategoryId() {
   const lastNum = parseInt(lastCat.categoryId.replace('CAT', '')) + 1;
   return `CAT${String(lastNum).padStart(3, '0')}`;
 }
-
-
 
 exports.createCategory = async (req, res) => {
   try {
@@ -27,33 +25,18 @@ exports.createCategory = async (req, res) => {
     const categoryId = await generateCategoryId();
     console.log("🆔 Generated Category ID:", categoryId);
 
-    const uploadImageToCloudinary = (fileBuffer) => {
-      return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'categories', resource_type: 'image' },
-          (err, result) => {
-            if (err) {
-              console.error("❌ Cloudinary Upload Error:", err);
-              return reject(new Error("Cloudinary error: " + err.message));
-            }
-            resolve({
-              url: result.secure_url,
-              public_id: result.public_id,
-            });
-          }
-        );
-        stream.end(fileBuffer);
-      });
-    };
-
     let uploadedImages = [];
     try {
       uploadedImages = await Promise.all(
-        req.files.map(file => uploadImageToCloudinary(file.buffer))
+        req.files.map(async (file) => {
+          const { url, id } = await uploadBufferToGCS(file.buffer, `categories/${file.originalname}`);
+          return { url, public_id: id };
+        })
       );
     } catch (uploadError) {
+      console.error('❌ GCS Upload Error:', uploadError);
       return res.status(500).json({
-        message: '❌ Cloudinary upload failed',
+        message: '❌ GCS upload failed',
         error: uploadError.message
       });
     }
