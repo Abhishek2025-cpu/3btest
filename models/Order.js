@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const productOrderSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+productId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductUpload', required: true },
+
   productName: { type: String, required: true }, // 🆕 Added product name
   quantity: { type: Number, required: true },
   color: { type: String, default: 'Not specified' },
