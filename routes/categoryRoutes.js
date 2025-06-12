@@ -1,31 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() }); // Use memory storage for GCS uploads
+const categoryController = require('../controllar/categoryController');
+const upload = require('../middlewares/multer'); // multer config for handling file uploads
 
-const {
-  createCategory,
-  getAllCategories,
-  getCategoryById,
-  updateCategory,
-  deleteCategory,
-  toggleCategoryStatus,
-} = require('../controllar/categoryController');
+// Create category with images
+router.post('/add-category', upload.array('images'), categoryController.createCategory);
 
-// Create
-router.post('/add-category', upload.array('images', 5), createCategory);
+// Get all categories with product counts
+router.get('/all-category', categoryController.getCategories);
 
-// Read
-router.get('/get-category', getAllCategories);
-router.get('/get-category/:id', getCategoryById);
+// Get category by ID (ObjectId)
+router.get('/category/:id', categoryController.getCategoryById);
 
-// Update
-router.put('/update/:id', upload.array('images', 5), updateCategory);
+// Update a category (with optional new images and removal of some images)
+router.put('/update/:id', upload.array('images'), categoryController.updateCategory);
 
-// Delete
-router.delete('/delete/:id', deleteCategory);
+// Delete category by ID
+router.delete('/delete/:id', categoryController.deleteCategory);
 
-// Toggle status
-router.patch('/toggle/:id/status', toggleCategoryStatus);
+// Toggle inStock status using categoryId (e.g., CAT001)
+router.patch('/toggle-stock/:id', categoryController.toggleCategoryStock);
 
 module.exports = router;
