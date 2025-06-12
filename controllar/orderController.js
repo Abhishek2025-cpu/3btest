@@ -98,7 +98,7 @@ exports.placeOrder = async (req, res) => {
 };
 
 
-
+//get products
 
 
 exports.getOrders = async (req, res) => {
