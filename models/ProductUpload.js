@@ -25,12 +25,11 @@ const productSchema = new mongoose.Schema({
       url: { type: String, required: true }
     }
   ],
-  
-colorImageMap: {
-  type: mongoose.Schema.Types.Mixed,
-  default: {}
-}
-
+  colorImageMap: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Product', productSchema);
+// 👇 This sets the collection name explicitly to `productuploads`
+module.exports = mongoose.model('ProductUpload', productSchema, 'productuploads');
