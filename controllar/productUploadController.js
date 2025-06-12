@@ -1,57 +1,77 @@
 const Product = require('../models/ProductUpload');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
+const crypto = require('crypto');
+
 exports.createProduct = async (req, res) => {
   try {
     const {
       categoryId,
       name,
       about,
-      colors,
       dimensions,
       quantity,
       pricePerPiece,
       totalPiecesPerBox,
-      discountPercentage,
-      colorImageMap // 🔗 New field in body, format: { "red": "red-img.jpg", "blue": "blue-img.jpg" }
+      discountPercentage
     } = req.body;
-
-    // Validation...
 
     const parsedPrice = Number(pricePerPiece);
     const parsedTotal = Number(totalPiecesPerBox);
     const parsedQty = Number(quantity) || 0;
     const parsedDiscount = Number(discountPercentage) || 0;
-    const mrpPerBox = parsedPrice * parsedTotal;
-    const discountedPricePerBox = parsedDiscount > 0
-      ? mrpPerBox - (mrpPerBox * parsedDiscount / 100)
-      : mrpPerBox;
 
-    const images = req.files?.images || [];
-
-    const uploadedImages = await Promise.all(
-      images.map(file =>
-        uploadBufferToGCS(file.buffer, file.originalname, 'product-images')
-      )
-    );
-
-    // 🔗 Construct color-image mapping
-    let colorToImageMap = {};
-    if (colorImageMap) {
-      const map = JSON.parse(colorImageMap); // Expecting JSON string in body
-      Object.entries(map).forEach(([color, fileName]) => {
-        const matchedUrl = uploadedImages.find(url => url.includes(fileName));
-        if (matchedUrl) {
-          colorToImageMap[color] = matchedUrl;
-        }
+    if (!categoryId || !name || isNaN(parsedPrice) || isNaN(parsedTotal)) {
+      return res.status(400).json({
+        success: false,
+        message: '❌ Required fields missing or invalid'
       });
     }
 
+    // Get uploaded files
+    const allImageFiles = req.files?.images || [];
+    const colorImageFiles = req.files?.colorImages || [];
+
+    // Upload all images with unique IDs
+    const uploadedImages = await Promise.all(
+      allImageFiles.map(async (file) => {
+        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'product-images');
+        return {
+          id: crypto.randomUUID(),
+          url
+        };
+      })
+    );
+
+    // Map for quick lookup by original filename
+    const filenameToImageMap = {};
+    allImageFiles.forEach((file, index) => {
+      filenameToImageMap[file.originalname] = uploadedImages[index];
+    });
+
+    // Build colorImageMap from filenames
+    const colorImageMap = {};
+    colorImageFiles.forEach((file) => {
+      const matched = filenameToImageMap[file.originalname];
+      if (matched) {
+        colorImageMap[file.originalname] = {
+          id: matched.id,
+          url: matched.url
+        };
+      }
+    });
+
+    const mrpPerBox = parsedPrice * parsedTotal;
+    const discountedPricePerBox =
+      parsedDiscount > 0
+        ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
+        : mrpPerBox;
+
+    // Save product
     const product = new Product({
       categoryId,
       name,
       about,
-      colors: colors ? colors.split(',') : [],
       dimensions: dimensions ? dimensions.split(',') : [],
       quantity: parsedQty,
       pricePerPiece: parsedPrice,
@@ -59,8 +79,8 @@ exports.createProduct = async (req, res) => {
       mrpPerBox,
       discountPercentage: parsedDiscount,
       finalPricePerBox: discountedPricePerBox,
-      images: uploadedImages,
-      colorImageMap: colorToImageMap
+      images: uploadedImages, // Only { id, url }
+      colorImageMap          // Also only { id, url }
     });
 
     await product.save();
@@ -70,7 +90,6 @@ exports.createProduct = async (req, res) => {
       message: '✅ Product created successfully',
       product
     });
-
   } catch (err) {
     console.error('❌ Error creating product:', err);
     res.status(500).json({
@@ -83,11 +102,18 @@ exports.createProduct = async (req, res) => {
 
 
 
+
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    res.json({ success: true, products });
+    const products = await Product.find().sort({ createdAt: -1 }).lean();
+
+    res.status(200).json({
+      success: true,
+      message: '✅ Products fetched successfully',
+      products
+    });
   } catch (err) {
+    console.error('❌ Error fetching products:', err);
     res.status(500).json({
       success: false,
       message: '❌ Failed to fetch products',
