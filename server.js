@@ -25,8 +25,10 @@ connectDB();
 const productUploadRoutes = require('./routes/productUploadRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 app.use('/api/products', productUploadRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/categories', categoryRoutes);
 
 
 
