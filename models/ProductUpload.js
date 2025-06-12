@@ -9,11 +9,15 @@ const productUploadSchema = new mongoose.Schema({
   quantity: { type: Number, default: 0 },
   pricePerPiece: { type: Number, required: true },
   totalPiecesPerBox: { type: Number, required: true },
-  mrpPerBox: { type: Number }, // calculated: pricePerPiece * totalPiecesPerBox
+  mrpPerBox: { type: Number },
   images: [String],
   discountPercentage: { type: Number, default: 0 },
-finalPricePerBox: { type: Number }
-
+  finalPricePerBox: { type: Number },
+  colorImageMap: {
+    type: Map,
+    of: String
+  }
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('ProductUpload', productUploadSchema);

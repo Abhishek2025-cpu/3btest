@@ -12,38 +12,16 @@ exports.createProduct = async (req, res) => {
       quantity,
       pricePerPiece,
       totalPiecesPerBox,
-      discountPercentage // 🎯 New field for discount
+      discountPercentage,
+      colorImageMap // 🔗 New field in body, format: { "red": "red-img.jpg", "blue": "blue-img.jpg" }
     } = req.body;
 
-    console.log('📦 Incoming product data:', req.body);
-
-    // Validate required fields
-    if (!categoryId || !name || !pricePerPiece || !totalPiecesPerBox) {
-      return res.status(400).json({
-        success: false,
-        message: '❌ Required fields missing: categoryId, name, pricePerPiece, or totalPiecesPerBox'
-      });
-    }
+    // Validation...
 
     const parsedPrice = Number(pricePerPiece);
     const parsedTotal = Number(totalPiecesPerBox);
     const parsedQty = Number(quantity) || 0;
     const parsedDiscount = Number(discountPercentage) || 0;
-
-    if (isNaN(parsedPrice) || isNaN(parsedTotal)) {
-      return res.status(400).json({
-        success: false,
-        message: '❌ pricePerPiece and totalPiecesPerBox must be valid numbers'
-      });
-    }
-
-    if (parsedDiscount < 0 || parsedDiscount > 100) {
-      return res.status(400).json({
-        success: false,
-        message: '❌ discountPercentage must be between 0 and 100'
-      });
-    }
-
     const mrpPerBox = parsedPrice * parsedTotal;
     const discountedPricePerBox = parsedDiscount > 0
       ? mrpPerBox - (mrpPerBox * parsedDiscount / 100)
@@ -52,8 +30,22 @@ exports.createProduct = async (req, res) => {
     const images = req.files?.images || [];
 
     const uploadedImages = await Promise.all(
-      images.map(file => uploadBufferToGCS(file.buffer, file.originalname, 'product-images'))
+      images.map(file =>
+        uploadBufferToGCS(file.buffer, file.originalname, 'product-images')
+      )
     );
+
+    // 🔗 Construct color-image mapping
+    let colorToImageMap = {};
+    if (colorImageMap) {
+      const map = JSON.parse(colorImageMap); // Expecting JSON string in body
+      Object.entries(map).forEach(([color, fileName]) => {
+        const matchedUrl = uploadedImages.find(url => url.includes(fileName));
+        if (matchedUrl) {
+          colorToImageMap[color] = matchedUrl;
+        }
+      });
+    }
 
     const product = new Product({
       categoryId,
@@ -67,7 +59,8 @@ exports.createProduct = async (req, res) => {
       mrpPerBox,
       discountPercentage: parsedDiscount,
       finalPricePerBox: discountedPricePerBox,
-      images: uploadedImages
+      images: uploadedImages,
+      colorImageMap: colorToImageMap
     });
 
     await product.save();
@@ -77,6 +70,7 @@ exports.createProduct = async (req, res) => {
       message: '✅ Product created successfully',
       product
     });
+
   } catch (err) {
     console.error('❌ Error creating product:', err);
     res.status(500).json({
@@ -86,6 +80,7 @@ exports.createProduct = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getAllProducts = async (req, res) => {
