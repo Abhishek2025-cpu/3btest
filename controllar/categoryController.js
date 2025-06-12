@@ -1,7 +1,7 @@
 const Category = require('../models/Category');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
-const uploadBufferToGCS = require('../utils/gcloud'); // ✅ Your GCS utility
+const { uploadBufferToGCS } = require('../utils/gcloud'); // ✅ Fixed named import
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
@@ -11,11 +11,9 @@ async function generateCategoryId() {
   return `CAT${String(lastNum).padStart(3, '0')}`;
 }
 
+
 exports.createCategory = async (req, res) => {
   try {
-    console.log("➡️ Received request:", req.body);
-    console.log("➡️ Files received:", req.files);
-
     const { name, position } = req.body;
 
     if (!req.files || req.files.length === 0) {
@@ -23,23 +21,16 @@ exports.createCategory = async (req, res) => {
     }
 
     const categoryId = await generateCategoryId();
-    console.log("🆔 Generated Category ID:", categoryId);
 
-    let uploadedImages = [];
-    try {
-      uploadedImages = await Promise.all(
-        req.files.map(async (file) => {
-          const { url, id } = await uploadBufferToGCS(file.buffer, `categories/${file.originalname}`);
-          return { url, public_id: id };
-        })
-      );
-    } catch (uploadError) {
-      console.error('❌ GCS Upload Error:', uploadError);
-      return res.status(500).json({
-        message: '❌ GCS upload failed',
-        error: uploadError.message
-      });
-    }
+    const uploadedImages = await Promise.all(
+      req.files.map(async (file) => {
+        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'categories');
+        return {
+          url,
+          id: `categories/${file.originalname}`
+        };
+      })
+    );
 
     const category = new Category({
       categoryId,
@@ -56,11 +47,13 @@ exports.createCategory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error creating category:", error);
-    res.status(500).json({ message: '❌ Category creation failed', error: error.message });
+    console.error("❌ Error creating category:", error.stack || error);
+    res.status(500).json({
+      message: '❌ Category creation failed',
+      error: error.message || 'Unknown server error'
+    });
   }
 };
-
 
 
 
