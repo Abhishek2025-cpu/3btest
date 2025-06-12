@@ -50,7 +50,7 @@ exports.createProduct = async (req, res) => {
     });
 
     // Build colorImageMap as Map
-   const colorImageMap = new Map();
+const colorImageMap = new Map();
 colorImageFiles.forEach((file) => {
   const matched = filenameToImageMap[file.originalname];
   if (matched) {
@@ -79,7 +79,7 @@ const product = new Product({
   discountPercentage: parsedDiscount,
   finalPricePerBox: discountedPricePerBox,
   images: uploadedImages,
-  colorImageMap: Object.fromEntries(colorImageMap) // ✅ This is important
+    colorImageMap: Object.fromEntries(colorImageMap)
 });
 
     await product.save();

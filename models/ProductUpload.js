@@ -25,10 +25,12 @@ const productSchema = new mongoose.Schema({
       url: { type: String, required: true }
     }
   ],
-  colorImageMap: {
-    type: Map,
-    of: imageSchema // 👈 key change
-  }
+  
+colorImageMap: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {}
+}
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Product', productSchema);
