@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
 
-const imageSchema = new mongoose.Schema({
-  id: String,
-  url: String
-}, { _id: false });
-
-const productUploadSchema = new mongoose.Schema({
-  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+const productSchema = new mongoose.Schema({
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'Category'
+  },
   name: { type: String, required: true },
   about: { type: String },
   dimensions: [String],
@@ -16,12 +15,20 @@ const productUploadSchema = new mongoose.Schema({
   mrpPerBox: { type: Number },
   discountPercentage: { type: Number, default: 0 },
   finalPricePerBox: { type: Number },
-  images: [imageSchema],
+  images: [
+    {
+      id: { type: String, required: true },
+      url: { type: String, required: true }
+    }
+  ],
   colorImageMap: {
     type: Map,
-    of: imageSchema,
-    default: {}
+    of: {
+      id: String,
+      url: String
+    },
+    default: () => new Map()
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('ProductUpload', productUploadSchema);
+module.exports = mongoose.model('Product', productSchema);

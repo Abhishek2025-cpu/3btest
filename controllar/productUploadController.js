@@ -28,48 +28,45 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // Step 1: Get files
     const allImageFiles = req.files?.images || [];
     const colorImageFiles = req.files?.colorImages || [];
 
-    // Step 2: Upload all images to GCS with UUIDs
+    // Upload all images
     const uploadedImages = await Promise.all(
       allImageFiles.map(async (file) => {
         const url = await uploadBufferToGCS(file.buffer, file.originalname, 'product-images');
-        const id = crypto.randomUUID();
-        return { id, url, originalname: file.originalname };
+        return {
+          id: crypto.randomUUID(),
+          url,
+          originalname: file.originalname
+        };
       })
     );
 
-    // Step 3: Map original filename to uploaded image
-    const imageMap = {};
-    uploadedImages.forEach(img => {
-      imageMap[img.originalname] = { id: img.id, url: img.url };
+    // Build filename -> {id, url} map
+    const filenameToImageMap = {};
+    uploadedImages.forEach(({ id, url, originalname }) => {
+      filenameToImageMap[originalname] = { id, url };
     });
 
-    // Step 4: Create colorImageMap based on matches
-    const colorImageMap = {};
-    colorImageFiles.forEach(file => {
-      const match = imageMap[file.originalname];
+    // Build colorImageMap as Map
+    const colorImageMap = new Map();
+    colorImageFiles.forEach((file) => {
+      const match = filenameToImageMap[file.originalname];
       if (match) {
-        colorImageMap[file.originalname] = {
+        colorImageMap.set(file.originalname, {
           id: match.id,
           url: match.url
-        };
+        });
       }
     });
 
-    // Step 5: Prepare images (drop originalname)
-    const finalImages = uploadedImages.map(({ id, url }) => ({ id, url }));
-
-    // Step 6: Compute pricing
     const mrpPerBox = parsedPrice * parsedTotal;
-    const finalPricePerBox =
+    const discountedPricePerBox =
       parsedDiscount > 0
         ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
         : mrpPerBox;
 
-    // Step 7: Save product
     const product = new Product({
       categoryId,
       name,
@@ -80,8 +77,8 @@ exports.createProduct = async (req, res) => {
       totalPiecesPerBox: parsedTotal,
       mrpPerBox,
       discountPercentage: parsedDiscount,
-      finalPricePerBox,
-      images: finalImages,
+      finalPricePerBox: discountedPricePerBox,
+      images: uploadedImages.map(({ id, url }) => ({ id, url })),
       colorImageMap
     });
 
