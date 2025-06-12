@@ -67,20 +67,21 @@ exports.createProduct = async (req, res) => {
         ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
         : mrpPerBox;
 
-    const product = new Product({
-      categoryId,
-      name,
-      about,
-      dimensions: dimensions ? dimensions.split(',') : [],
-      quantity: parsedQty,
-      pricePerPiece: parsedPrice,
-      totalPiecesPerBox: parsedTotal,
-      mrpPerBox,
-      discountPercentage: parsedDiscount,
-      finalPricePerBox: discountedPricePerBox,
-      images: uploadedImages.map(({ id, url }) => ({ id, url })),
-      colorImageMap
-    });
+const product = new Product({
+  categoryId,
+  name,
+  about,
+  dimensions: dimensions ? dimensions.split(',') : [],
+  quantity: parsedQty,
+  pricePerPiece: parsedPrice,
+  totalPiecesPerBox: parsedTotal,
+  mrpPerBox,
+  discountPercentage: parsedDiscount,
+  finalPricePerBox: discountedPricePerBox,
+  images: uploadedImages.map(({ id, url }) => ({ id, url })),
+  colorImageMap: Object.fromEntries(colorImageMap) // ✅ FIX: convert Map to plain object
+});
+
 
     await product.save();
 
