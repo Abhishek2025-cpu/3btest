@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const categoryController = require('../controllar/categoryController');
-const upload = require('../middlewares/multer'); // multer config for handling file uploads
+const upload = require('../middleware/upload'); // multer config for handling file uploads
 
 // Create category with images
 router.post('/add-category', upload.array('images'), categoryController.createCategory);
