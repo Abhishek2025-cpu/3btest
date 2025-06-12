@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const categoryController = require('../controllar/categoryController');
-const upload = require('../middleware/upload'); // multer config for handling file uploads
 
-// Create category with images
-router.post('/add-category', upload.array('images'), categoryController.createCategory);
+const { uploadProduct } = require('../middleware/upload');
+
+router.post('/add-category', uploadProduct.array('images'), categoryController.createCategory);
+
 
 // Get all categories with product counts
 router.get('/all-category', categoryController.getCategories);
