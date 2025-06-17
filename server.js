@@ -24,10 +24,12 @@ connectDB();
 // Routes
 const productUploadRoutes = require('./routes/productUploadRoutes');
 const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 app.use('/api/products', productUploadRoutes);
+app.use('/api/feedback', feedbackRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api', shippingAddressRoutes);
