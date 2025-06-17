@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { signup, login,updateUser,getUserProfiles,getUserProfileById } = require('../controllar/authController');
-const { uploadProduct } = require('../middlewares/uploader');
+const { uploadProduct } = require('../middleware/upload');
 const otpController = require('../controllar/authController');
 
 
