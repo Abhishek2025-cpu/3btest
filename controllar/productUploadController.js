@@ -184,20 +184,24 @@ exports.deleteProduct = async (req, res) => {
 
 exports.filterAndSortProducts = async (req, res) => {
   try {
-    const { categoryId, sortBy, minPrice, maxPrice } = req.query;
+    const { categoryIds, sortBy, minPrice, maxPrice } = req.query;
 
     const filter = {};
 
-    if (categoryId) {
-      filter.categoryId = categoryId;
+    // ✅ Handle multiple categories
+    if (categoryIds) {
+      const categoriesArray = categoryIds.split(','); // e.g., ['cat1', 'cat2']
+      filter.categoryId = { $in: categoriesArray };
     }
 
+    // ✅ Handle price range
     if (minPrice || maxPrice) {
       filter.finalPricePerBox = {};
       if (minPrice) filter.finalPricePerBox.$gte = parseFloat(minPrice);
       if (maxPrice) filter.finalPricePerBox.$lte = parseFloat(maxPrice);
     }
 
+    // ✅ Sorting logic
     let sort = {};
     if (sortBy === 'lowToHigh') {
       sort.finalPricePerBox = 1;
