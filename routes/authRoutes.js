@@ -9,7 +9,7 @@ const {
   getUserProfileById,
 
 } = require('../controllar/authController'); 
-const otpController = require('../Controllers/otpController');
+const otpController = require('../controllar/otpController');
 const { uploadProduct } = require('../middleware/upload');
 
 // Routes
