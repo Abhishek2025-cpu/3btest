@@ -5,7 +5,7 @@ const {
   updateAddress,
   deleteAddress,
   getShippingAddresses
-} = require('../Controllers/shippingAddressController');
+} = require('../controllar/shippingAddressController');
 
 router.post('/user/:userId/address', addAddress);
 router.put('/user/:userId/address/:addressId', updateAddress);
