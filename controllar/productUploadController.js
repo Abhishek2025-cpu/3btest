@@ -181,13 +181,21 @@ exports.deleteProduct = async (req, res) => {
 };
 
 
+
 exports.filterAndSortProducts = async (req, res) => {
   try {
-    const { categoryId, sortBy } = req.query;
+    const { categoryId, sortBy, minPrice, maxPrice } = req.query;
 
     const filter = {};
+
     if (categoryId) {
       filter.categoryId = categoryId;
+    }
+
+    if (minPrice || maxPrice) {
+      filter.finalPricePerBox = {};
+      if (minPrice) filter.finalPricePerBox.$gte = parseFloat(minPrice);
+      if (maxPrice) filter.finalPricePerBox.$lte = parseFloat(maxPrice);
     }
 
     let sort = {};
@@ -197,9 +205,7 @@ exports.filterAndSortProducts = async (req, res) => {
       sort.finalPricePerBox = -1;
     }
 
-    const products = await Product.find(filter)
-      .sort(sort)
-      .lean();
+    const products = await Product.find(filter).sort(sort).lean();
 
     res.status(200).json({
       success: true,
