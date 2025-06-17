@@ -9,7 +9,7 @@ const {
   getUserProfileById,
   sendOtp,
   verifyOtp
-} = require('../controller/authController'); // ✅ fixed spelling here
+} = require('../controllar/authController'); 
 
 const { uploadProduct } = require('../middleware/upload');
 
