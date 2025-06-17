@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { signup, login,updateUser,getUserProfiles,getUserProfileById } = require('../controllar/authController');
-const { uploadPrifle } = require('../middleware/upload');
+const { uploadProduct } = require('../middlewares/uploader');
 const otpController = require('../controllar/authController');
 
-router.post('/signup', uploadPrifle.single('profileImage'), signup);
+
+router.post('/signup', uploadProduct.single('profileImage'), signup);
 router.put('/update-user/:userId', uploadPrifle.single('profileImage'), updateUser);
 router.post('/login', login);
 router.post('/send-otp', otpController.sendOtp);//updated 
