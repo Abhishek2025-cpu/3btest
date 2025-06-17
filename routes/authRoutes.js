@@ -9,10 +9,11 @@ const {
   getUserProfileById,
   sendOtp,
   verifyOtp
-} = require('../controllar/authController');
+} = require('../controller/authController'); // ✅ fixed spelling here
 
 const { uploadProduct } = require('../middleware/upload');
 
+// Routes
 router.post('/signup', uploadProduct.single('profileImage'), signup);
 router.put('/update-user/:userId', uploadProduct.single('profileImage'), updateUser);
 router.post('/login', login);
