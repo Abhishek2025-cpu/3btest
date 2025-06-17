@@ -179,3 +179,39 @@ exports.deleteProduct = async (req, res) => {
     res.status(500).json({ success: false, message: '❌ Deletion failed', error: err.message });
   }
 };
+
+
+exports.filterAndSortProducts = async (req, res) => {
+  try {
+    const { categoryId, sortBy } = req.query;
+
+    const filter = {};
+    if (categoryId) {
+      filter.categoryId = categoryId;
+    }
+
+    let sort = {};
+    if (sortBy === 'lowToHigh') {
+      sort.finalPricePerBox = 1;
+    } else if (sortBy === 'highToLow') {
+      sort.finalPricePerBox = -1;
+    }
+
+    const products = await Product.find(filter)
+      .sort(sort)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      message: '✅ Products filtered and sorted successfully',
+      products
+    });
+  } catch (err) {
+    console.error('❌ Error filtering/sorting products:', err);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to filter/sort products',
+      error: err.message
+    });
+  }
+};
