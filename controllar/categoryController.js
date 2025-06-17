@@ -63,7 +63,7 @@ exports.getCategories = async (req, res) => {
     const categories = await Category.find();
 
     // Aggregate product counts for each categoryId (string), only where quantity > 0
-    const Product = require('../models/Product');
+
     const productCounts = await Product.aggregate([
       { $match: { quantity: { $gt: 0 } } },
       { $group: { _id: "$categoryId", count: { $sum: 1 } } }
