@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { signup, login,updateUser,getUserProfiles,getUserProfileById } = require('../Controllers/authController');
 const { uploadPrifle } = require('../middleware/upload');
-const otpController = require('../Controllers/otpController');
+const otpController = require('../controllar/authController');
 
 router.post('/signup', uploadPrifle.single('profileImage'), signup);
 router.put('/update-user/:userId', uploadPrifle.single('profileImage'), updateUser);
