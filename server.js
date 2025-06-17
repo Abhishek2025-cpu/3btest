@@ -22,12 +22,14 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 connectDB();
 
 // Routes
+const authRoutes  = require('./routes/authRoutes')
 const productUploadRoutes = require('./routes/productUploadRoutes');
 const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/orders', orderRoutes);
