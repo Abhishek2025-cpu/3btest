@@ -19,6 +19,6 @@ router.put('/update/:productId', uploadProduct.fields([
 ]), productController.updateProduct);
 
 router.delete('/delete/:productId', productController.deleteProduct);
-router.get('/products/filter-sort', productController.filterAndSortProducts);
+router.get('/filter-sort', productController.filterAndSortProducts);
 
 module.exports = router;
