@@ -91,8 +91,8 @@ exports.placeOrder = async (req, res) => {
     console.error('Error placing order:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error placing order.',
-      error: error.message
+      message: error.message,
+      error: 'Server error placing order.'
     });
   }
 };
