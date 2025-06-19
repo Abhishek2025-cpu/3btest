@@ -88,7 +88,7 @@ const qrData = product._id.toString(); // Just the MongoDB ObjectId as string
 const qrBuffer = await QRCode.toBuffer(qrData);
 
 // Upload QR code buffer to GCS
-const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, '3bprofiles-products');
+const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
 
 // Save it in the product document
 product.qrCodeUrl = qrUrl;
@@ -114,8 +114,7 @@ product.qrCodeUrl = qrUrl;
 
 exports.getAllProducts = async (req, res) => {
   try {
- const products = await Product.find().sort({ createdAt: -1 }).lean();
-
+    const products = await Product.find().sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
