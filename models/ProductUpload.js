@@ -28,7 +28,9 @@ const productSchema = new mongoose.Schema({
   colorImageMap: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
-  }
+  },
+  qrCodeUrl: { type: String }
+
 }, { timestamps: true });
 
 // 👇 This sets the collection name explicitly to `productuploads`

@@ -1,5 +1,7 @@
 const Product = require('../models/ProductUpload');
 const { uploadBufferToGCS } = require('../utils/gcloud');
+const QRCode = require('qrcode');
+
 
 const crypto = require('crypto');
 
@@ -82,6 +84,15 @@ const product = new Product({
     colorImageMap: Object.fromEntries(colorImageMap)
 });
 
+const qrData = product._id.toString(); // Just the MongoDB ObjectId as string
+const qrBuffer = await QRCode.toBuffer(qrData);
+
+// Upload QR code buffer to GCS
+const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, '3bprofiles-products');
+
+// Save it in the product document
+product.qrCodeUrl = qrUrl;
+
     await product.save();
 
     res.status(201).json({
@@ -103,7 +114,8 @@ const product = new Product({
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 }).lean();
+ const products = await Product.find().sort({ createdAt: -1 }).lean();
+
 
     res.status(200).json({
       success: true,
