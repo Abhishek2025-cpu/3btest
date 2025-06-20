@@ -24,6 +24,7 @@ exports.placeOrder = async (req, res) => {
     }
 
     // 2. Process items and deduct stock
+    let totalPrice = 0;
     const products = await Promise.all(
       items.map(async item => {
         const product = await Product.findById(item.productId);
@@ -33,6 +34,7 @@ exports.placeOrder = async (req, res) => {
           throw new Error(`Insufficient stock for product: ${product.name}`);
         }
 
+        // Deduct quantity and update availability
         product.quantity -= item.quantity;
         if (product.quantity <= 0) {
           product.quantity = 0;
@@ -40,14 +42,17 @@ exports.placeOrder = async (req, res) => {
         }
         await product.save();
 
-        // Determine correct image based on selected color
+        // Select correct image
         let image = null;
         const colorKey = item.color?.trim();
         if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
           image = product.colorImageMap[colorKey];
         } else if (product.images && product.images.length) {
-          image = product.images[0]; // fallback to first image
+          image = product.images[0];
         }
+
+        const productSubtotal = item.price * item.quantity;
+        totalPrice += productSubtotal;
 
         return {
           productId: product._id,
@@ -55,7 +60,8 @@ exports.placeOrder = async (req, res) => {
           quantity: item.quantity,
           color: item.color || 'Not specified',
           priceAtPurchase: item.price,
-          image, // includes { id, url }
+          subtotal: productSubtotal,
+          image,
           orderId: generateOrderId()
         };
       })
@@ -65,6 +71,7 @@ exports.placeOrder = async (req, res) => {
     const newOrder = new Order({
       userId,
       products,
+      totalPrice,
       shippingDetails: {
         name: shippingAddress.name,
         phone: shippingAddress.phone,
@@ -84,7 +91,16 @@ exports.placeOrder = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Order placed successfully",
-      order: newOrder
+      order: newOrder,
+      totalPrice,
+      productBreakdown: products.map(p => ({
+        productId: p.productId,
+        name: p.productName,
+        quantity: p.quantity,
+        color: p.color,
+        priceAtPurchase: p.priceAtPurchase,
+        subtotal: p.subtotal
+      }))
     });
 
   } catch (error) {
@@ -96,6 +112,7 @@ exports.placeOrder = async (req, res) => {
     });
   }
 };
+
 
 
 //get products

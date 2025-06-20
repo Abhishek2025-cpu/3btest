@@ -29,6 +29,12 @@ const orderSchema = new mongoose.Schema({
     detailedAddress: String
   },
   orderId: { type: String, required: true, unique: true },
+  
+  totalPrice: {
+  type: Number,
+  required: true
+},
+
   currentStatus: {
     type: String,
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
