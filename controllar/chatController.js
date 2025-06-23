@@ -1,5 +1,5 @@
 const Chat = require('../models/chat');
-const { uploadBufferToGCS } = require('../utils/gcsUploader'); // ensure correct path
+const { uploadBufferToGCS } = require('../utils/gcloud'); // ensure correct path
 const multer = require('multer');
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
