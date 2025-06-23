@@ -1,4 +1,5 @@
 const Category = require('../models/Category');
+const sharp = require('sharp');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
 const { uploadBufferToGCS } = require('../utils/gcloud'); // ✅ Fixed named import
@@ -24,10 +25,19 @@ exports.createCategory = async (req, res) => {
 
     const uploadedImages = await Promise.all(
       req.files.map(async (file) => {
-        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'categories');
+        // Compress image using Sharp
+        const compressedBuffer = await sharp(file.buffer)
+          .resize({ width: 1000 }) // Optional resize
+          .jpeg({ quality: 70 })   // Adjust quality for compression
+          .toBuffer();
+
+        const fileName = `compressed-${Date.now()}-${file.originalname}`;
+
+        const url = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
+
         return {
           url,
-          id: `categories/${file.originalname}`
+          id: `categories/${fileName}`
         };
       })
     );
