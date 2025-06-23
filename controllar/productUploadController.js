@@ -1,7 +1,7 @@
 const Product = require('../models/ProductUpload');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const QRCode = require('qrcode');
-
+const sharp = require('sharp');
 
 const crypto = require('crypto');
 
@@ -33,10 +33,17 @@ exports.createProduct = async (req, res) => {
     const allImageFiles = req.files?.images || [];
     const colorImageFiles = req.files?.colorImages || [];
 
-    // Upload all images
+    // Compress and upload all images
     const uploadedImages = await Promise.all(
       allImageFiles.map(async (file) => {
-        const url = await uploadBufferToGCS(file.buffer, file.originalname, 'product-images');
+        const compressedBuffer = await sharp(file.buffer)
+          .resize({ width: 1000 }) // optional: resize
+          .jpeg({ quality: 70 })   // compression level
+          .toBuffer();
+
+        const filename = `compressed-${Date.now()}-${file.originalname}`;
+        const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+
         return {
           id: crypto.randomUUID(),
           url,
@@ -51,17 +58,30 @@ exports.createProduct = async (req, res) => {
       filenameToImageMap[originalname] = { id, url };
     });
 
-    // Build colorImageMap as Map
-const colorImageMap = new Map();
-colorImageFiles.forEach((file) => {
-  const matched = filenameToImageMap[file.originalname];
-  if (matched) {
-    colorImageMap.set(file.originalname, {
-      id: matched.id,
-      url: matched.url
-    });
-  }
-});
+    // Map color images using original filenames
+    const colorImageMap = new Map();
+
+    for (const file of colorImageFiles) {
+      const matched = filenameToImageMap[file.originalname];
+      if (matched) {
+        colorImageMap.set(file.originalname, {
+          id: matched.id,
+          url: matched.url
+        });
+      } else {
+        // Optionally: compress & upload unmatched color images too
+        const compressedBuffer = await sharp(file.buffer)
+          .resize({ width: 1000 })
+          .jpeg({ quality: 70 })
+          .toBuffer();
+
+        const filename = `compressed-${Date.now()}-${file.originalname}`;
+        const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+        const id = crypto.randomUUID();
+        colorImageMap.set(file.originalname, { id, url });
+        uploadedImages.push({ id, url, originalname: file.originalname });
+      }
+    }
 
     const mrpPerBox = parsedPrice * parsedTotal;
     const discountedPricePerBox =
@@ -69,29 +89,26 @@ colorImageFiles.forEach((file) => {
         ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
         : mrpPerBox;
 
-const product = new Product({
-  categoryId,
-  name,
-  about,
-  dimensions: dimensions ? dimensions.split(',') : [],
-  quantity: parsedQty,
-  pricePerPiece: parsedPrice,
-  totalPiecesPerBox: parsedTotal,
-  mrpPerBox,
-  discountPercentage: parsedDiscount,
-  finalPricePerBox: discountedPricePerBox,
-  images: uploadedImages,
-    colorImageMap: Object.fromEntries(colorImageMap)
-});
+    const product = new Product({
+      categoryId,
+      name,
+      about,
+      dimensions: dimensions ? dimensions.split(',') : [],
+      quantity: parsedQty,
+      pricePerPiece: parsedPrice,
+      totalPiecesPerBox: parsedTotal,
+      mrpPerBox,
+      discountPercentage: parsedDiscount,
+      finalPricePerBox: discountedPricePerBox,
+      images: uploadedImages,
+      colorImageMap: Object.fromEntries(colorImageMap)
+    });
 
-const qrData = product._id.toString(); // Just the MongoDB ObjectId as string
-const qrBuffer = await QRCode.toBuffer(qrData);
-
-// Upload QR code buffer to GCS
-const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
-
-// Save it in the product document
-product.qrCodeUrl = qrUrl;
+    // Generate and upload QR code
+    const qrData = product._id.toString();
+    const qrBuffer = await QRCode.toBuffer(qrData);
+    const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
+    product.qrCodeUrl = qrUrl;
 
     await product.save();
 
@@ -100,6 +117,7 @@ product.qrCodeUrl = qrUrl;
       message: '✅ Product created successfully',
       product
     });
+
   } catch (err) {
     console.error('❌ Error creating product:', err);
     res.status(500).json({
