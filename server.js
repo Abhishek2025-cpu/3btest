@@ -33,12 +33,14 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api', shippingAddressRoutes);
+app.use('/api/chat', chatRoutes);
 
 
 
