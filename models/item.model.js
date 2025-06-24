@@ -7,6 +7,7 @@ const itemSchema = new mongoose.Schema({
   helper: {
     _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
     name: { type: String, required: true },
+     eid: { type: String, required: true },
   },
   operator: {
     _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
