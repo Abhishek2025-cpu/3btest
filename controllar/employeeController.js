@@ -24,6 +24,11 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ error: 'Other role must be specified when role is Other' });
     }
 
+     const existingEmployee = await Employee.findOne({ mobile });
+    if (existingEmployee) {
+      return res.status(400).json({ error: 'Mobile number already exists' });
+    }
+
     const dobDate = new Date(dob);
     const eid = `${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${(dobDate.getFullYear() + 1) % 100}`;
     const password = name.slice(0, 4).toLowerCase() + adharNumber.slice(-4);
