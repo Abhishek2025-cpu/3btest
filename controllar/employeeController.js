@@ -1,5 +1,5 @@
 const Employee = require('../models/Employee');
-const { uploadBufferToGCS } = require('../utils/uploadToGCS');
+const { uploadBufferToGCS } = require('../utils/gcloud');
 
 function generateEid(dob) {
   const date = new Date(dob);
