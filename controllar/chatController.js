@@ -1,16 +1,25 @@
 const Chat = require('../models/chat');
-const { uploadBufferToGCS } = require('../utils/gcloud'); // ensure correct path
+const { uploadBufferToGCS } = require('../utils/gcloud');
 const multer = require('multer');
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// POST: Send a message or file
 exports.sendMessage = [
   upload.single('file'),
   async (req, res) => {
     try {
       const { senderId, receiverId, message } = req.body;
       const file = req.file;
+
+      console.log('--- Incoming Request ---');
+      console.log('senderId:', senderId);
+      console.log('receiverId:', receiverId);
+      console.log('message:', message);
+      console.log('file:', file ? {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      } : 'No file received');
 
       if (!senderId || !receiverId) {
         return res.status(400).json({ success: false, message: "senderId and receiverId are required" });
@@ -22,7 +31,13 @@ exports.sendMessage = [
 
       let mediaUrl = null;
       if (file) {
-        mediaUrl = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+        try {
+          mediaUrl = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+          console.log('File uploaded to GCS at:', mediaUrl);
+        } catch (uploadError) {
+          console.error('GCS upload failed:', uploadError.message);
+          return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
+        }
       }
 
       const chat = await Chat.create({
@@ -34,10 +49,12 @@ exports.sendMessage = [
 
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
+      console.error('Unexpected error:', err.message);
       res.status(500).json({ success: false, message: err.message });
     }
   }
 ];
+
 
 // GET: Get all chats for a specific user
 exports.getUserChats = async (req, res) => {
