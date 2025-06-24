@@ -1,5 +1,5 @@
 const Item = require('../models/item.model');
-const Employee = require('../models/employee.model');
+const Employee = require('../models/Employee');
 const QRCode = require('qrcode');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
