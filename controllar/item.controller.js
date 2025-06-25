@@ -5,13 +5,17 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 
 exports.createItem = async (req, res) => {
   try {
-    const { itemNo, length, noOfSticks, helperId, operatorId, shift, company } = req.body;
+    const { itemNo, length, noOfSticks, helperEid, operatorEid, shift, company } = req.body;
+
     if (!req.file) return res.status(400).json({ error: 'Product image is required' });
 
-    const helper = await Employee.findById(helperId);
-    const operator = await Employee.findById(operatorId);
+    // Find helper/operator using eid instead of _id
+    const helper = await Employee.findOne({ eid: helperEid });
+    const operator = await Employee.findOne({ eid: operatorEid });
 
-    if (!helper || !operator) return res.status(400).json({ error: 'Invalid helper or operator ID' });
+    if (!helper || !operator) {
+      return res.status(400).json({ error: 'Invalid helper or operator EID' });
+    }
 
     const qrData = `${itemNo}-${Date.now()}`;
     const qrBuffer = await QRCode.toBuffer(qrData);
@@ -22,7 +26,7 @@ exports.createItem = async (req, res) => {
       itemNo,
       length,
       noOfSticks,
-      helper: { _id: helper._id, name: helper.name },
+      helper: { _id: helper._id, name: helper.name, eid: helper.eid },
       operator: { _id: operator._id, name: operator.name, eid: operator.eid },
       shift,
       company,
