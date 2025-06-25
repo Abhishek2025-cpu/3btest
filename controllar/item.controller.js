@@ -1,6 +1,6 @@
 const Item = require('../models/item.model');
 const Employee = require('../models/Employee');
-const bwipjs = require('bwip-js');
+const bwipjs = require('bwip-js'); // For barcode generation
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
 exports.createItem = async (req, res) => {
@@ -17,21 +17,23 @@ exports.createItem = async (req, res) => {
       return res.status(400).json({ error: 'Invalid helper or operator EID' });
     }
 
-    // Generate barcode data (must be unique and valid for barcode format)
-    const barcodeData = `${itemNo}-${Date.now()}`;
+    // Generate unique barcode data
+    const barcodeData = `${Date.now()}-${itemNo}`;
 
-    // Generate barcode as PNG buffer using bwip-js
+    // Generate barcode image buffer
     const barcodeBuffer = await bwipjs.toBuffer({
-      bcid:        'code128',       // Barcode type
-      text:        barcodeData,     // Text to encode
-      scale:       3,               // 3x scaling factor
-      height:      10,              // Bar height, in millimeters
-      includetext: true,            // Show human-readable text
-      textxalign:  'center',        // Center the text
+      bcid: 'code128',         // Barcode type
+      text: barcodeData,       // Text to encode
+      scale: 3,                // 3x scaling factor
+      height: 10,              // Bar height in mm
+      includetext: true,       // Show text below barcode
+      textxalign: 'center',    // Center-align text
     });
 
-    // Upload barcode and product image to GCS
+    // Upload barcode image
     const barcodeUrl = await uploadBufferToGCS(barcodeBuffer, `${barcodeData}.png`, 'barcodes');
+
+    // Upload product image
     const productImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images');
 
     const item = await Item.create({
@@ -43,7 +45,7 @@ exports.createItem = async (req, res) => {
       shift,
       company,
       barcodeUrl,
-      productImageUrl
+      productImageUrl,
     });
 
     res.status(201).json(item);
@@ -52,6 +54,7 @@ exports.createItem = async (req, res) => {
     res.status(500).json({ error: 'Failed to create item' });
   }
 };
+
 
 
 exports.getItems = async (req, res) => {
