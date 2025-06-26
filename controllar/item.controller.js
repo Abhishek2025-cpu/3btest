@@ -1,6 +1,6 @@
+const QRCode = require('qrcode'); // ADD THIS: QR Code generator
 const Item = require('../models/item.model');
 const Employee = require('../models/Employee');
-const bwipjs = require('bwip-js'); // For barcode generation
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
 exports.createItem = async (req, res) => {
@@ -9,7 +9,7 @@ exports.createItem = async (req, res) => {
 
     if (!req.file) return res.status(400).json({ error: 'Product image is required' });
 
-    // Find helper/operator using eid instead of _id
+    // Find helper/operator using eid
     const helper = await Employee.findOne({ eid: helperEid });
     const operator = await Employee.findOne({ eid: operatorEid });
 
@@ -17,25 +17,24 @@ exports.createItem = async (req, res) => {
       return res.status(400).json({ error: 'Invalid helper or operator EID' });
     }
 
-    // Generate unique barcode data
-    const barcodeData = `${Date.now()}-${itemNo}`;
+    // Generate unique QR code data
+    const qrCodeData = `${Date.now()}-${itemNo}`;
 
-    // Generate barcode image buffer
-    const barcodeBuffer = await bwipjs.toBuffer({
-      bcid: 'code128',         // Barcode type
-      text: barcodeData,       // Text to encode
-      scale: 3,                // 3x scaling factor
-      height: 10,              // Bar height in mm
-      includetext: true,       // Show text below barcode
-      textxalign: 'center',    // Center-align text
+    // Generate QR code buffer (PNG)
+    const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
+      type: 'png',
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 500, // Ensures decent resolution
     });
 
-    // Upload barcode image
-    const barcodeUrl = await uploadBufferToGCS(barcodeBuffer, `${barcodeData}.png`, 'barcodes');
+    // Upload QR code image to GCS
+    const qrCodeUrl = await uploadBufferToGCS(qrCodeBuffer, `${qrCodeData}.png`, 'qr-codes');
 
     // Upload product image
     const productImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images');
 
+    // Create item
     const item = await Item.create({
       itemNo,
       length,
@@ -44,7 +43,7 @@ exports.createItem = async (req, res) => {
       operator: { _id: operator._id, name: operator.name, eid: operator.eid },
       shift,
       company,
-      barcodeUrl,
+      qrCodeUrl, // USE QR CODE URL instead of barcodeUrl
       productImageUrl,
     });
 
@@ -54,6 +53,7 @@ exports.createItem = async (req, res) => {
     res.status(500).json({ error: 'Failed to create item' });
   }
 };
+
 
 
 

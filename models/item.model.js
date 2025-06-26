@@ -16,7 +16,7 @@ const itemSchema = new mongoose.Schema({
   },
   shift: { type: String, enum: ['Day', 'Night'], required: true },
   company: { type: String, enum: ['3B', 'B'], required: true },
-  barcodeUrl : { type: String, required: true },
+  qrCodeUrl : { type: String, required: true },
   productImageUrl: { type: String, required: true },
 }, { timestamps: true });
 
