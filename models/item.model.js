@@ -14,6 +14,12 @@ const itemSchema = new mongoose.Schema({
     name: { type: String, required: true },
     eid: { type: String, required: true },
   },
+  stockStatus: {
+  type: String,
+  enum: ['In Stock', 'Stock Out'],
+  default: 'In Stock',
+},
+
   shift: { type: String, enum: ['Day', 'Night'], required: true },
   company: { type: String, enum: ['3B', 'B'], required: true },
   qrCodeUrl : { type: String, required: true },

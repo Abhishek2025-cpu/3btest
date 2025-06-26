@@ -75,3 +75,23 @@ exports.deleteItem = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete item' });
   }
 };
+
+exports.updateStockStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['In Stock', 'Out of Stock'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value' });
+    }
+
+    const item = await Item.findByIdAndUpdate(id, { status }, { new: true });
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    res.json(item);
+  } catch (err) {
+    console.error('Update stock status error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
