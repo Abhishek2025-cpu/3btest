@@ -1,12 +1,9 @@
 const axios = require('axios');
 const User = require('../models/User');
-const sendWelcomeEmail = require('../utils/sendWelcomeEmail'); // ensure this is implemented
 
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
-const SENDER_ID = 'THRBEE';
-const TEMPLATE_ID = '1107175093827517588'; // DLT approved
+const TEMPLATE_ID = '1107175093827517588'; // DLT-approved template
 
-// Step 1: Send OTP
 exports.sendOtp = async (req, res) => {
   const { number } = req.body;
 
@@ -20,18 +17,19 @@ exports.sendOtp = async (req, res) => {
       return res.status(400).json({ status: false, message: 'Mobile number already registered' });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000);
+    const otp = Math.floor(100000 + Math.random() * 900000); // 6-digit OTP
 
-    const url = `https://2factor.in/API/V1/${API_KEY}/SEND/${number}/${otp}/${SENDER_ID}/${TEMPLATE_ID}`;
-
-    const otpRes = await axios.get(url);
+    // ✅ Correct URL for DLT-approved template
+    const otpRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/${number}/${otp}/${TEMPLATE_ID}`
+    );
 
     if (otpRes.data.Status === 'Success') {
       return res.status(200).json({
         status: true,
         message: 'OTP sent successfully',
         sessionId: otpRes.data.Details,
-        otp // remove this line in production!
+        otp // remove in production
       });
     } else {
       return res.status(400).json({
@@ -41,11 +39,12 @@ exports.sendOtp = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('OTP SEND ERROR:', {
+    console.error('Error sending OTP:', {
       url: error?.config?.url,
       status: error?.response?.status,
       data: error?.response?.data
     });
+
     return res.status(500).json({
       status: false,
       message: 'Error sending OTP',
@@ -53,6 +52,7 @@ exports.sendOtp = async (req, res) => {
     });
   }
 };
+
 
 // Step 2: Verify OTP
 exports.verifyOtp = async (req, res) => {
