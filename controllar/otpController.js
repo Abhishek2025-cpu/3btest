@@ -1,36 +1,37 @@
 const axios = require('axios');
 const User = require('../models/User');
+const sendWelcomeEmail = require('../utils/sendWelcomeEmail'); // ensure this is implemented
 
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
 const SENDER_ID = 'THRBEE';
-const TEMPLATE_ID = '1107175093827517588'; // DLT approved template ID
+const TEMPLATE_ID = '1107175093827517588'; // DLT approved
 
+// Step 1: Send OTP
 exports.sendOtp = async (req, res) => {
-  const { number, email } = req.body;
+  const { number } = req.body;
+
+  if (!number) {
+    return res.status(400).json({ status: false, message: 'Mobile number is required' });
+  }
 
   try {
-    const existingNumber = await User.findOne({ number });
-    if (existingNumber) {
+    const existingUser = await User.findOne({ number });
+    if (existingUser) {
       return res.status(400).json({ status: false, message: 'Mobile number already registered' });
     }
 
-    const existingEmail = await User.findOne({ email });
-    if (existingEmail) {
-      return res.status(400).json({ status: false, message: 'Email already registered' });
-    }
+    const otp = Math.floor(100000 + Math.random() * 900000);
 
-    const otp = Math.floor(100000 + Math.random() * 900000); // Generate 6-digit OTP
+    const url = `https://2factor.in/API/V1/${API_KEY}/SEND/${number}/${otp}/${SENDER_ID}/${TEMPLATE_ID}`;
 
-    const otpRes = await axios.get(
-      `https://2factor.in/API/V1/${API_KEY}/SEND/${number}/${otp}/${SENDER_ID}/${TEMPLATE_ID}`
-    );
+    const otpRes = await axios.get(url);
 
     if (otpRes.data.Status === 'Success') {
       return res.status(200).json({
         status: true,
-        message: 'OTP sent via SMS',
+        message: 'OTP sent successfully',
         sessionId: otpRes.data.Details,
-        otp // (optional) return OTP for testing purposes — remove in production
+        otp // remove this line in production!
       });
     } else {
       return res.status(400).json({
@@ -40,21 +41,18 @@ exports.sendOtp = async (req, res) => {
       });
     }
   } catch (error) {
-  console.error('Axios Error:', {
-    url: error.config.url,
-    status: error.response?.status,
-    data: error.response?.data
-  });
-  res.status(500).json({
-    status: false,
-    message: 'Error sending OTP',
-    error: error.response?.data || error.message
-  });
-}
+    console.error('OTP SEND ERROR:', {
+      url: error?.config?.url,
+      status: error?.response?.status,
+      data: error?.response?.data
+    });
+    return res.status(500).json({
+      status: false,
+      message: 'Error sending OTP',
+      error: error.response?.data || error.message
+    });
+  }
 };
-
-
-
 
 // Step 2: Verify OTP
 exports.verifyOtp = async (req, res) => {
@@ -73,12 +71,11 @@ exports.verifyOtp = async (req, res) => {
     );
 
     if (verifyRes.data.Status === 'Success' && verifyRes.data.Details === 'OTP Matched') {
-      // ✅ OTP matched – send welcome email
-      await sendWelcomeEmail(email);
+      await sendWelcomeEmail(email); // ✅ send email if OTP matched
 
       return res.status(200).json({
         status: true,
-        message: 'OTP verified and Welcome email sent'
+        message: 'OTP verified and welcome email sent'
       });
     } else {
       return res.status(400).json({
@@ -88,11 +85,11 @@ exports.verifyOtp = async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('OTP VERIFY ERROR:', error.message);
     return res.status(500).json({
       status: false,
       message: 'OTP verification or email error',
-      error: error.message
+      error: error.response?.data || error.message
     });
   }
 };
-
