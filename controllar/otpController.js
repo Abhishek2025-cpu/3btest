@@ -40,13 +40,19 @@ exports.sendOtp = async (req, res) => {
       });
     }
   } catch (error) {
-    return res.status(500).json({
-      status: false,
-      message: 'Internal server error while sending OTP',
-      error: error.message
-    });
-  }
+  console.error('Axios Error:', {
+    url: error.config.url,
+    status: error.response?.status,
+    data: error.response?.data
+  });
+  res.status(500).json({
+    status: false,
+    message: 'Error sending OTP',
+    error: error.response?.data || error.message
+  });
+}
 };
+
 
 
 
