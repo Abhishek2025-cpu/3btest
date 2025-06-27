@@ -2,14 +2,10 @@ const axios = require('axios');
 const User = require('../models/User');
 
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
-const TEMPLATE_ID = '1107175093827517588'; // Your DLT-approved SMS template
 
 exports.sendOtp = async (req, res) => {
   const { number } = req.body;
-
-  if (!number) {
-    return res.status(400).json({ status: false, message: 'Mobile number is required' });
-  }
+  if (!number) return res.status(400).json({ status: false, message: 'Mobile number is required' });
 
   try {
     const existingUser = await User.findOne({ number });
@@ -17,26 +13,22 @@ exports.sendOtp = async (req, res) => {
       return res.status(400).json({ status: false, message: 'Mobile number already registered' });
     }
 
-    // ✅ Use AUTOGEN for SMS-only
-    const response = await axios.get(
-      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${number}/AUTOGEN/${TEMPLATE_ID}`
+    // 👉 SMS-only endpoint without template ID ensures SMS delivery
+    const otpRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${number}/AUTOGEN`
     );
 
-    if (response.data.Status === 'Success') {
+    if (otpRes.data.Status === 'Success') {
       return res.status(200).json({
         status: true,
         message: 'OTP sent via SMS',
-        sessionId: response.data.Details
+        sessionId: otpRes.data.Details
       });
     } else {
-      return res.status(400).json({
-        status: false,
-        message: 'Failed to send OTP via SMS',
-        details: response.data
-      });
+      return res.status(400).json({ status: false, message: 'Failed to send OTP via SMS', details: otpRes.data });
     }
   } catch (error) {
-    console.error('OTP Send Error:', error.response?.data || error.message);
+    console.error('OTP SMS Error:', error.response?.data || error.message);
     return res.status(500).json({
       status: false,
       message: 'Error sending OTP',
