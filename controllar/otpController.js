@@ -1,11 +1,11 @@
 // controllers/otpController.js
 const axios = require('axios');
 const User = require('../models/User');
-const sendWelcomeEmail = require('../utils/sendWelcomeEmail'); // ✅ CORRECT
-
-
 
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
+const SENDER_ID = 'THRBEE'; // From DLT
+const TEMPLATE_ID = '1107175093827517588'; // CT Id from DLT portal
+const PE_ID = '1101644800000087291'; // PE Id from DLT portal
 
 exports.sendOtp = async (req, res) => {
   const { number, email } = req.body;
@@ -29,22 +29,29 @@ exports.sendOtp = async (req, res) => {
       });
     }
 
-    // Send OTP if number and email are not registered
-    const otpRes = await axios.get(
-      `https://2factor.in/API/V1/${API_KEY}/SMS/${number}/AUTOGEN`
+    // Generate a random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // Construct SMS content using your DLT-approved template
+    const message = `Your OTP for login to 3B Profiles is ${otp}. It is valid for 2 minutes. Do not share this OTP with anyone for security reasons.`;
+
+    // Send SMS via 2Factor API using template
+    const smsRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/${number}/${encodeURIComponent(message)}/${SENDER_ID}/${TEMPLATE_ID}`
     );
 
-    if (otpRes.data.Status === 'Success') {
+    if (smsRes.data.Status === 'Success') {
       return res.status(200).json({
         status: true,
         message: 'OTP sent via SMS',
-        sessionId: otpRes.data.Details
+        sessionId: smsRes.data.Details,
+        otp // Optional: Only show in dev/testing, not production
       });
     } else {
       return res.status(400).json({
         status: false,
         message: 'Failed to send OTP',
-        details: otpRes.data
+        details: smsRes.data
       });
     }
   } catch (error) {
