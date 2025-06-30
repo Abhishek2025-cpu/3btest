@@ -8,18 +8,23 @@ exports.login = async (req, res) => {
   try {
     const { number, password } = req.body;
 
-    const admin = await Admin.findOne({ number });
-    if (!admin) return res.status(404).json({ message: 'Admin not found' });
+    if (!number || !password) {
+      return res.status(400).json({ message: 'Number and password are required' });
+    }
 
-    const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
+    const admin = await Admin.findOne({ number, password });
+    if (!admin) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-    res.json({ message: 'Login successful', admin });
+    // Hide sensitive fields if any
+    const { password: _, otp, otpExpiry, ...safeAdmin } = admin.toObject();
+
+    res.status(200).json({ message: 'Login successful', admin: safeAdmin });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
-
 // Request OTP for number/password update
 exports.requestOtp = async (req, res) => {
   try {
