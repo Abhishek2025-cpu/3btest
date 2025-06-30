@@ -35,10 +35,8 @@
 
 // gcloud.js
 
-
 const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const { Storage } = require('@google-cloud/storage');
-const { GoogleAuth } = require('google-auth-library');
 const uuid = require('uuid').v4;
 
 let storage; // Cached storage client
@@ -48,27 +46,12 @@ async function getStorage() {
 
   const secretClient = new SecretManagerServiceClient();
 
-  // Access the service account key from Secret Manager
   const [version] = await secretClient.accessSecretVersion({
     name: 'projects/1067354145699/secrets/gcs-service-account-key/versions/latest',
   });
 
   const key = JSON.parse(version.payload.data.toString());
-
-  // Validate key structure
-  if (!key.client_email || !key.private_key) {
-    throw new Error('Invalid service account credentials.');
-  }
-
-  // Create a custom auth client
-  const auth = new GoogleAuth({
-    credentials: key,
-    projectId: key.project_id,
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
-
-  // Create storage client with custom auth
-  storage = new Storage({ authClient: await auth.getClient(), projectId: key.project_id });
+  storage = new Storage({ credentials: key, projectId: 'b-profiles-461910' });
   return storage;
 }
 
@@ -86,10 +69,7 @@ exports.uploadBufferToGCS = async (buffer, filename, folder = 'uploads') => {
       },
     });
 
-    stream.on('error', (err) => {
-      console.error('Stream error during GCS upload:', err);
-      reject(err);
-    });
+    stream.on('error', (err) => reject(err));
 
     stream.on('finish', () => {
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`;
@@ -99,3 +79,4 @@ exports.uploadBufferToGCS = async (buffer, filename, folder = 'uploads') => {
     stream.end(buffer);
   });
 };
+
