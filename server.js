@@ -30,6 +30,8 @@ const authRoutes  = require('./routes/authRoutes')
 const productUploadRoutes = require('./routes/productUploadRoutes');
 const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+const admin = require('./models/Admin');
+
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -45,6 +47,8 @@ app.use('/api', shippingAddressRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/staff', employeeRoutes);
 app.use('/api/items', itemsRoutes);
+app.use('/api/admin',admin);
+
 
 
 
