@@ -47,7 +47,7 @@ async function getStorage() {
   const secretClient = new SecretManagerServiceClient();
 
   const [version] = await secretClient.accessSecretVersion({
-    name: 'projects/1067354145699/secrets/gcs-service-account-key-2/versions/latest',
+    name: 'projects/1067354145699/secrets/gcs-key-2/versions/latest',
   });
 
   const key = JSON.parse(version.payload.data.toString());
