@@ -45,10 +45,10 @@ async function getStorage() {
   if (storage) return storage;
 
   const secretClient = new SecretManagerServiceClient();
+const [version] = await secretClient.accessSecretVersion({
+  name: 'projects/1067354145699/secrets/gcs-key-2/versions/latest',
+});
 
-  const [version] = await secretClient.accessSecretVersion({
-    name: 'projects/1067354145699/secrets/gcs-key-2/versions/latest',
-  });
 
   const key = JSON.parse(version.payload.data.toString());
   storage = new Storage({ credentials: key, projectId: 'b-profiles-461910' });
