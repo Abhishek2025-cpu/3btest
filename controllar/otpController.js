@@ -1,5 +1,7 @@
 const axios = require('axios');
 const User = require('../models/User');
+const sendWelcomeEmail = require('../utils/sendWelcomeEmail'); 
+
 
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
 
@@ -78,3 +80,5 @@ exports.verifyOtp = async (req, res) => {
     });
   }
 };
+
+
