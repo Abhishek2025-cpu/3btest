@@ -57,25 +57,38 @@ exports.verifyOtp = async (req, res) => {
       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
     );
 
-    if (verifyRes.data.Status === 'Success' && verifyRes.data.Details === 'OTP Matched') {
-      await sendWelcomeEmail(email); // ✅ send email if OTP matched
-
-      return res.status(200).json({
-        status: true,
-        message: 'OTP verified and welcome email sent'
-      });
-    } else {
+    if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
       return res.status(400).json({
         status: false,
         message: 'Invalid OTP',
         details: verifyRes.data
       });
     }
+
+    // OTP is matched, now try to send the email
+    try {
+      await sendWelcomeEmail(email);
+      return res.status(200).json({
+        status: true,
+        message: 'OTP verified and welcome email sent'
+      });
+    } catch (emailError) {
+      console.error('EMAIL SENDING ERROR:', emailError.message);
+      // This error is critical but we might still want to let the user in.
+      // Or, we can report the failure clearly.
+      return res.status(500).json({
+        status: false,
+        message: 'OTP verification was successful, but failed to send the welcome email.',
+        error: emailError.message // Provide a clearer error
+      });
+    }
+
   } catch (error) {
-    console.error('OTP VERIFY ERROR:', error.message);
+    // This will now mostly catch errors from the 2factor.in API call
+    console.error('OTP VERIFY API ERROR:', error.message);
     return res.status(500).json({
       status: false,
-      message: 'OTP verification or email error',
+      message: 'Error during OTP verification process',
       error: error.response?.data || error.message
     });
   }
