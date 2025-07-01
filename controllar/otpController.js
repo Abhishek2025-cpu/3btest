@@ -43,8 +43,10 @@ exports.sendOtp = async (req, res) => {
 
 // Step 2: Verify OTP
 exports.verifyOtp = async (req, res) => {
-  const { sessionId, otp, email } = req.body;
+  // The 'email' is received but will not be used for now.
+  const { sessionId, otp, email } = req.body; 
 
+  // The check for 'email' is still here, we can remove it if you want.
   if (!sessionId || !otp || !email) {
     return res.status(400).json({
       status: false,
@@ -57,6 +59,7 @@ exports.verifyOtp = async (req, res) => {
       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
     );
 
+    // Check if the OTP from 2factor.in is valid
     if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
       return res.status(400).json({
         status: false,
@@ -65,26 +68,17 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    // OTP is matched, now try to send the email
-    try {
-      await sendWelcomeEmail(email);
-      return res.status(200).json({
-        status: true,
-        message: 'OTP verified and welcome email sent'
-      });
-    } catch (emailError) {
-      console.error('EMAIL SENDING ERROR:', emailError.message);
-      // This error is critical but we might still want to let the user in.
-      // Or, we can report the failure clearly.
-      return res.status(500).json({
-        status: false,
-        message: 'OTP verification was successful, but failed to send the welcome email.',
-        error: emailError.message // Provide a clearer error
-      });
-    }
+    // --- MODIFICATION ---
+    // The try/catch block for sending the email has been removed.
+    // If we reach this point, the OTP is valid. We immediately return success.
+
+    return res.status(200).json({
+      status: true,
+      message: 'OTP verified successfully'
+    });
 
   } catch (error) {
-    // This will now mostly catch errors from the 2factor.in API call
+    // This will catch any errors from the 2factor.in API call
     console.error('OTP VERIFY API ERROR:', error.message);
     return res.status(500).json({
       status: false,
@@ -93,5 +87,4 @@ exports.verifyOtp = async (req, res) => {
     });
   }
 };
-
 
