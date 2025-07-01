@@ -1,6 +1,8 @@
 const transporter = require('./mailer'); // This now correctly gets the nodemailer instance
 
 const sendWelcomeEmail = async (to, name = 'User') => {
+  console.log("Email User from ENV:", process.env.SMTP_EMAIL);
+console.log("Email Pass from ENV:", process.env.SMTP_PASSWORD);
   const mailOptions = {
     from: `"3B Profiles App" <abhisheks@pearlorganisation.com>`,
     to,
