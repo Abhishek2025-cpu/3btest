@@ -118,7 +118,7 @@ exports.createItem = async (req, res) => {
   } catch (error) {
     // This will now log more specific GCS errors if they occur
     console.error('Create Item Error:', error);
-    res.status(500).json({ error: 'Failed to create item' });
+    res.status(500).json({ error: 'Failed to create item',error });
   }
 };
 
