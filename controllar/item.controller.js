@@ -1,4 +1,61 @@
-const QRCode = require('qrcode'); // ADD THIS: QR Code generator
+// const QRCode = require('qrcode'); // ADD THIS: QR Code generator
+// const Item = require('../models/item.model');
+// const Employee = require('../models/Employee');
+// const { uploadBufferToGCS } = require('../utils/gcloud');
+
+// exports.createItem = async (req, res) => {
+//   try {
+//     const { itemNo, length, noOfSticks, helperEid, operatorEid, shift, company } = req.body;
+
+//     if (!req.file) return res.status(400).json({ error: 'Product image is required' });
+
+//     // Find helper/operator using eid
+//     const helper = await Employee.findOne({ eid: helperEid });
+//     const operator = await Employee.findOne({ eid: operatorEid });
+
+//     if (!helper || !operator) {
+//       return res.status(400).json({ error: 'Invalid helper or operator EID' });
+//     }
+
+//     // Generate unique QR code data
+//     const qrCodeData = `${Date.now()}-${itemNo}`;
+
+//     // Generate QR code buffer (PNG)
+//     const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
+//       type: 'png',
+//       errorCorrectionLevel: 'H',
+//       margin: 1,
+//       width: 500, // Ensures decent resolution
+//     });
+
+//     // Upload QR code image to GCS
+//     const qrCodeUrl = await uploadBufferToGCS(qrCodeBuffer, `${qrCodeData}.png`, 'qr-codes');
+
+//     // Upload product image
+//     const productImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images');
+
+//     // Create item
+//     const item = await Item.create({
+//       itemNo,
+//       length,
+//       noOfSticks,
+//       helper: { _id: helper._id, name: helper.name, eid: helper.eid },
+//       operator: { _id: operator._id, name: operator.name, eid: operator.eid },
+//       shift,
+//       company,
+//       qrCodeUrl, // USE QR CODE URL instead of barcodeUrl
+//       productImageUrl,
+//     });
+
+//     res.status(201).json(item);
+//   } catch (error) {
+//     console.error('Create Item Error:', error);
+//     res.status(500).json({ error: 'Failed to create item' });
+//   }
+// };
+
+
+const QRCode = require('qrcode');
 const Item = require('../models/item.model');
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
@@ -25,14 +82,24 @@ exports.createItem = async (req, res) => {
       type: 'png',
       errorCorrectionLevel: 'H',
       margin: 1,
-      width: 500, // Ensures decent resolution
+      width: 500,
     });
 
-    // Upload QR code image to GCS
-    const qrCodeUrl = await uploadBufferToGCS(qrCodeBuffer, `${qrCodeData}.png`, 'qr-codes');
+    // MODIFIED: Upload QR code image to GCS with explicit content type
+    const qrCodeUrl = await uploadBufferToGCS(
+      qrCodeBuffer,
+      `${qrCodeData}.png`,
+      'qr-codes',
+      'image/png' // Pass the content type
+    );
 
-    // Upload product image
-    const productImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images');
+    // MODIFIED: Upload product image with its mimetype from multer
+    const productImageUrl = await uploadBufferToGCS(
+      req.file.buffer,
+      req.file.originalname,
+      'product-images',
+      req.file.mimetype // Pass the content type from the uploaded file
+    );
 
     // Create item
     const item = await Item.create({
@@ -43,17 +110,17 @@ exports.createItem = async (req, res) => {
       operator: { _id: operator._id, name: operator.name, eid: operator.eid },
       shift,
       company,
-      qrCodeUrl, // USE QR CODE URL instead of barcodeUrl
+      qrCodeUrl,
       productImageUrl,
     });
 
     res.status(201).json(item);
   } catch (error) {
+    // This will now log more specific GCS errors if they occur
     console.error('Create Item Error:', error);
     res.status(500).json({ error: 'Failed to create item' });
   }
 };
-
 
 
 
