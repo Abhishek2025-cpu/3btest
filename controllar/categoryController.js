@@ -272,6 +272,7 @@ exports.getCategoryById = async (req, res) => {
 
 
 // ✅ CORRECTED AND FINAL VERSION
+// ✅ CORRECTED AND FINAL VERSION
 exports.deleteCategoryImage = async (req, res) => {
   try {
     // The :categoryId is the parent document's _id
