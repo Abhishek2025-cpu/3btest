@@ -271,32 +271,44 @@ exports.getCategoryById = async (req, res) => {
 };
 
 
+// ✅ CORRECTED AND FINAL VERSION
 exports.deleteCategoryImage = async (req, res) => {
   try {
+    // The :categoryId is the parent document's _id
+    // The :imageId is the sub-document's _id (the image's unique _id)
     const { categoryId, imageId } = req.params;
 
-    // The imageId from the URL needs to be decoded to handle slashes correctly
-    const decodedImageId = decodeURIComponent(imageId);
-
-    // First, find the category to ensure it exists
+    // 1. Find the parent category first
     const category = await Category.findById(categoryId);
     if (!category) {
       return res.status(404).json({ message: 'Category not found.' });
     }
     
-    // Check if the image exists in the category's array before trying to delete
-    const imageExists = category.images.some(img => img.id === decodedImageId);
-    if (!imageExists) {
-        return res.status(404).json({ message: 'Image not found in this category.' });
+    // 2. Find the specific image subdocument within the category's array using its _id
+    const imageToDelete = category.images.find(img => img._id.toString() === imageId);
+
+    // If the image with that _id doesn't exist in this category, return an error
+    if (!imageToDelete) {
+        return res.status(404).json({ message: 'Image with the specified ID was not found in this category.' });
     }
 
-    // 1. Delete the file from Google Cloud Storage
-    await deleteFileFromGCS(decodedImageId);
+    // 3. Extract the GCS file path from the image's public URL
+    // Example URL: https://storage.googleapis.com/3bprofiles-products/categories/cea30...
+    // We need to extract the path: "categories/cea30..."
+    const urlParts = imageToDelete.url.split('/');
+    const gcsFilePath = urlParts.slice(4).join('/'); // Skips the first 4 parts (https:, , storage.googleapis.com, bucket-name)
 
-    // 2. Remove the image reference from the Category document in MongoDB
+    if (!gcsFilePath) {
+      return res.status(500).json({ message: 'Could not parse file path from image URL.' });
+    }
+
+    // 4. Delete the file from Google Cloud Storage using the extracted path
+    await deleteFileFromGCS(gcsFilePath);
+
+    // 5. Remove the image reference from the Category document in MongoDB using its _id
     const updatedCategory = await Category.findByIdAndUpdate(
       categoryId,
-      { $pull: { images: { id: decodedImageId } } },
+      { $pull: { images: { _id: imageId } } }, // Pull the element where the _id matches
       { new: true }
     );
 
@@ -306,6 +318,7 @@ exports.deleteCategoryImage = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("❌ Image deletion failed:", error);
     res.status(500).json({ message: '❌ Image deletion failed', error: error.message });
   }
 };
