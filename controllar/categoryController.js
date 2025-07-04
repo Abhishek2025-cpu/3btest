@@ -2,7 +2,7 @@ const Category = require('../models/Category');
 const sharp = require('sharp');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
-const { uploadBufferToGCS } = require('../utils/gcloud'); // ✅ Fixed named import
+const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud'); // ✅ Fixed named import
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
@@ -25,20 +25,17 @@ exports.createCategory = async (req, res) => {
 
     const uploadedImages = await Promise.all(
       req.files.map(async (file) => {
-        // Compress image using Sharp
         const compressedBuffer = await sharp(file.buffer)
-          .resize({ width: 1000 }) // Optional resize
-          .jpeg({ quality: 70 })   // Adjust quality for compression
+          .resize({ width: 1000 })
+          .jpeg({ quality: 70 })
           .toBuffer();
 
-        const fileName = `compressed-${Date.now()}-${file.originalname}`;
+        const fileName = `cat-${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+        
+        // Destructure the id and url from the returned object
+        const { id, url } = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
 
-        const url = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
-
-        return {
-          url,
-          id: `categories/${fileName}`
-        };
+        return { id, url }; // Return the complete object
       })
     );
 
@@ -57,10 +54,10 @@ exports.createCategory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error creating category:", error.stack || error);
+    console.error("❌ Error creating category:", error);
     res.status(500).json({
       message: '❌ Category creation failed',
-      error: error.message || 'Unknown server error'
+      error: error.message
     });
   }
 };
@@ -111,78 +108,51 @@ exports.updateCategory = async (req, res) => {
     const { id } = req.params;
     const { name, position, imagesToRemove } = req.body;
 
-    const updateData = {};
-    if (name) updateData.name = name;
-    if (position !== undefined) updateData.position = Number(position);
-
     const existingCategory = await Category.findById(id);
     if (!existingCategory) {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // Parse imagesToRemove from JSON string if needed (because form-data sends it as string)
+    // 1. Handle image removals
     let imagesToRemoveArr = [];
     if (imagesToRemove) {
-      if (typeof imagesToRemove === 'string') {
-        imagesToRemoveArr = JSON.parse(imagesToRemove);
-      } else {
-        imagesToRemoveArr = imagesToRemove;
-      }
+      imagesToRemoveArr = typeof imagesToRemove === 'string' ? JSON.parse(imagesToRemove) : imagesToRemove;
     }
 
-    // Remove images from Cloudinary & existingCategory.images array
     if (imagesToRemoveArr.length > 0) {
-      for (const public_id of imagesToRemoveArr) {
-        await cloudinary.uploader.destroy(public_id);
-      }
-      // Filter out removed images from the category's images
+      // Delete from GCS
+      const deletionPromises = imagesToRemoveArr.map(imageId => deleteFileFromGCS(imageId));
+      await Promise.all(deletionPromises);
+
+      // Filter out removed images from the category's images array
       existingCategory.images = existingCategory.images.filter(
-        img => !imagesToRemoveArr.includes(img.public_id)
+        img => !imagesToRemoveArr.includes(img.id)
       );
     }
 
-    // Upload new images if any
+    // 2. Handle new image uploads
     if (req.files && req.files.length > 0) {
-      const uploadImageToCloudinary = (fileBuffer) => {
-        return new Promise((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: 'categories', resource_type: 'image' },
-            (err, result) => {
-              if (err) return reject(err);
-              resolve({
-                url: result.secure_url,
-                public_id: result.public_id,
-              });
-            }
-          );
-          stream.end(fileBuffer);
-        });
-      };
-
-      const uploadedImages = await Promise.all(
-        req.files.map(file => uploadImageToCloudinary(file.buffer))
-      );
-
-      // Append new images to existing ones
-      existingCategory.images = [...existingCategory.images, ...uploadedImages];
+      const uploadPromises = req.files.map(async (file) => {
+        const compressedBuffer = await sharp(file.buffer).resize({ width: 1000 }).jpeg({ quality: 70 }).toBuffer();
+        const fileName = `compressed-${Date.now()}-${file.originalname}`;
+        const url = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
+        return { url, id: `categories/${fileName}` };
+      });
+      
+      const newImages = await Promise.all(uploadPromises);
+      existingCategory.images.push(...newImages);
     }
 
-    // Update other fields
-    if (updateData.name) existingCategory.name = updateData.name;
-    if (updateData.position !== undefined) existingCategory.position = updateData.position;
+    // 3. Update other fields
+    if (name) existingCategory.name = name;
+    if (position !== undefined) existingCategory.position = Number(position);
 
-    // Save updated category
+    // 4. Save the updated category
     const updatedCategory = await existingCategory.save();
 
     res.status(200).json({
       message: '✅ Category updated successfully',
-      category: {
-        ...updatedCategory.toObject(),
-        images: updatedCategory.images.map(img => ({
-          url: img.url,
-          public_id: img.public_id
-        }))
-      }
+      category: updatedCategory
     });
 
   } catch (error) {
@@ -283,5 +253,45 @@ exports.getCategoryById = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch category', error: error.message });
+  }
+};
+
+
+exports.deleteCategoryImage = async (req, res) => {
+  try {
+    const { categoryId, imageId } = req.params;
+
+    // The imageId from the URL needs to be decoded to handle slashes correctly
+    const decodedImageId = decodeURIComponent(imageId);
+
+    // First, find the category to ensure it exists
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found.' });
+    }
+    
+    // Check if the image exists in the category's array before trying to delete
+    const imageExists = category.images.some(img => img.id === decodedImageId);
+    if (!imageExists) {
+        return res.status(404).json({ message: 'Image not found in this category.' });
+    }
+
+    // 1. Delete the file from Google Cloud Storage
+    await deleteFileFromGCS(decodedImageId);
+
+    // 2. Remove the image reference from the Category document in MongoDB
+    const updatedCategory = await Category.findByIdAndUpdate(
+      categoryId,
+      { $pull: { images: { id: decodedImageId } } },
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: '✅ Image deleted successfully',
+      category: updatedCategory,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: '❌ Image deletion failed', error: error.message });
   }
 };

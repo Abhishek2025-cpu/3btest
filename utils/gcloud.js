@@ -86,10 +86,15 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const { Storage } = require('@google-cloud/storage');
 const uuid = require('uuid').v4;
 
-let storage; // Cached storage client
+let storage; // Cached storage client instance
 
+// Define the bucket name as a constant to be used by all functions
+const BUCKET_NAME = '3bprofiles-products';
+
+// This function correctly fetches credentials and initializes the storage client.
+// It's designed to be called by other functions in this file.
 async function getStorage() {
-  if (storage) return storage;
+  if (storage) return storage; // Return cached client if it exists
 
   const secretClient = new SecretManagerServiceClient();
   const [version] = await secretClient.accessSecretVersion({
@@ -97,14 +102,15 @@ async function getStorage() {
   });
 
   const key = JSON.parse(version.payload.data.toString());
+  // Initialize the cached client
   storage = new Storage({ credentials: key, projectId: 'b-profiles-461910' });
   return storage;
 }
 
-// MODIFIED: Added 'contentType' parameter
+// Your upload function is good, just updated to use the constant for the bucket name.
 exports.uploadBufferToGCS = async (buffer, filename, folder = 'uploads', contentType) => {
-  const storage = await getStorage();
-  const bucket = storage.bucket('3bprofiles-products');
+  const storageClient = await getStorage();
+  const bucket = storageClient.bucket(BUCKET_NAME);
 
   const gcsFileName = `${folder}/${uuid()}-${filename}`;
   const file = bucket.file(gcsFileName);
@@ -112,18 +118,45 @@ exports.uploadBufferToGCS = async (buffer, filename, folder = 'uploads', content
   return new Promise((resolve, reject) => {
     const stream = file.createWriteStream({
       metadata: {
-        // MODIFIED: Use the provided contentType. Fallback to 'auto' if not provided.
-        contentType: contentType || 'auto',
+        contentType: contentType || 'image/jpeg', // Fallback to a common image type
       },
+      resumable: false, // Recommended for smaller files
     });
 
     stream.on('error', (err) => reject(err));
 
     stream.on('finish', () => {
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`;
-      resolve(publicUrl);
+      // Return the full path (id) and the public URL separately
+      resolve({
+        id: gcsFileName,
+        url: `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`
+      });
     });
 
     stream.end(buffer);
   });
+};
+
+
+// ** THIS IS THE CORRECTED FUNCTION **
+// It was failing because `storage` and `bucketName` were not defined in its scope.
+exports.deleteFileFromGCS = async (fileName) => {
+  try {
+    // 1. Get the initialized storage client, just like the upload function does.
+    const storageClient = await getStorage();
+
+    // 2. Use the defined BUCKET_NAME constant to get the correct bucket.
+    await storageClient.bucket(BUCKET_NAME).file(fileName).delete();
+    
+    console.log(`✅ Successfully deleted ${fileName} from GCS bucket.`);
+  } catch (error) {
+    // This error handling is good and has been kept.
+    if (error.code === 404) {
+      console.warn(`⚠️ File not found in GCS, skipping deletion: ${fileName}`);
+      return; // This is not a failure, the file is already gone.
+    }
+    // For all other errors, we re-throw them to be handled by the controller.
+    console.error(`❌ Error deleting file ${fileName} from GCS:`, error);
+    throw new Error(`Failed to delete file from cloud storage.`);
+  }
 };
