@@ -21,5 +21,9 @@ router.delete('/delete/:id', categoryController.deleteCategory);
 
 // Toggle inStock status using categoryId (e.g., CAT001)
 router.patch('/toggle-stock/:id', categoryController.toggleCategoryStock);
+// ... import your controller functions, including deleteCategoryImage
 
+// Route for deleting a single image from a category
+// The imageId will be URL encoded by the frontend
+router.delete('/delete/:categoryId/images/:imageId', categoryController.deleteCategoryImage);
 module.exports = router;
