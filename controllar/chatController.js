@@ -62,23 +62,32 @@ exports.getUserChats = async (req, res) => {
     const { userId } = req.params;
     const chats = await Chat.find({
       $or: [{ senderId: userId }, { receiverId: userId }]
-    }).sort({ timestamp: 1 });
+    })
+      .sort({ timestamp: 1 })
+      .populate('senderId', 'name')    // fetch name only
+      .populate('receiverId', 'name');
 
     res.json({ success: true, data: chats });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 // GET: Admin fetches all messages
 exports.getAllChatsForAdmin = async (req, res) => {
   try {
-    const chats = await Chat.find({}).sort({ timestamp: -1 });
+    const chats = await Chat.find({})
+      .sort({ timestamp: -1 })
+      .populate('senderId', 'name')
+      .populate('receiverId', 'name');
+
     res.json({ success: true, data: chats });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 // POST: Admin reply to user
 exports.adminReply = [
