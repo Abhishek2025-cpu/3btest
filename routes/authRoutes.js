@@ -7,7 +7,7 @@ const {
   updateUser,
   getUserProfiles,
   getUserProfileById,
-  deleteUserById
+  deleteUserById,
 
 } = require('../controllar/authController'); 
 const otpController = require('../controllar/otpController');
