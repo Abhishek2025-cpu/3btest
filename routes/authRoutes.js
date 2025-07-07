@@ -7,6 +7,7 @@ const {
   updateUser,
   getUserProfiles,
   getUserProfileById,
+  deleteUserById
 
 } = require('../controllar/authController'); 
 const otpController = require('../controllar/otpController');
@@ -20,5 +21,6 @@ router.post('/send-otp', otpController.sendOtp);
 router.post('/verify-otp', otpController.verifyOtp);
 router.get('/get-user-profiles', getUserProfiles);
 router.get('/users/:userId', getUserProfileById);
+router.delete('/users/:userId',deleteUserById)
 
 module.exports = router;
