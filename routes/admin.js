@@ -5,6 +5,7 @@ const adminController = require('../controllar/adminController');
 const memoryUpload = require('../utils/memoryUpload');
 
 // Authentication
+router.post('/admin-resgiter',adminController.register);
 router.post('/login', adminController.login);
 
 // Password/Number Recovery and Update

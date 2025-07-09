@@ -4,6 +4,46 @@ const { uploadBufferToGCS } = require('../utils/gcloud'); // Make sure this util
 const { sendOtpEmail } = require('../utils/sendOtp'); // Make sure this utility is correct
 
 // Admin Login (Corrected and Secure)
+
+// Admin Registration (No bcrypt hashing — for testing only)
+exports.register = async (req, res) => {
+  try {
+    const { email, number, password } = req.body;
+
+    if (!password || (!email && !number)) {
+      return res.status(400).json({ message: 'Password and either email or number are required' });
+    }
+
+    // Check for existing admin with same email or number
+    const existingAdmin = await Admin.findOne({
+      $or: [{ email }, { number }],
+    });
+
+    if (existingAdmin) {
+      return res.status(409).json({ message: 'Admin with given email or number already exists' });
+    }
+
+    // Create new admin (storing plain password — NOT recommended in production)
+    const newAdmin = new Admin({
+      email,
+      number,
+      password, // No hashing here
+    });
+
+    await newAdmin.save();
+
+    const adminObject = newAdmin.toObject();
+    delete adminObject.password;
+
+    res.status(201).json({ message: 'Admin registered successfully', admin: adminObject });
+  } catch (err) {
+    console.error("Admin Registration Error:", err);
+    res.status(500).json({ message: 'Failed to register admin', error: err.message });
+  }
+};
+
+
+
 exports.login = async (req, res) => {
   try {
     const { number, password } = req.body;
