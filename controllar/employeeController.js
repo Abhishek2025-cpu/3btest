@@ -14,26 +14,38 @@ function generatePassword(name, adhar) {
   const adharPart = adhar.slice(-4);
   return `${namePart}${adharPart}`;
 }
+
 exports.createEmployee = async (req, res) => {
   try {
     const { name, mobile, role, otherRole, dob, adharNumber } = req.body;
 
-    if (!req.file) return res.status(400).json({ error: 'Adhar image is required' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'Adhar image is required' });
+    }
 
     if (role === 'Other' && !otherRole) {
       return res.status(400).json({ error: 'Other role must be specified when role is Other' });
     }
 
-     const existingEmployee = await Employee.findOne({ mobile });
+    const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
       return res.status(400).json({ error: 'Mobile number already exists' });
     }
 
     const dobDate = new Date(dob);
-    const eid = `${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${(dobDate.getFullYear() + 1) % 100}`;
-    const password = name.slice(0, 4).toLowerCase() + adharNumber.slice(-4);
+    if (isNaN(dobDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date of birth format' });
+    }
 
-    const adharImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'adhar-images');
+    const eid = generateEid(dob);
+    const password = generatePassword(name, adharNumber);
+
+    const { url: adharImageUrl } = await uploadBufferToGCS(
+      req.file.buffer,
+      req.file.originalname,
+      'adhar-images',
+      req.file.mimetype
+    );
 
     const employee = await Employee.create({
       name,
@@ -44,15 +56,18 @@ exports.createEmployee = async (req, res) => {
       eid,
       password,
       adharNumber,
-      adharImageUrl
+      adharImageUrl,
     });
 
     res.status(201).json(employee);
   } catch (error) {
-    console.error('Create Employee Error:', error);
+    console.error('Create Employee Error:', error.message, error.stack);
     res.status(500).json({ error: 'Failed to create employee' });
   }
 };
+
+
+
 
 exports.getAllEmployees = async (req, res) => {
   try {
