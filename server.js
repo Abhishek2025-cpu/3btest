@@ -30,7 +30,7 @@ const authRoutes  = require('./routes/authRoutes')
 const productUploadRoutes = require('./routes/productUploadRoutes');
 const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
-const adminRoutes = require('./models/Admin');
+const adminRoutes = require('./routes/admin');
 
 
 const orderRoutes = require('./routes/orderRoutes');
