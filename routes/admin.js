@@ -8,10 +8,10 @@ router.post('/admin-register', adminController.register);
 router.post('/login', adminController.login);
 
 // ✅ Profile Photo Update
-router.patch(
-  '/profile/:id',
-  memoryUpload.single('profilePhoto'),
-  adminController.updateProfilePhoto
-);
+// router.patch(
+//   '/profile/:id',
+//   memoryUpload.single('profilePhoto'),
+//   adminController.updateProfilePhoto
+// );
 
 module.exports = router;
