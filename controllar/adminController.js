@@ -63,27 +63,27 @@ exports.login = async (req, res) => {
 };
 
 // ✅ Update Profile Photo
-exports.updateProfilePhoto = async (req, res) => {
-  try {
-    const { id } = req.params;
+// exports.updateProfilePhoto = async (req, res) => {
+//   try {
+//     const { id } = req.params;
 
-    if (!req.file) {
-      return res.status(400).json({ message: 'No image file provided' });
-    }
+//     if (!req.file) {
+//       return res.status(400).json({ message: 'No image file provided' });
+//     }
 
-    const admin = await Admin.findById(id);
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin not found' });
-    }
+//     const admin = await Admin.findById(id);
+//     if (!admin) {
+//       return res.status(404).json({ message: 'Admin not found' });
+//     }
 
-    const photoUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'admin-photos');
-    admin.profilePhoto = photoUrl;
+//     const photoUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'admin-photos');
+//     admin.profilePhoto = photoUrl;
 
-    await admin.save();
+//     await admin.save();
 
-    res.json({ message: 'Profile photo updated', profilePhoto: photoUrl });
-  } catch (err) {
-    console.error("Update Photo Error:", err);
-    res.status(500).json({ message: 'Failed to update photo', error: err.message });
-  }
-};
+//     res.json({ message: 'Profile photo updated', profilePhoto: photoUrl });
+//   } catch (err) {
+//     console.error("Update Photo Error:", err);
+//     res.status(500).json({ message: 'Failed to update photo', error: err.message });
+//   }
+// };
