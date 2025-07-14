@@ -7,41 +7,61 @@ const { uploadBufferToGCS, deleteFileFromGCS } = require('../utils/gcloud'); // 
  * @route   POST /api/other-categories
  * @desc    Add a new OtherCategory
  */
+// In controllers/otherCategoryController.js
+
 exports.addOtherCategory = async (req, res) => {
+  console.log("--- [DEBUG] Received request to add OtherCategory ---");
   try {
     const { name } = req.body;
+    console.log("[DEBUG] Category Name from request body:", name);
 
     if (!name) {
       return res.status(400).json({ message: 'Category name is required' });
     }
+    
+    // This check is crucial
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'At least one image is required' });
+        console.error("[DEBUG] ERROR: req.files is empty or undefined. Check the form-data key in Postman. It must be 'files'.");
+        return res.status(400).json({ message: 'At least one image is required. Make sure your form-data key is "files".' });
     }
+    console.log(`[DEBUG] Received ${req.files.length} file(s). Processing...`);
 
-    // Process and upload images to GCS in parallel
     const uploadedImages = await Promise.all(
-      req.files.map(async (file) => {
+      req.files.map(async (file, index) => {
+        const fileNumber = index + 1;
+        console.log(`[DEBUG] File #${fileNumber}: Processing with sharp...`);
         const compressedBuffer = await sharp(file.buffer)
           .resize({ width: 1000 })
           .jpeg({ quality: 80 })
           .toBuffer();
+        console.log(`[DEBUG] File #${fileNumber}: Sharp processing complete.`);
 
         const fileName = `other-cat-${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
         
-        // uploadBufferToGCS should return an object { id, url }
-        // id = file path in GCS, url = public URL
-        const { id, url } = await uploadBufferToGCS(compressedBuffer, fileName, 'other-categories');
+        console.log(`[DEBUG] File #${fileNumber}: Uploading to GCS as '${fileName}'...`);
+        const gcsResult = await uploadBufferToGCS(compressedBuffer, fileName, 'other-categories');
+        
+        // This log is the most important one!
+        console.log(`[DEBUG] File #${fileNumber}: Result from uploadBufferToGCS:`, gcsResult);
 
+        // Explicitly check if the result is invalid
+        if (!gcsResult || !gcsResult.id || !gcsResult.url) {
+            throw new Error(`uploadBufferToGCS returned an invalid value for file #${fileNumber}. Expected { id, url }, but got: ${JSON.stringify(gcsResult)}`);
+        }
+
+        const { id, url } = gcsResult;
         return { id, url };
       })
     );
-
+    
+    console.log("[DEBUG] All images processed. Saving to database...");
     const newOtherCategory = new OtherCategory({
       name,
       images: uploadedImages,
     });
 
     await newOtherCategory.save();
+    console.log("[DEBUG] ✅ Successfully saved to database.");
 
     res.status(201).json({
       message: '✅ OtherCategory created successfully',
@@ -49,7 +69,8 @@ exports.addOtherCategory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error creating OtherCategory:", error);
+    console.error("❌ --- FATAL ERROR in addOtherCategory --- ❌");
+    console.error(error); // This prints the full error stack trace
     res.status(500).json({
       message: '❌ OtherCategory creation failed',
       error: error.message
