@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // Adjust the path if your controller folder is named 'controllar'
-const otherCategoryController = require('../controllers/otherCategoryController'); 
+const otherCategoryController = require('../controllar/otherCategoryController'); 
 
 // Re-using your existing multer middleware for file uploads
 const { uploadProduct } = require('../middleware/upload');
