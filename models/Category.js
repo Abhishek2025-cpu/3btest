@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-
 const imageSubSchema = new mongoose.Schema({
   url: { type: String, required: true },
   id: { type: String, required: true } // This is the file path in GCS
