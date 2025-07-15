@@ -5,106 +5,64 @@ const sharp = require('sharp');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
 // POST - Add a new company
-// controllers/otherProduct.controller.js (Modified addOtherProduct function)
+exports.addCompany = async (req, res) => {
+  console.log("--- [DEBUG] Received request to add Company ---");
+  try {
+    const { name } = req.body;
 
-// ... (keep processAndUploadFile helper function)
-
-exports.addOtherProduct = async (req, res) => {
-    console.log("--- [DEBUG] Received request to add OtherProduct ---");
-    try {
-        // --- 1. EXTRACT & VALIDATE DATA ---
-        const { categoryId } = req.params;
-        // Destructure the new companyIds field from the body
-        const { productName, modelNo, size, details, materialNames, materialPrices, companyIds } = req.body;
-        
-        const productImages = req.files.images;
-        const materialImages = req.files.materialImages;
-
-        // ... (all previous validations for category, product details, images, materials remain the same) ...
-
-        // --- NEW VALIDATION for companyIds ---
-        let companiesArray = [];
-        if (companyIds) {
-            // Handle both single ID string and array of ID strings
-            companiesArray = Array.isArray(companyIds) ? companyIds : [companyIds];
-            // Optional: Check if all provided IDs are valid Mongo ObjectIds
-            for (const id of companiesArray) {
-                if (!mongoose.Types.ObjectId.isValid(id)) {
-                    return res.status(400).json({ message: `Invalid Company ID format: ${id}` });
-                }
-            }
-        }
-        
-        // ... (all image uploading logic remains the same) ...
-
-        const [uploadedProductImages, uploadedMaterialImages] = await Promise.all([
-            Promise.all(productImages.map(f => processAndUploadFile(f, 'product', 'products-bucket'))),
-            Promise.all(materialImages.map(f => processAndUploadFile(f, 'material', 'materials-bucket')))
-        ]);
-        
-        const materialsData = materialNames.map((name, index) => ({
-            materialName: name,
-            price: parseFloat(materialPrices[index]),
-            materialImage: uploadedMaterialImages[index]
-        }));
-
-        // --- 5. SAVE TO DATABASE (with companies) ---
-        console.log("[DEBUG] Saving product to database...");
-        const newProduct = new OtherProduct({
-            productName, modelNo, size, details,
-            images: uploadedProductImages,
-            materials: materialsData,
-            category: categoryId,
-            companies: companiesArray // Add the validated company IDs here
-        });
-
-        await newProduct.save();
-        console.log("[DEBUG] ✅ Successfully saved new product with company associations.");
-
-        // We can populate the response to show the created data immediately
-        const populatedProduct = await newProduct.populate([
-            { path: 'category', select: 'name' },
-            { path: 'companies', select: 'name logo' }
-        ]);
-
-        res.status(201).json({
-            message: '✅ Product created successfully',
-            product: populatedProduct
-        });
-
-    } catch (error) {
-        // ... (error handling remains the same) ...
-        console.error("❌ --- FATAL ERROR in addOtherProduct --- ❌");
-        console.error(error);
-        res.status(500).json({ message: '❌ Product creation failed', error: error.message });
+    if (!name) {
+      return res.status(400).json({ message: 'Company name is required.' });
     }
+    if (!req.file) {
+      return res.status(400).json({ message: 'Company logo image is required. Use key "logo".' });
+    }
+    
+    // Process and upload the logo
+    console.log(`[DEBUG] Processing logo: ${req.file.originalname}`);
+    const compressedBuffer = await sharp(req.file.buffer)
+      .resize({ width: 400, height: 400, fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+      .png({ quality: 90 }) // PNG for better transparency support
+      .toBuffer();
+
+    const fileName = `logos/company-logo-${Date.now()}-${name.replace(/\s+/g, '-')}`;
+    const gcsResult = await uploadBufferToGCS(compressedBuffer, fileName, 'company-assets-bucket');
+    
+    if (!gcsResult || !gcsResult.id || !gcsResult.url) {
+        throw new Error(`GCS upload failed for company logo.`);
+    }
+
+    const newCompany = new Company({
+      name,
+      logo: { id: gcsResult.id, url: gcsResult.url }
+    });
+
+    await newCompany.save();
+    console.log("[DEBUG] ✅ Successfully saved new company.");
+    res.status(201).json({ message: '✅ Company created successfully', company: newCompany });
+
+  } catch (error) {
+    console.error("❌ --- FATAL ERROR in addCompany --- ❌");
+    // Handle duplicate key error nicely
+    if (error.code === 11000) {
+        return res.status(409).json({ message: 'A company with this name already exists.' });
+    }
+    console.error(error);
+    res.status(500).json({ message: '❌ Company creation failed', error: error.message });
+  }
 };
 
-
-// controllers/otherProduct.controller.js (Add this new function)
-
-exports.getProductById = async (req, res) => {
-    console.log(`--- [DEBUG] Received request to get Product by ID: ${req.params.productId} ---`);
+// GET - Get all companies (for the dropdown)
+exports.getAllCompanies = async (req, res) => {
+    console.log("--- [DEBUG] Received request to get all Companies ---");
     try {
-        const { productId } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(productId)) {
-            return res.status(400).json({ message: 'Invalid Product ID format.' });
-        }
-
-        const product = await OtherProduct.findById(productId)
-            .populate({ path: 'category', select: 'name' }) // Populate the category name
-            .populate({ path: 'companies', select: 'name logo' }); // Populate the company name and logo
-
-        if (!product) {
-            return res.status(404).json({ message: 'Product not found.' });
-        }
-
-        res.status(200).json(product);
+        // Find all companies and return only their name, logo, and id
+        const companies = await Company.find().select('name logo').sort({ name: 1 });
+        
+        res.status(200).json(companies);
 
     } catch (error) {
-        console.error("❌ --- ERROR in getProductById --- ❌");
+        console.error("❌ --- ERROR in getAllCompanies --- ❌");
         console.error(error);
-        res.status(500).json({ message: '❌ Failed to fetch product', error: error.message });
+        res.status(500).json({ message: '❌ Failed to fetch companies', error: error.message });
     }
 };
