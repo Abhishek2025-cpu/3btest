@@ -32,8 +32,9 @@ exports.sendMessage = [
       let mediaUrl = null;
       if (file) {
         try {
-          mediaUrl = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-          console.log('File uploaded to GCS at:', mediaUrl);
+        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+          mediaUrl = uploadResult.url; // Store only the URL as a string
+
         } catch (uploadError) {
           console.error('GCS upload failed:', uploadError.message);
           return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
