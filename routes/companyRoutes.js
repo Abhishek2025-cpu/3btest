@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const companyController = require('../controllers/company.controller');
+const companyController = require('../controllar/company.controller');
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
