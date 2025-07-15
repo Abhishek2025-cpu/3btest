@@ -28,18 +28,18 @@ exports.sendMessage = [
       if (!message && !file) {
         return res.status(400).json({ success: false, message: "Either message or file is required" });
       }
+let mediaUrl = null;
+if (file) {
+  try {
+    const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+    console.log('Uploaded file URL:', url);
+    mediaUrl = url;
+  } catch (uploadError) {
+    console.error('GCS upload failed:', uploadError.message);
+    return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
+  }
+}
 
-      let mediaUrl = null;
-      if (file) {
-        try {
-        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-          mediaUrl = uploadResult.url; // Store only the URL as a string
-
-        } catch (uploadError) {
-          console.error('GCS upload failed:', uploadError.message);
-          return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
-        }
-      }
 
       const chat = await Chat.create({
         senderId,
