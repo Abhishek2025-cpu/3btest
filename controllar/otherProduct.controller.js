@@ -27,57 +27,86 @@ const processAndUploadFile = async (file, prefix, bucket) => {
 };
 
 
+// controllers/otherProduct.controller.js
+
+// ... (imports and helper functions like processAndUploadFile remain the same)
+
 exports.addOtherProduct = async (req, res) => {
     console.log("--- [DEBUG] Received request to add OtherProduct ---");
     try {
-        // --- 1. EXTRACT & VALIDATE DATA ---
+        // --- 1. EXTRACT DATA ---
         const { categoryId } = req.params;
-        // Destructure the new companyIds field from the body
-        const { productName, modelNo, size, details, materialNames, materialPrices, companyIds } = req.body;
+        // Destructure the new materialDiscounts field from the body
+        const { 
+            productName, modelNo, size, details, 
+            materialNames, materialPrices, materialDiscounts, 
+            companyIds 
+        } = req.body;
         
         const productImages = req.files.images;
         const materialImages = req.files.materialImages;
 
-        // ... (all previous validations for category, product details, images, materials remain the same) ...
-
-        // --- NEW VALIDATION for companyIds ---
-        let companiesArray = [];
-        if (companyIds) {
-            // Handle both single ID string and array of ID strings
-            companiesArray = Array.isArray(companyIds) ? companyIds : [companyIds];
-            // Optional: Check if all provided IDs are valid Mongo ObjectIds
-            for (const id of companiesArray) {
-                if (!mongoose.Types.ObjectId.isValid(id)) {
-                    return res.status(400).json({ message: `Invalid Company ID format: ${id}` });
-                }
-            }
+        // --- 2. VALIDATE DATA ---
+        console.log("[DEBUG] Validating incoming data...");
+        // ... (all previous validations for productName, files, etc. remain)
+        
+        // Convert to arrays to handle single-item submissions gracefully
+        const names = Array.isArray(materialNames) ? materialNames : [materialNames];
+        const prices = Array.isArray(materialPrices) ? materialPrices : [materialPrices];
+        const discounts = Array.isArray(materialDiscounts) ? materialDiscounts : [materialDiscounts];
+        
+        if (!materialImages || names.length !== materialImages.length || prices.length !== materialImages.length || discounts.length !== materialImages.length) {
+            return res.status(400).json({ 
+                message: `Data mismatch. The number of material names, prices, discounts, and images must be the same.`
+            });
         }
         
-        // ... (all image uploading logic remains the same) ...
+        let companiesArray = [];
+        if (companyIds) { /* ... companyId validation remains the same ... */ }
 
+        // --- 3. UPLOAD IMAGES ---
+        console.log("[DEBUG] Uploading all images...");
         const [uploadedProductImages, uploadedMaterialImages] = await Promise.all([
             Promise.all(productImages.map(f => processAndUploadFile(f, 'product', 'products-bucket'))),
             Promise.all(materialImages.map(f => processAndUploadFile(f, 'material', 'materials-bucket')))
         ]);
         
-        const materialsData = materialNames.map((name, index) => ({
-            materialName: name,
-            price: parseFloat(materialPrices[index]),
-            materialImage: uploadedMaterialImages[index]
-        }));
+        // --- 4. CALCULATE PRICES & PREPARE MATERIAL DATA ---
+        console.log("[DEBUG] Calculating prices and preparing material data...");
+        const materialsData = names.map((name, index) => {
+            const originalPrice = parseFloat(prices[index]);
+            // Use || 0 as a fallback if a discount is not provided for an item
+            const discountPercentage = parseFloat(discounts[index] || 0);
 
-        // --- 5. SAVE TO DATABASE (with companies) ---
+            if (isNaN(originalPrice) || isNaN(discountPercentage)) {
+                throw new Error(`Invalid price or discount for material #${index + 1}. Please provide numbers.`);
+            }
+
+            // Calculate the final price
+            const finalPrice = originalPrice - (originalPrice * (discountPercentage / 100));
+
+            // Return the full object to be stored in the database
+            return {
+                materialName: name,
+                price: originalPrice,
+                discount: discountPercentage,
+                discountedPrice: finalPrice, // Store the calculated price
+                materialImage: uploadedMaterialImages[index]
+            };
+        });
+
+        // --- 5. SAVE TO DATABASE ---
         console.log("[DEBUG] Saving product to database...");
         const newProduct = new OtherProduct({
             productName, modelNo, size, details,
             images: uploadedProductImages,
             materials: materialsData,
             category: categoryId,
-            companies: companiesArray // Add the validated company IDs here
+            companies: companiesArray
         });
 
         await newProduct.save();
-        console.log("[DEBUG] ✅ Successfully saved new product with company associations.");
+        console.log("[DEBUG] ✅ Successfully saved new product.");
 
         // We can populate the response to show the created data immediately
         const populatedProduct = await newProduct.populate([
@@ -91,9 +120,12 @@ exports.addOtherProduct = async (req, res) => {
         });
 
     } catch (error) {
-        // ... (error handling remains the same) ...
         console.error("❌ --- FATAL ERROR in addOtherProduct --- ❌");
         console.error(error);
+        // Check for Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: '❌ Product creation failed', error: error.message });
     }
 };

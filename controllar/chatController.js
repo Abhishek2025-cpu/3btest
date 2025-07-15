@@ -3,7 +3,11 @@ const Chat = require('../models/chat');
 const User = require('../models/User'); // make sure this exists
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const mongoose = require('mongoose');
+
 const multer = require('multer');
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
 
 exports.sendMessage = [
   upload.single('file'),
