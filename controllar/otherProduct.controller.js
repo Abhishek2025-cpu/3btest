@@ -129,34 +129,35 @@ exports.getProductById = async (req, res) => {
 
 
 // NEW FUNCTION: GET all products for a given category ID
-exports.getProductsByCategoryId = async (req, res) => {
-  console.log(`--- [DEBUG] Received request to get all Products for Category ID: ${req.params.categoryId} ---`);
-  try {
-    const { categoryId } = req.params;
-
-    // 1. Validate the Category ID
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      return res.status(400).json({ message: 'Invalid Category ID format.' });
-    }
+exports.getProductById = async (req, res) => {
+    // Log the exact ID received
+    console.log(`--- [DEBUG] GET Product by ID. Received productId: '${req.params.productId}' ---`);
     
-    // 2. Optional but recommended: Check if the category actually exists
-    const categoryExists = await OtherCategory.findById(categoryId);
-    if (!categoryExists) {
-        return res.status(404).json({ message: `Category with ID ${categoryId} not found.` });
+    try {
+        const { productId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            console.error(`[DEBUG] Invalid ObjectId format for ID: ${productId}`);
+            return res.status(400).json({ message: 'Invalid Product ID format.' });
+        }
+
+        // Log before the query
+        console.log(`[DEBUG] Querying 'otherproducts' collection for _id: ${productId}`);
+        const product = await OtherProduct.findById(productId)
+            .populate({ path: 'category', select: 'name' })
+            .populate({ path: 'companies', select: 'name logo' });
+
+        // Log the result of the query
+        console.log("[DEBUG] Result from findById:", product); // This will show 'null'
+
+        if (!product) {
+            console.log(`[DEBUG] Product not found in database for ID: ${productId}`);
+            return res.status(444).json({ message: 'Product not found.' });
+        }
+
+        res.status(200).json(product);
+
+    } catch (error) {
+        // ... error handling
     }
-
-    // 3. Find all products where the 'category' field matches the categoryId
-    //    We also populate the 'companies' to include their details in the response.
-    const products = await OtherProduct.find({ category: categoryId })
-      .populate({ path: 'companies', select: 'name logo' });
-
-    // The .find() method returns an array. If no products are found,
-    // it will be an empty array [], which is the correct response.
-    res.status(200).json(products);
-
-  } catch (error) {
-    console.error("❌ --- ERROR in getProductsByCategoryId --- ❌");
-    console.error(error);
-    res.status(500).json({ message: '❌ Failed to fetch products for the category', error: error.message });
-  }
 };
