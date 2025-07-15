@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const otherProductController = require('../controllers/otherProduct.controller');
+const otherProductController = require('../controllar/otherProduct.controller');
 
 
 // Configure Multer for in-memory file storage
