@@ -129,35 +129,36 @@ exports.getProductById = async (req, res) => {
 
 
 // NEW FUNCTION: GET all products for a given category ID
-exports.getProductById = async (req, res) => {
-    // Log the exact ID received
-    console.log(`--- [DEBUG] GET Product by ID. Received productId: '${req.params.productId}' ---`);
-    
-    try {
-        const { productId } = req.params;
+exports.getProductsByCategoryId = async (req, res) => {
+  const { categoryId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(productId)) {
-            console.error(`[DEBUG] Invalid ObjectId format for ID: ${productId}`);
-            return res.status(400).json({ message: 'Invalid Product ID format.' });
-        }
+  console.log(`--- [DEBUG] Fetching products for Category ID: ${categoryId} ---`);
 
-        // Log before the query
-        console.log(`[DEBUG] Querying 'otherproducts' collection for _id: ${productId}`);
-        const product = await OtherProduct.findById(productId)
-            .populate({ path: 'category', select: 'name' })
-            .populate({ path: 'companies', select: 'name logo' });
-
-        // Log the result of the query
-        console.log("[DEBUG] Result from findById:", product); // This will show 'null'
-
-        if (!product) {
-            console.log(`[DEBUG] Product not found in database for ID: ${productId}`);
-            return res.status(444).json({ message: 'Product not found.' });
-        }
-
-        res.status(200).json(product);
-
-    } catch (error) {
-        // ... error handling
+  try {
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ message: 'Invalid Category ID format.' });
     }
+
+    // Check if the category exists
+    const categoryExists = await OtherCategory.exists({ _id: categoryId });
+    if (!categoryExists) {
+      return res.status(404).json({ message: `Category with ID ${categoryId} not found.` });
+    }
+
+    // Find products
+    const products = await OtherProduct.find({ category: categoryId })
+      .populate({ path: 'companies', select: 'name logo' });
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: `No products found for Category ID ${categoryId}.` });
+    }
+
+    return res.status(200).json(products);
+
+  } catch (error) {
+    console.error("❌ --- ERROR in getProductsByCategoryId --- ❌");
+    console.error(error);
+    res.status(500).json({ message: 'Failed to fetch products for the category', error: error.message });
+  }
 };
