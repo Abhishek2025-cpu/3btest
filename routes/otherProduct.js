@@ -27,4 +27,10 @@ router.post(
 
 router.get('/products/:productId', otherProductController.getProductById);
 
+// GET /api/other-categories/:categoryId/products
+router.get(
+  '/products/:categoryId',
+  otherProductController.getProductsByCategoryId
+);
+
 module.exports = router;

@@ -126,3 +126,37 @@ exports.getProductById = async (req, res) => {
         res.status(500).json({ message: '❌ Failed to fetch product', error: error.message });
     }
 };
+
+
+// NEW FUNCTION: GET all products for a given category ID
+exports.getProductsByCategoryId = async (req, res) => {
+  console.log(`--- [DEBUG] Received request to get all Products for Category ID: ${req.params.categoryId} ---`);
+  try {
+    const { categoryId } = req.params;
+
+    // 1. Validate the Category ID
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ message: 'Invalid Category ID format.' });
+    }
+    
+    // 2. Optional but recommended: Check if the category actually exists
+    const categoryExists = await OtherCategory.findById(categoryId);
+    if (!categoryExists) {
+        return res.status(404).json({ message: `Category with ID ${categoryId} not found.` });
+    }
+
+    // 3. Find all products where the 'category' field matches the categoryId
+    //    We also populate the 'companies' to include their details in the response.
+    const products = await OtherProduct.find({ category: categoryId })
+      .populate({ path: 'companies', select: 'name logo' });
+
+    // The .find() method returns an array. If no products are found,
+    // it will be an empty array [], which is the correct response.
+    res.status(200).json(products);
+
+  } catch (error) {
+    console.error("❌ --- ERROR in getProductsByCategoryId --- ❌");
+    console.error(error);
+    res.status(500).json({ message: '❌ Failed to fetch products for the category', error: error.message });
+  }
+};
