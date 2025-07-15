@@ -30,7 +30,7 @@ router.get('/products/:productId', otherProductController.getProductById);
 // GET /api/other-categories/:categoryId/products
 router.get(
   '/products/:categoryId',
-  otherProductController.getProductsByCategoryId
+  otherProductController.getProductById
 );
 
 module.exports = router;
