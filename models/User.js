@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   number: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  role: { type: String, default: "client" },
+  role: { type: String, enum: ['client', 'admin', 'user'], default: 'client' },
   profileImage: { type: String, default: null },
   shippingAddresses: {
     type: [shippingAddressSchema],
