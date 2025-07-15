@@ -43,6 +43,12 @@ const otherProductSchema = new Schema({
     required: true,
     validate: [val => val.length > 0, 'At least one material is required.']
   },
+
+    // Array of references to Company documents
+  companies: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Company' // This MUST match the model name from mongoose.model('Company', ...)
+  }],
   // Other fields
   size: { type: String, trim: true },
   details: { type: String, required: [true, 'Product details are required.'] },

@@ -25,4 +25,6 @@ router.post(
   otherProductController.addOtherProduct
 );
 
+router.get('/products/:productId', otherProductController.getProductById);
+
 module.exports = router;
