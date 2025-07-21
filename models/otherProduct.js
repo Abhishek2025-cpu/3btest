@@ -1,7 +1,7 @@
 // models/otherProduct.model.js
 
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
+const { Schema, model, Types } = require('mongoose');
 
 // This sub-schema is updated to include discount fields
 const MaterialSchema = new Schema({
@@ -36,6 +36,8 @@ const MaterialSchema = new Schema({
   }
 }, { _id: false });
 
+
+
 const otherProductSchema = new Schema({
   productName: {
     type: String,
@@ -47,23 +49,19 @@ const otherProductSchema = new Schema({
     required: [true, 'Model number is required.'],
     trim: true,
   },
-  // Main product images
   images: [{
     id: { type: String, required: true },
     url: { type: String, required: true }
   }],
-  // Array of materials, now using the updated MaterialSchema
   materials: {
     type: [MaterialSchema],
     required: true,
     validate: [val => val.length > 0, 'At least one material is required.']
   },
-  // Array of references to Company documents
   companies: [{
     type: Schema.Types.ObjectId,
-    ref: 'Company' // This MUST match the model name from mongoose.model('Company', ...)
+    ref: 'Company'
   }],
-  // Other fields
   size: { type: String, trim: true },
   details: { type: String, required: [true, 'Product details are required.'] },
   category: {
@@ -71,9 +69,15 @@ const otherProductSchema = new Schema({
     ref: 'OtherCategory',
     required: true,
     index: true
+  },
+
+  // ✅ New Field: pieces
+  pieces: {
+    type: Schema.Types.Mixed,
+    default: 'NA'
   }
-}, {
-  timestamps: true
-});
+
+}, { timestamps: true });
+
 
 module.exports = mongoose.model('OtherProduct', otherProductSchema);

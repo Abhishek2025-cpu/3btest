@@ -40,7 +40,7 @@ exports.addOtherProduct = async (req, res) => {
         const { 
             productName, modelNo, size, details, 
             materialNames, materialPrices, materialDiscounts, 
-            companyIds 
+            companyIds, pieces  
         } = req.body;
         
         const productImages = req.files.images;
@@ -102,7 +102,9 @@ exports.addOtherProduct = async (req, res) => {
             images: uploadedProductImages,
             materials: materialsData,
             category: categoryId,
-            companies: companiesArray
+            companies: companiesArray,
+            pieces: pieces && pieces !== '' ? isNaN(pieces) ? 'NA' : Number(pieces) : 'NA',
+
         });
 
         await newProduct.save();
