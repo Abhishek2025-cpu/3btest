@@ -2,6 +2,7 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/ProductUpload');
+const OtherProduct = require('../models/otherproduct');
 
 
 const generateOrderId = () => {
@@ -9,6 +10,7 @@ const generateOrderId = () => {
   const random = Math.floor(100000000000 + Math.random() * 900000000000); // 12 digits
   return `${prefix}${random}`;
 };
+
 
 exports.placeOrder = async (req, res) => {
   try {
@@ -27,28 +29,46 @@ exports.placeOrder = async (req, res) => {
     let totalPrice = 0;
     const products = await Promise.all(
       items.map(async item => {
-        const product = await Product.findById(item.productId);
+        // Try ProductUpload first
+        let product = await Product.findById(item.productId);
+        let isOtherProduct = false;
+
+        // If not found, try OtherProduct
+        if (!product) {
+          product = await OtherProduct.findById(item.productId);
+          isOtherProduct = true;
+        }
         if (!product) throw new Error('Product not found');
 
-        if (product.quantity < item.quantity) {
-          throw new Error(`Insufficient stock for product: ${product.name}`);
+        // Deduct quantity and update availability (if stock is tracked)
+        if (typeof product.quantity === 'number') {
+          if (product.quantity < item.quantity) {
+            throw new Error(`Insufficient stock for product: ${product.name || product.productname}`);
+          }
+          product.quantity -= item.quantity;
+          if (product.quantity <= 0) {
+            product.quantity = 0;
+            product.available = false;
+          }
+          await product.save();
         }
-
-        // Deduct quantity and update availability
-        product.quantity -= item.quantity;
-        if (product.quantity <= 0) {
-          product.quantity = 0;
-          product.available = false;
-        }
-        await product.save();
 
         // Select correct image
         let image = null;
-        const colorKey = item.color?.trim();
-        if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
-          image = product.colorImageMap[colorKey];
-        } else if (product.images && product.images.length) {
-          image = product.images[0];
+        if (!isOtherProduct) {
+          const colorKey = item.color?.trim();
+          if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
+            image = product.colorImageMap[colorKey];
+          } else if (product.images && product.images.length) {
+            image = product.images[0];
+          }
+        } else {
+          // For OtherProduct, fallback to images or a default field
+          if (product.images && product.images.length) {
+            image = product.images[0];
+          } else if (product.image) {
+            image = product.image;
+          }
         }
 
         const productSubtotal = item.price * item.quantity;
@@ -56,7 +76,7 @@ exports.placeOrder = async (req, res) => {
 
         return {
           productId: product._id,
-          productName: product.name,
+          productName: product.name || product.productname,
           quantity: item.quantity,
           color: item.color || 'Not specified',
           priceAtPurchase: item.price,
@@ -112,6 +132,111 @@ exports.placeOrder = async (req, res) => {
     });
   }
 };
+// ...existing code...
+
+
+// exports.placeOrder = async (req, res) => {
+//   try {
+//     const { userId, shippingAddressId, items } = req.body;
+
+//     // 1. Get User and selected shipping address
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+//     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
+//     if (!shippingAddress) {
+//       return res.status(404).json({ success: false, message: 'Shipping address not found' });
+//     }
+
+//     // 2. Process items and deduct stock
+//     let totalPrice = 0;
+//     const products = await Promise.all(
+//       items.map(async item => {
+//         const product = await Product.findById(item.productId);
+//         if (!product) throw new Error('Product not found');
+
+//         if (product.quantity < item.quantity) {
+//           throw new Error(`Insufficient stock for product: ${product.name}`);
+//         }
+
+//         // Deduct quantity and update availability
+//         product.quantity -= item.quantity;
+//         if (product.quantity <= 0) {
+//           product.quantity = 0;
+//           product.available = false;
+//         }
+//         await product.save();
+
+//         // Select correct image
+//         let image = null;
+//         const colorKey = item.color?.trim();
+//         if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
+//           image = product.colorImageMap[colorKey];
+//         } else if (product.images && product.images.length) {
+//           image = product.images[0];
+//         }
+
+//         const productSubtotal = item.price * item.quantity;
+//         totalPrice += productSubtotal;
+
+//         return {
+//           productId: product._id,
+//           productName: product.name,
+//           quantity: item.quantity,
+//           color: item.color || 'Not specified',
+//           priceAtPurchase: item.price,
+//           subtotal: productSubtotal,
+//           image,
+//           orderId: generateOrderId()
+//         };
+//       })
+//     );
+
+//     // 3. Create new order
+//     const newOrder = new Order({
+//       userId,
+//       products,
+//       totalPrice,
+//       shippingDetails: {
+//         name: shippingAddress.name,
+//         phone: shippingAddress.phone,
+//         addressType: shippingAddress.addressType,
+//         detailedAddress: shippingAddress.detailedAddress
+//       },
+//       orderId: generateOrderId(),
+//       currentStatus: "Pending",
+//       tracking: [{
+//         status: "Pending",
+//         updatedAt: new Date()
+//       }]
+//     });
+
+//     await newOrder.save();
+
+//     res.status(201).json({
+//       success: true,
+//       message: "Order placed successfully",
+//       order: newOrder,
+//       totalPrice,
+//       productBreakdown: products.map(p => ({
+//         productId: p.productId,
+//         name: p.productName,
+//         quantity: p.quantity,
+//         color: p.color,
+//         priceAtPurchase: p.priceAtPurchase,
+//         subtotal: p.subtotal
+//       }))
+//     });
+
+//   } catch (error) {
+//     console.error('Error placing order:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//       error: 'Server error placing order.'
+//     });
+//   }
+// };
 
 
 
