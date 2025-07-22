@@ -75,15 +75,15 @@ exports.placeOrder = async (req, res) => {
         totalPrice += productSubtotal;
 
         return {
-          productId: product._id,
-          productName: product.name || product.productname,
-          quantity: item.quantity,
-          color: item.color || 'Not specified',
-          priceAtPurchase: item.price,
-          subtotal: productSubtotal,
-          image,
-          orderId: generateOrderId()
-        };
+  productId: product._id,
+  productName: product.productName || product.name || item.productName || item.productname || 'Unknown Product', // Always set productName
+  quantity: item.quantity,
+  color: item.color || 'Not specified',
+  priceAtPurchase: item.price,
+  subtotal: productSubtotal,
+  image,
+  orderId: generateOrderId()
+};
       })
     );
 
