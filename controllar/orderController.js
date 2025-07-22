@@ -2,7 +2,7 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/ProductUpload');
-const OtherProduct = require('../models/otherproduct');
+const OtherProduct = require('../models/otherProduct');
 
 
 const generateOrderId = () => {
