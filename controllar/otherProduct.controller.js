@@ -202,3 +202,99 @@ exports.getProductsByCategoryId = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch products for the category', error: error.message });
   }
 };
+
+
+
+// UPDATE OtherProduct
+exports.updateOtherProduct = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({ message: 'Invalid Product ID format.' });
+        }
+
+        const product = await OtherProduct.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found.' });
+        }
+
+        // Update basic fields
+        const updatableFields = [
+            'productName', 'modelNo', 'size', 'details', 'category', 'companies', 'pieces'
+        ];
+        updatableFields.forEach(field => {
+            if (req.body[field] !== undefined) {
+                product[field] = req.body[field];
+            }
+        });
+
+        // Update product images if provided
+        if (req.files && req.files.images) {
+            const uploadedProductImages = await Promise.all(
+                req.files.images.map(f => processAndUploadFile(f, 'product', 'products-bucket'))
+            );
+            product.images = uploadedProductImages;
+        }
+
+        // Update material images and materials if provided
+        if (req.files && req.files.materialImages && req.body.materialNames && req.body.materialPrices) {
+            const names = Array.isArray(req.body.materialNames) ? req.body.materialNames : [req.body.materialNames];
+            const prices = Array.isArray(req.body.materialPrices) ? req.body.materialPrices : [req.body.materialPrices];
+            const discounts = req.body.materialDiscounts ? (Array.isArray(req.body.materialDiscounts) ? req.body.materialDiscounts : [req.body.materialDiscounts]) : [];
+            const uploadedMaterialImages = await Promise.all(
+                req.files.materialImages.map(f => processAndUploadFile(f, 'material', 'materials-bucket'))
+            );
+            if (
+                names.length !== uploadedMaterialImages.length ||
+                prices.length !== uploadedMaterialImages.length ||
+                (discounts.length > 0 && discounts.length !== uploadedMaterialImages.length)
+            ) {
+                return res.status(400).json({ message: 'Material data mismatch.' });
+            }
+            product.materials = names.map((name, index) => {
+                const originalPrice = parseFloat(prices[index]);
+                const discountPercentage = parseFloat(discounts[index] || 0);
+                const finalPrice = originalPrice - (originalPrice * (discountPercentage / 100));
+                return {
+                    materialName: name,
+                    price: originalPrice,
+                    discount: discountPercentage,
+                    discountedPrice: finalPrice,
+                    materialImage: uploadedMaterialImages[index]
+                };
+            });
+        }
+
+        await product.save();
+        const populatedProduct = await product.populate([
+            { path: 'category', select: 'name' },
+            { path: 'companies', select: 'name logo' }
+        ]);
+        res.status(200).json({ message: 'Product updated successfully', product: populatedProduct });
+    } catch (error) {
+        console.error("❌ --- ERROR in updateOtherProduct --- ❌");
+        console.error(error);
+        res.status(500).json({ message: 'Failed to update product', error: error.message });
+    }
+};
+
+
+exports.deleteOtherProduct = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({ message: 'Invalid Product ID format.' });
+        }
+        const deleted = await OtherProduct.findByIdAndDelete(productId);
+        if (!deleted) {
+            return res.status(404).json({ message: 'Product not found.' });
+        }
+        res.status(200).json({ message: 'Product deleted successfully.' });
+    } catch (error) {
+        console.error("❌ --- ERROR in deleteOtherProduct --- ❌");
+        console.error(error);
+        res.status(500).json({ message: 'Failed to delete product', error: error.message });
+    }
+};
+
+
