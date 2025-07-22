@@ -33,4 +33,18 @@ router.get(
   otherProductController.getProductsByCategoryId
 );
 
+router.put(
+  '/update-product/:productId',
+  upload.fields([
+      { name: 'images', maxCount: 10 },        // For main product images
+      { name: 'materialImages', maxCount: 10 } // For the material variant images
+  ]),
+  otherProductController.updateOtherProduct
+);
+
+router.delete(
+  '/delete-product/:productId',
+  otherProductController.deleteOtherProduct
+);
+
 module.exports = router;
