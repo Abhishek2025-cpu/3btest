@@ -39,7 +39,8 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
     default: 'Pending'
-  }
+  },
+    gstin: { type: String, required: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);

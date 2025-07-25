@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
+const GstDetails = require('../models/GstDetails'); 
 
 
 const generateOrderId = () => {
@@ -21,6 +22,15 @@ exports.placeOrder = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    const gst = await GstDetails.findOne({ userId });
+
+    if (!gst || !gst.gstin) {
+     return res.status(400).json({
+       success: false,
+         message: 'GSTIN not found. Please complete GST verification before placing an order.'
+       });
+      }
 
     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
     if (!shippingAddress) {
@@ -122,6 +132,7 @@ exports.placeOrder = async (req, res) => {
       },
       orderId: generateOrderId(), // This is the main ID for the entire order.
       currentStatus: "Pending",
+       gstin: gst.gstin ,
       tracking: [{
         status: "Pending",
         updatedAt: new Date()
