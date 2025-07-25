@@ -153,11 +153,15 @@
 
 
 
+
 const Chat = require('../models/chat');
+const User = require('../models/User');
+const Admin = require('../models/Admin');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const multer = require('multer');
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
+
 
 exports.sendMessage = [
   upload.single('file'),
@@ -166,16 +170,6 @@ exports.sendMessage = [
       const { senderId, receiverId, message } = req.body;
       const file = req.file;
 
-      console.log('--- Incoming Request ---');
-      console.log('senderId:', senderId);
-      console.log('receiverId:', receiverId);
-      console.log('message:', message);
-      console.log('file:', file ? {
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size
-      } : 'No file received');
-
       if (!senderId || !receiverId) {
         return res.status(400).json({ success: false, message: "senderId and receiverId are required" });
       }
@@ -183,22 +177,34 @@ exports.sendMessage = [
       if (!message && !file) {
         return res.status(400).json({ success: false, message: "Either message or file is required" });
       }
-let mediaUrl = null;
-if (file) {
-  try {
-    const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-    console.log('Uploaded file URL:', url);
-    mediaUrl = url;
-  } catch (uploadError) {
-    console.error('GCS upload failed:', uploadError.message);
-    return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
-  }
-}
 
+      // Resolve senderModel
+      let senderModel = null;
+      if (await User.findById(senderId)) senderModel = 'User';
+      else if (await Admin.findById(senderId)) senderModel = 'Admin';
+      else return res.status(400).json({ success: false, message: "Invalid senderId" });
+
+      // Resolve receiverModel
+      let receiverModel = null;
+      if (await User.findById(receiverId)) receiverModel = 'User';
+      else if (await Admin.findById(receiverId)) receiverModel = 'Admin';
+      else return res.status(400).json({ success: false, message: "Invalid receiverId" });
+
+      let mediaUrl = null;
+      if (file) {
+        try {
+          const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+          mediaUrl = url;
+        } catch (uploadError) {
+          return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
+        }
+      }
 
       const chat = await Chat.create({
         senderId,
         receiverId,
+        senderModel,
+        receiverModel,
         message: message || null,
         mediaUrl
       });
