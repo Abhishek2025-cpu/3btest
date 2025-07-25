@@ -18,26 +18,34 @@ exports.placeOrder = async (req, res) => {
 
     // 1. Get User and selected shipping address
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
     if (!shippingAddress) {
       return res.status(404).json({ success: false, message: 'Shipping address not found' });
     }
 
-    // 2. Process items and deduct stock
-    let totalPrice = 0; // This will accumulate the floating-point total
+    // 2. Process items, calculate total, and deduct stock
+    let totalPrice = 0; // This will accumulate the precise floating-point total
     const products = await Promise.all(
       items.map(async item => {
-        // ... (your existing product lookup and stock deduction logic is correct)
+        // Try ProductUpload first
         let product = await Product.findById(item.productId);
         let isOtherProduct = false;
+
+        // If not found, try OtherProduct
         if (!product) {
           product = await OtherProduct.findById(item.productId);
           isOtherProduct = true;
         }
-        if (!product) throw new Error('Product not found');
+        if (!product) {
+          // Throw a specific error if no product is found at all
+          throw new Error(`Product not found with ID: ${item.productId}`);
+        }
 
+        // Deduct quantity and update availability (if stock is tracked)
         if (typeof product.quantity === 'number') {
           if (product.quantity < item.quantity) {
             throw new Error(`Insufficient stock for product: ${product.name || product.productname}`);
@@ -50,31 +58,54 @@ exports.placeOrder = async (req, res) => {
           await product.save();
         }
 
+        // Select correct image
         let image = null;
         if (!isOtherProduct) {
-            // ... (image logic)
+          const colorKey = item.color?.trim();
+          if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
+            image = product.colorImageMap[colorKey];
+          } else if (product.images && product.images.length) {
+            image = product.images[0];
+          }
         } else {
-            // ... (image logic)
+          // For OtherProduct, fallback to images or a default field
+          if (product.images && product.images.length) {
+            image = product.images[0];
+          } else if (product.image) {
+            image = product.image;
+          }
         }
 
-        const productSubtotal = item.price * item.quantity;
-        totalPrice += productSubtotal; // Add the precise subtotal to the total
+        // ====================================================================
+        // FIX 1: Reliably handle price from the request payload
+        // This handles cases where the price is sent as `item.price` or `item.priceAtPurchase`.
+        // ====================================================================
+        const priceForCalculation = item.price || item.priceAtPurchase;
+
+        // Add a safety check to prevent NaN errors if price is missing entirely.
+        if (typeof priceForCalculation !== 'number') {
+          throw new Error(`Price is missing or invalid for product: ${item.productName || item.productId}`);
+        }
+
+        const productSubtotal = priceForCalculation * item.quantity;
+        totalPrice += productSubtotal;
 
         return {
           productId: product._id,
-          productName: product.productName || product.name || item.productName || item.productname || 'Unknown Product',
+          productName: product.productName || product.name || item.productName || 'Unknown Product',
           quantity: item.quantity,
           color: item.color || 'Not specified',
-          priceAtPurchase: item.price,
+          // Use the reliable price to populate the required schema field
+          priceAtPurchase: priceForCalculation,
           subtotal: productSubtotal,
           image,
-          orderId: generateOrderId() // Note: This might need to be the main order's ID
+          orderId: generateOrderId() // This was in your original code. Ensure this is intended per-product.
         };
       })
     );
-    
+
     // ====================================================================
-    // CHANGE 1: Round the final total price to the nearest integer.
+    // FIX 2: Round the final total price to the nearest integer.
     // ====================================================================
     const roundedTotalPrice = Math.round(totalPrice);
 
@@ -82,17 +113,14 @@ exports.placeOrder = async (req, res) => {
     const newOrder = new Order({
       userId,
       products,
-      // ====================================================================
-      // CHANGE 2: Use the new rounded total price when creating the order.
-      // ====================================================================
-      totalPrice: roundedTotalPrice, 
+      totalPrice: roundedTotalPrice, // Use the new rounded total price
       shippingDetails: {
         name: shippingAddress.name,
-        phone: shippingAddress.phone, // I see 'phone' here but 'number' in your schema. Be sure they match!
+        phone: shippingAddress.phone, // Reminder: Ensure your schema uses 'phone' and not 'number'.
         addressType: shippingAddress.addressType,
         detailedAddress: shippingAddress.detailedAddress
       },
-      orderId: generateOrderId(),
+      orderId: generateOrderId(), // This is the main ID for the entire order.
       currentStatus: "Pending",
       tracking: [{
         status: "Pending",
@@ -102,14 +130,12 @@ exports.placeOrder = async (req, res) => {
 
     await newOrder.save();
 
+    // 4. Send successful response
     res.status(201).json({
       success: true,
       message: "Order placed successfully",
       order: newOrder,
-      // ====================================================================
-      // CHANGE 3: Send the rounded total price in the final JSON response.
-      // ====================================================================
-      totalPrice: roundedTotalPrice, 
+      totalPrice: roundedTotalPrice, // Send the rounded total price in the response
       productBreakdown: products.map(p => ({
         productId: p.productId,
         name: p.productName,
@@ -121,10 +147,11 @@ exports.placeOrder = async (req, res) => {
     });
 
   } catch (error) {
+    // 5. Catch and handle any errors gracefully
     console.error('Error placing order:', error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message, // Send the specific error message for easier debugging
       error: 'Server error placing order.'
     });
   }
