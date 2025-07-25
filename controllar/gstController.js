@@ -1,5 +1,7 @@
 const axios = require('axios');
 const GstDetails = require('../models/GstDetails');
+const User = require('../models/User');
+
 
 
 
@@ -28,6 +30,7 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or unregistered GSTIN' });
     }
 
+    // ✅ Save to GstDetails collection
     const saved = await GstDetails.findOneAndUpdate(
       { userId },
       {
@@ -40,6 +43,13 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
       { new: true, upsert: true }
     );
 
+    // ✅ Update GSTIN in User model
+    await User.findByIdAndUpdate(
+      userId,
+      { gstin },
+      { new: true }
+    );
+
     return res.status(200).json({ success: true, data: saved });
 
   } catch (err) {
@@ -47,4 +57,5 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
   }
 };
+
 

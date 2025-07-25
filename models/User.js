@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   role: { type: String, enum: ['client', 'admin', 'user'], default: 'client' },
   profileImage: { type: String, default: null },
+    gstin: { type: String, default: null }, 
   shippingAddresses: {
     type: [shippingAddressSchema],
     validate: [arr => arr.length <= 5, '{PATH} exceeds the limit of 5']
