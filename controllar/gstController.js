@@ -1,6 +1,9 @@
 const axios = require('axios');
 const GstDetails = require('../models/GstDetails');
 
+const axios = require('axios');
+const GstDetails = require('../models/GstDetails');
+
 exports.verifyAndSaveGSTIN = async (req, res) => {
   const { userId, gstin } = req.body;
 
@@ -9,15 +12,14 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
   }
 
   try {
-    // Call GST validation API
     const response = await axios.post(
-      'https://gstin-bulk-validator.p.rapidapi.com/v1.0/verifyGSTIN',
+      'https://gstin-bulk-verification1.p.rapidapi.com/v1.0/verifyGSTIN',
       { gstin: [gstin] },
       {
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Key': '33e17d9fa16359016cd870164c111452',
-          'X-RapidAPI-Host': 'gstin-bulk-validator.p.rapidapi.com'
+          'X-RapidAPI-Host': 'gstin-bulk-verification1.p.rapidapi.com'
         }
       }
     );
@@ -40,9 +42,11 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
       { new: true, upsert: true }
     );
 
-    res.status(200).json({ success: true, data: saved });
+    return res.status(200).json({ success: true, data: saved });
+
   } catch (err) {
     console.error('GSTIN verification error:', err.message);
-    res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
+    return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
   }
 };
+
