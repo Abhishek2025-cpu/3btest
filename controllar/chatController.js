@@ -167,8 +167,14 @@ exports.sendMessage = [
   upload.single('file'),
   async (req, res) => {
     try {
-      const { senderId, receiverId, message } = req.body;
+      const senderId = req.body.senderId?.trim();
+      const receiverId = req.body.receiverId?.trim();
+      const message = req.body.message;
       const file = req.file;
+
+      console.log('BODY:', req.body);
+      console.log('senderId:', senderId);
+      console.log('receiverId:', receiverId);
 
       if (!senderId || !receiverId) {
         return res.status(400).json({ success: false, message: "senderId and receiverId are required" });
@@ -178,13 +184,13 @@ exports.sendMessage = [
         return res.status(400).json({ success: false, message: "Either message or file is required" });
       }
 
-      // Resolve senderModel
+      // Detect sender model
       let senderModel = null;
       if (await User.findById(senderId)) senderModel = 'User';
       else if (await Admin.findById(senderId)) senderModel = 'Admin';
       else return res.status(400).json({ success: false, message: "Invalid senderId" });
 
-      // Resolve receiverModel
+      // Detect receiver model
       let receiverModel = null;
       if (await User.findById(receiverId)) receiverModel = 'User';
       else if (await Admin.findById(receiverId)) receiverModel = 'Admin';
@@ -192,18 +198,14 @@ exports.sendMessage = [
 
       let mediaUrl = null;
       if (file) {
-        try {
-          const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-          mediaUrl = url;
-        } catch (uploadError) {
-          return res.status(500).json({ success: false, message: 'File upload failed', error: uploadError.message });
-        }
+        const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+        mediaUrl = url;
       }
 
       const chat = await Chat.create({
         senderId,
-        receiverId,
         senderModel,
+        receiverId,
         receiverModel,
         message: message || null,
         mediaUrl
@@ -211,11 +213,12 @@ exports.sendMessage = [
 
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
-      console.error('Unexpected error:', err.message);
+      console.error('Unexpected error:', err);
       res.status(500).json({ success: false, message: err.message });
     }
   }
 ];
+
 
 
 // GET: Get all chats for a specific user
