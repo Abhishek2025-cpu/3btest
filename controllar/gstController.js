@@ -3,8 +3,6 @@ const GstDetails = require('../models/GstDetails');
 
 
 
-const axios = require('axios');
-const GstDetails = require('../models/GstDetails');
 
 exports.verifyAndSaveGSTIN = async (req, res) => {
   const { userId, gstin } = req.query;
