@@ -1,31 +1,25 @@
 const axios = require('axios');
 const GstDetails = require('../models/GstDetails');
 
-
-
 exports.verifyAndSaveGSTIN = async (req, res) => {
   const { userId, gstin } = req.body;
-
   if (!userId || !gstin) {
     return res.status(400).json({ success: false, message: 'userId and gstin are required' });
   }
 
   try {
-    const response = await axios.post(
-      'https://gstin-bulk-verification1.p.rapidapi.com/v1.0/verifyGSTIN',
-      { gstin: [gstin] },
+    const response = await axios.get(
+      `https://gst-return-status.p.rapidapi.com/free/gstin/${gstin}`,
       {
         headers: {
-          'Content-Type': 'application/json',
-          'X-RapidAPI-Key': '33e17d9fa16359016cd870164c111452',
-          'X-RapidAPI-Host': 'gstin-bulk-verification1.p.rapidapi.com'
+          'x-rapidapi-key': '33e17d9fa16359016cd870164c111452',
+          'x-rapidapi-host': 'gst-return-status.p.rapidapi.com'
         }
       }
     );
 
-    const data = response.data?.data?.[0];
-
-    if (!data || data.valid_gstin !== true) {
+    const data = response.data?.data;
+    if (!data || !data.gstin || data.sts !== 'Active') {
       return res.status(400).json({ success: false, message: 'Invalid or unregistered GSTIN' });
     }
 
@@ -34,9 +28,9 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
       {
         userId,
         gstin,
-        legalName: data.legal_name,
-        tradeName: data.trade_name,
-        state: data.state
+        legalName: data.lgnm,
+        tradeName: data.tradeName,
+        state: data.state || null
       },
       { new: true, upsert: true }
     );
@@ -48,4 +42,3 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
   }
 };
-
