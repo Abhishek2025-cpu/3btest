@@ -6,7 +6,7 @@ const shippingAddressSchema = new mongoose.Schema({
   addressType: { type: String, enum: ['Home', 'Work', 'Custom'], required: true },
   detailedAddress: { type: String, required: true }
 }, { _id: true });
-
+//coments 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   number: { type: String, required: true, unique: true },
