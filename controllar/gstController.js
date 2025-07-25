@@ -2,7 +2,8 @@ const axios = require('axios');
 const GstDetails = require('../models/GstDetails');
 
 exports.verifyAndSaveGSTIN = async (req, res) => {
-  const { userId, gstin } = req.body;
+  const { userId, gstin } = req.query;
+
   if (!userId || !gstin) {
     return res.status(400).json({ success: false, message: 'userId and gstin are required' });
   }
@@ -42,3 +43,4 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed', error: err.message });
   }
 };
+
