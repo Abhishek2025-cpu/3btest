@@ -26,21 +26,18 @@ exports.placeOrder = async (req, res) => {
     }
 
     // 2. Process items and deduct stock
-    let totalPrice = 0;
+    let totalPrice = 0; // This will accumulate the floating-point total
     const products = await Promise.all(
       items.map(async item => {
-        // Try ProductUpload first
+        // ... (your existing product lookup and stock deduction logic is correct)
         let product = await Product.findById(item.productId);
         let isOtherProduct = false;
-
-        // If not found, try OtherProduct
         if (!product) {
           product = await OtherProduct.findById(item.productId);
           isOtherProduct = true;
         }
         if (!product) throw new Error('Product not found');
 
-        // Deduct quantity and update availability (if stock is tracked)
         if (typeof product.quantity === 'number') {
           if (product.quantity < item.quantity) {
             throw new Error(`Insufficient stock for product: ${product.name || product.productname}`);
@@ -53,48 +50,45 @@ exports.placeOrder = async (req, res) => {
           await product.save();
         }
 
-        // Select correct image
         let image = null;
         if (!isOtherProduct) {
-          const colorKey = item.color?.trim();
-          if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
-            image = product.colorImageMap[colorKey];
-          } else if (product.images && product.images.length) {
-            image = product.images[0];
-          }
+            // ... (image logic)
         } else {
-          // For OtherProduct, fallback to images or a default field
-          if (product.images && product.images.length) {
-            image = product.images[0];
-          } else if (product.image) {
-            image = product.image;
-          }
+            // ... (image logic)
         }
 
         const productSubtotal = item.price * item.quantity;
-        totalPrice += productSubtotal;
+        totalPrice += productSubtotal; // Add the precise subtotal to the total
 
         return {
-  productId: product._id,
-  productName: product.productName || product.name || item.productName || item.productname || 'Unknown Product', // Always set productName
-  quantity: item.quantity,
-  color: item.color || 'Not specified',
-  priceAtPurchase: item.price,
-  subtotal: productSubtotal,
-  image,
-  orderId: generateOrderId()
-};
+          productId: product._id,
+          productName: product.productName || product.name || item.productName || item.productname || 'Unknown Product',
+          quantity: item.quantity,
+          color: item.color || 'Not specified',
+          priceAtPurchase: item.price,
+          subtotal: productSubtotal,
+          image,
+          orderId: generateOrderId() // Note: This might need to be the main order's ID
+        };
       })
     );
+    
+    // ====================================================================
+    // CHANGE 1: Round the final total price to the nearest integer.
+    // ====================================================================
+    const roundedTotalPrice = Math.round(totalPrice);
 
     // 3. Create new order
     const newOrder = new Order({
       userId,
       products,
-      totalPrice,
+      // ====================================================================
+      // CHANGE 2: Use the new rounded total price when creating the order.
+      // ====================================================================
+      totalPrice: roundedTotalPrice, 
       shippingDetails: {
         name: shippingAddress.name,
-        phone: shippingAddress.phone,
+        phone: shippingAddress.phone, // I see 'phone' here but 'number' in your schema. Be sure they match!
         addressType: shippingAddress.addressType,
         detailedAddress: shippingAddress.detailedAddress
       },
@@ -112,7 +106,10 @@ exports.placeOrder = async (req, res) => {
       success: true,
       message: "Order placed successfully",
       order: newOrder,
-      totalPrice,
+      // ====================================================================
+      // CHANGE 3: Send the rounded total price in the final JSON response.
+      // ====================================================================
+      totalPrice: roundedTotalPrice, 
       productBreakdown: products.map(p => ({
         productId: p.productId,
         name: p.productName,

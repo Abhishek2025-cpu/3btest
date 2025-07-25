@@ -56,11 +56,6 @@ app.use('/api/other-products', otherProductRoutes);
 app.use('/api/company', companyRoutes);
 
 
-
-
-
-
-
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
 

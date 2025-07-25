@@ -24,7 +24,7 @@ const orderSchema = new mongoose.Schema({
   products: [productOrderSchema],
   shippingDetails: {
     name: String,
-    number: String, // 🛠️ You had this as `number`, but are using `phone` in controller. Make sure they match.
+    phone: String, // 🛠️ You had this as `number`, but are using `phone` in controller. Make sure they match.
     addressType: String,
     detailedAddress: String
   },
