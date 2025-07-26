@@ -23,14 +23,15 @@ exports.placeOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const gst = await GstDetails.findOne({ userId });
+  const gst = await GstDetails.findOne({ userId });
 
-    if (!gst || !gst.gstin) {
-     return res.status(400).json({
-       success: false,
-         message: 'GSTIN not found. Please complete GST verification before placing an order.'
-       });
-      }
+if (!gst || !gst.gstin) {
+  return res.status(400).json({
+    success: false,
+    message: 'GSTIN not found. Please complete GST verification before placing an order.'
+  });
+}
+
 
     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
     if (!shippingAddress) {
@@ -153,7 +154,16 @@ exports.placeOrder = async (req, res) => {
         quantity: p.quantity,
         color: p.color,
         priceAtPurchase: p.priceAtPurchase,
-        subtotal: p.subtotal
+        subtotal: p.subtotal,
+        gstDetails: {
+           gstin: gst.gstin,
+           legalName: gst.legalName || '',
+            tradeName: gst.tradeName || '',
+            address: gst.address || '',
+             state: gst.state || '',
+             district: gst.district || '',
+               pincode: gst.pincode || ''
+              }
       }))
     });
 
