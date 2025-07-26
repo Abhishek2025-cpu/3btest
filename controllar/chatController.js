@@ -242,58 +242,58 @@ exports.getUserChats = async (req, res) => {
 // GET: Admin fetches all messages
 
 
+ 
 exports.getAllChatsForAdmin = async (req, res) => {
   try {
-    const chats = await Chat.find({})
-      .sort({ timestamp: -1 })
-      .populate('senderId', 'name')
-      .populate('receiverId', 'name');
-
     const ADMIN_ID = "68411a77cdc05295de45af4e";
 
-    // Get unique userIds (excluding ADMIN)
+    // 1. Get all chat messages
+    const chats = await Chat.find({}).sort({ timestamp: -1 });
+
+    // 2. Extract all unique sender & receiver IDs (excluding duplicates)
     const userIds = new Set();
+
     chats.forEach(chat => {
-      const senderId = chat.senderId?._id?.toString();
-      const receiverId = chat.receiverId?._id?.toString();
-      if (senderId !== ADMIN_ID) userIds.add(senderId);
-      if (receiverId !== ADMIN_ID) userIds.add(receiverId);
+      if (chat.senderId && chat.senderId.toString() !== ADMIN_ID) {
+        userIds.add(chat.senderId.toString());
+      }
+      if (chat.receiverId && chat.receiverId.toString() !== ADMIN_ID) {
+        userIds.add(chat.receiverId.toString());
+      }
     });
 
-    // Fetch users
-    const users = await User.find({ _id: { $in: Array.from(userIds) } }, 'name');
+    // 3. Fetch user name mappings
+    const users = await User.find({ _id: { $in: Array.from(userIds) } }, '_id name');
     const userMap = {};
-    users.forEach(u => {
-      userMap[u._id.toString()] = u.name;
+    users.forEach(user => {
+      userMap[user._id.toString()] = user.name;
     });
 
-    // Attach names explicitly (if not populated)
+    // 4. Enrich each chat message with sender and receiver names
     const enrichedChats = chats.map(chat => {
-      const senderId = chat.senderId?._id?.toString() || chat.senderId?.toString();
-      const receiverId = chat.receiverId?._id?.toString() || chat.receiverId?.toString();
-
-      const sender = {
-        _id: senderId,
-        name: chat.senderId?.name || userMap[senderId] || 'Unknown'
-      };
-      const receiver = {
-        _id: receiverId,
-        name: chat.receiverId?.name || userMap[receiverId] || 'Unknown'
-      };
+      const senderIdStr = chat.senderId.toString();
+      const receiverIdStr = chat.receiverId.toString();
 
       return {
         ...chat._doc,
-        senderId: sender,
-        receiverId: receiver
+        sender: {
+          _id: senderIdStr,
+          name: senderIdStr === ADMIN_ID ? 'Admin' : userMap[senderIdStr] || 'Unknown',
+        },
+        receiver: {
+          _id: receiverIdStr,
+          name: receiverIdStr === ADMIN_ID ? 'Admin' : userMap[receiverIdStr] || 'Unknown',
+        },
       };
     });
 
     res.json({ success: true, data: enrichedChats });
   } catch (err) {
-    console.error('Error fetching admin chats:', err);
+    console.error("Error in getAllChatsForAdmin:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 // POST: Admin reply to user
