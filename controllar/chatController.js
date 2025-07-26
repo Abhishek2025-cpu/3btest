@@ -317,20 +317,20 @@ exports.adminReply = [
         mediaUrl = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
       }
 
-      // NEW, CORRECTED CODE
-const newChat = await Chat.create({
-  senderId: adminId,
-  receiverId: userId,
-  message: message || null,
-  mediaUrl
-});
+      const newChat = await Chat.create({
+        senderId: adminId,
+        receiverId: userId,
+        senderModel: 'User',       // or 'Admin' if using separate Admin model
+        receiverModel: 'User',
+        message: message || null,
+        mediaUrl
+      });
 
-// Find the chat we just created and populate it before sending it back
-const populatedChat = await Chat.findById(newChat._id)
-  .populate('senderId', 'name')
-  .populate('receiverId', 'name');
+      const populatedChat = await Chat.findById(newChat._id)
+        .populate('senderId', 'name')
+        .populate('receiverId', 'name');
 
-res.status(201).json({ success: true, data: populatedChat });
+      res.status(201).json({ success: true, data: populatedChat });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
