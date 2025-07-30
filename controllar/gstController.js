@@ -3,10 +3,11 @@ const axios = require('axios');
 const GstDetails = require('../models/GstDetails');
 const User = require('../models/User');
 
-// --- IMPORTANT! ---
-// Replace the placeholder below with YOUR actual API key from your RapidAPI account.
-// It is highly recommended to store this in an environment variable (.env file).
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '7513cc6ddfmshfdeaa1b235a45ffp1445d6jsn8571db6015fb';
+// --- THIS IS THE ONLY LINE THAT HAS CHANGED ---
+// It now uses your new, working API key from your new account.
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '067908d46amsh868a7a0568364bfp17c722jsnc35d92475944';
+// ---------------------------------------------
+
 const RAPIDAPI_HOST = 'gst-return-status.p.rapidapi.com';
 
 /**
@@ -42,38 +43,34 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
     // 4. Get the data from the API response
     const data = response.data;
 
-    // --- CRUCIAL FOR DEBUGGING --- 
-    // This will print the exact response from the API to your server's console.
-    // Check this log if you still have issues.
+    // Optional: You can keep this log for verification or remove it
     console.log(`--- RAW RESPONSE FOR GSTIN ${gstin} ---:`, JSON.stringify(data, null, 2));
-    // --------------------------------
 
     // 5. Check if the response indicates a valid, active GSTIN
-    // The API returns a 'sts' (status) key. We must check if it is 'Active'.
     if (!data || data.sts !== 'Active') {
       return res.status(400).json({ 
         success: false, 
-        message: 'Invalid or unregistered GSTIN, or API error. Please check the GSTIN and try again.' 
+        message: 'Invalid or unregistered GSTIN. Please check the GSTIN and try again.' 
       });
     }
 
-    // 6. If valid, prepare the data and save/update it in your database
+    // 6. If valid, save/update the details in your database
     const savedDetails = await GstDetails.findOneAndUpdate(
-      { userId }, // Find the document by userId
+      { userId },
       {
         userId,
         gstin: data.gstin,
-        legalName: data.lgnm,       // 'lgnm' is the key for Legal Name
-        tradeName: data.tradeNam,     // 'tradeNam' is the key for Trade Name
-        state: data.pradr?.st || null // State is nested in 'pradr.st'
+        legalName: data.lgnm,
+        tradeName: data.tradeNam,
+        state: data.pradr?.st || null
       },
       { 
-        new: true,    // Return the updated document
-        upsert: true  // Create a new document if one doesn't exist for the user
+        new: true,
+        upsert: true
       }
     );
 
-    // 7. Update the User model with the verified GSTIN
+    // 7. Update the User model
     await User.findByIdAndUpdate(
       userId,
       { gstin: data.gstin },
@@ -84,17 +81,15 @@ exports.verifyAndSaveGSTIN = async (req, res) => {
     return res.status(200).json({ success: true, data: savedDetails });
 
   } catch (err) {
-    // This 'catch' block runs if the axios request itself fails (e.g., network error, 401/403/500 from API)
+    // This block will now only run for real errors, not subscription issues
     if (err.response) {
-      // The request was made and the server responded with a status code that falls out of the range of 2xx
       console.error('--- EXTERNAL API ERROR RESPONSE ---:', JSON.stringify(err.response.data, null, 2));
       return res.status(err.response.status || 500).json({
         success: false,
-        message: `External API Error: ${err.response.data.message || 'Verification failed. Check API key or subscription.'}`,
+        message: `External API Error: ${err.response.data.message || 'Verification failed.'}`,
         error: err.response.data
       });
     } else {
-      // Something happened in setting up the request that triggered an Error (e.g. no network)
       console.error('--- INTERNAL/NETWORK ERROR ---:', err.message);
       return res.status(500).json({ 
         success: false, 
