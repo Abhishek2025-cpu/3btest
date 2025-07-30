@@ -5,7 +5,7 @@ const User = require('../models/User');
 
 // --- THIS IS THE ONLY LINE THAT HAS CHANGED ---
 // It now uses your new, working API key from your new account.
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '067908d46amsh868a7a0568364bfp17c722jsnc35d92475944';
+const RAPIDAPI_KEY = '067908d46amsh868a7a0568364bfp17c722jsnc35d92475944';
 // ---------------------------------------------
 
 const RAPIDAPI_HOST = 'gst-return-status.p.rapidapi.com';
