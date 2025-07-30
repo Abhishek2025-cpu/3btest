@@ -6,7 +6,7 @@ const User = require('../models/User');
 // --- IMPORTANT! ---
 // Replace the placeholder below with YOUR actual API key from your RapidAPI account.
 // It is highly recommended to store this in an environment variable (.env file).
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || 'PASTE_YOUR_REAL_API_KEY_HERE';
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '7513cc6ddfmshfdeaa1b235a45ffp1445d6jsn8571db6015fb';
 const RAPIDAPI_HOST = 'gst-return-status.p.rapidapi.com';
 
 /**
