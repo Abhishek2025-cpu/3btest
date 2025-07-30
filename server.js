@@ -41,7 +41,7 @@ const itemsRoutes = require('./routes/item.routes')
 const otherCategoryRoutes = require('./routes/otherCategoryRoutes'); 
 const otherProductRoutes = require('./routes/otherProduct');
 const companyRoutes = require('./routes/companyRoutes');
-const gstRoutes = require('./routes/gst');
+const gstRoutes = require('./routes/gstRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
 app.use('/api/feedback', feedbackRoutes);
