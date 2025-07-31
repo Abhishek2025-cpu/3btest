@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const GstDetails = require('../models/GstDetails'); 
+const Company = require('../models/company'); 
 
 
 const generateOrderId = () => {
@@ -293,25 +294,35 @@ exports.getOrders = async (req, res) => {
       .populate('userId', 'name email number')
       .populate('products.productId');
 
+    // Preload all companies once to avoid querying DB repeatedly
+    const companies = await Company.find();
+    const companyMap = {};
+    companies.forEach(c => {
+      companyMap[c.name.toLowerCase()] = c;
+    });
+
     const formattedOrders = orders.map(order => {
       const populatedOrder = order.toObject();
 
-      // Calculate totalAmount
       populatedOrder.totalAmount = order.products.reduce(
         (sum, item) => sum + (item.priceAtPurchase * item.quantity),
         0
       );
 
-      // Set user object
       populatedOrder.user = populatedOrder.userId;
       delete populatedOrder.userId;
 
-      // Map products (normal + "other" products)
       populatedOrder.products = populatedOrder.products.map(item => {
         const isOtherProduct = !item.productId || typeof item.productId === 'string';
 
         if (isOtherProduct) {
-          // Handle "Other Product" with extra custom fields
+          // Try to get company details if present
+          let companyDetails = null;
+          if (item.company) {
+            const key = item.company.toLowerCase();
+            companyDetails = companyMap[key] || null;
+          }
+
           return {
             productId: null,
             productName: item.productName || 'Custom Product',
@@ -321,16 +332,23 @@ exports.getOrders = async (req, res) => {
             image: item.image || null,
             orderId: item.orderId,
             currentStatus: item.currentStatus,
-            // Additional custom fields
-            company: item.company,
-            materialName: item.materialName,
-            modelNo: item.modelNo,
-            selectedSize: item.selectedSize,
             discount: item.discount || 0,
-            totalPrice: item.totalPrice
+            selectedSize: item.selectedSize || null,
+            materialName: item.materialName || null,
+            modelNo: item.modelNo || null,
+            totalPrice: item.totalPrice || (item.priceAtPurchase * item.quantity),
+            // Company details
+            company: companyDetails
+              ? {
+                  name: companyDetails.name,
+                  logo: companyDetails.logo
+                }
+              : {
+                  name: item.company || 'Unknown',
+                  logo: null
+                }
           };
         } else {
-          // Handle regular product
           const product = item.productId || {};
           const colorImageMap = product.colorImageMap || {};
           const images = product.images || [];
@@ -368,7 +386,6 @@ exports.getOrders = async (req, res) => {
     });
   }
 };
-
 
 
 // exports.getOrders = async (req, res) => {
