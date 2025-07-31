@@ -16,8 +16,7 @@ const productOrderSchema = new mongoose.Schema({
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
     default: 'Pending'
   },
-
-  // ✅ Custom fields for "other products"
+  // Custom fields for "other products"
   company: { type: String },
   materialName: { type: String },
   modelNo: { type: String },
@@ -26,5 +25,24 @@ const productOrderSchema = new mongoose.Schema({
   totalPrice: { type: Number }
 });
 
+const orderSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  products: [productOrderSchema],
+  shippingDetails: {
+    name: String,
+    phone: String,
+    addressType: String,
+    detailedAddress: String
+  },
+  orderId: { type: String, required: true, unique: true },
+  totalPrice: { type: Number, required: true },
+  currentStatus: {
+    type: String,
+    enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
+    default: 'Pending'
+  },
+  gstin: { type: String, required: true }
+}, { timestamps: true });
 
+// ✅ Define orderSchema before using it
 module.exports = mongoose.model('Order', orderSchema);
