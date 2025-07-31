@@ -1,13 +1,12 @@
 const mongoose = require('mongoose');
 
 const productOrderSchema = new mongoose.Schema({
-productId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductUpload', required: true },
-
-  productName: { type: String, required: true }, // 🆕 Added product name
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductUpload', required: false },
+  productName: { type: String, required: true },
   quantity: { type: Number, required: true },
   color: { type: String, default: 'Not specified' },
   priceAtPurchase: { type: Number, required: true },
-  image: {  // 🆕 Added image field
+  image: {
     id: { type: String },
     url: { type: String }
   },
@@ -16,31 +15,16 @@ productId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductUpload', require
     type: String,
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
     default: 'Pending'
-  }
+  },
+
+  // ✅ Custom fields for "other products"
+  company: { type: String },
+  materialName: { type: String },
+  modelNo: { type: String },
+  selectedSize: { type: String },
+  discount: { type: Number, default: 0 },
+  totalPrice: { type: Number }
 });
 
-const orderSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  products: [productOrderSchema],
-  shippingDetails: {
-    name: String,
-    phone: String, // 🛠️ You had this as `number`, but are using `phone` in controller. Make sure they match.
-    addressType: String,
-    detailedAddress: String
-  },
-  orderId: { type: String, required: true, unique: true },
-  
-  totalPrice: {
-  type: Number,
-  required: true
-},
-
-  currentStatus: {
-    type: String,
-    enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
-    default: 'Pending'
-  },
-    gstin: { type: String, required: true }
-}, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);

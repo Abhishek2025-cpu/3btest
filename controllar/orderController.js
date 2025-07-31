@@ -102,17 +102,25 @@ if (!gst || !gst.gstin) {
         const productSubtotal = priceForCalculation * item.quantity;
         totalPrice += productSubtotal;
 
-        return {
-          productId: product._id,
-          productName: product.productName || product.name || item.productName || 'Unknown Product',
-          quantity: item.quantity,
-          color: item.color || 'Not specified',
-          // Use the reliable price to populate the required schema field
-          priceAtPurchase: priceForCalculation,
-          subtotal: productSubtotal,
-          image,
-          orderId: generateOrderId() // This was in your original code. Ensure this is intended per-product.
-        };
+       return {
+  productId: product._id || null,
+  productName: product.productName || product.name || item.productName || 'Unknown Product',
+  quantity: item.quantity,
+  color: item.color || 'Not specified',
+  priceAtPurchase: priceForCalculation,
+  subtotal: productSubtotal,
+  image,
+  orderId: generateOrderId(),
+
+  // ✅ Include other product fields from payload
+  company: item.company || null,
+  materialName: item.materialName || null,
+  modelNo: item.modelNo || null,
+  selectedSize: item.selectedSize || null,
+  discount: item.discount || 0,
+  totalPrice: item.totalPrice || productSubtotal
+};
+
       })
     );
 
