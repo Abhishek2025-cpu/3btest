@@ -44,5 +44,5 @@ const orderSchema = new mongoose.Schema({
   gstin: { type: String, required: true }
 }, { timestamps: true });
 
-// ✅ Define orderSchema before using it
+
 module.exports = mongoose.model('Order', orderSchema);
