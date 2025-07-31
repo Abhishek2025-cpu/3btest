@@ -8,9 +8,8 @@ const chatSchema = new mongoose.Schema({
   receiverModel: { type: String, required: true, enum: ['User', 'Admin'] },
 
   message: { type: String, default: null },
-  
-  // This is the correct way to define an optional nested object.
-  // Mongoose will simply not include this field if it's not provided.
+
+  // This is the correct definition for an optional nested object
   mediaUrl: { 
     id: { type: String },
     url: { type: String }
@@ -19,7 +18,5 @@ const chatSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   isRead: { type: Boolean, default: false }
 });
-
-// REMOVE THIS LINE: chatSchema.path('mediaUrl').default(null);
 
 module.exports = mongoose.model('Chat', chatSchema);
