@@ -286,8 +286,6 @@ if (!gst || !gst.gstin) {
 
 
 //get products
-
-
 exports.getOrders = async (req, res) => {
   try {
     const orders = await Order.find()
@@ -298,39 +296,59 @@ exports.getOrders = async (req, res) => {
     const formattedOrders = orders.map(order => {
       const populatedOrder = order.toObject();
 
-      // Add totalAmount calculation
+      // Calculate totalAmount
       populatedOrder.totalAmount = order.products.reduce(
         (sum, item) => sum + (item.priceAtPurchase * item.quantity),
         0
       );
 
-      // Add product details and ensure image
+      // Set user object
       populatedOrder.user = populatedOrder.userId;
       delete populatedOrder.userId;
 
+      // Map products (normal + "other" products)
       populatedOrder.products = populatedOrder.products.map(item => {
-        const product = item.productId || {};
-        const colorImageMap = product.colorImageMap || {};
-        const images = product.images || [];
+        const isOtherProduct = !item.productId || typeof item.productId === 'string';
 
-        // Try to fetch color-specific image
-        let image = colorImageMap[item.color];
+        if (isOtherProduct) {
+          // Handle "Other Product" with extra custom fields
+          return {
+            productId: null,
+            productName: item.productName || 'Custom Product',
+            quantity: item.quantity,
+            color: item.color || null,
+            priceAtPurchase: item.priceAtPurchase,
+            image: item.image || null,
+            orderId: item.orderId,
+            currentStatus: item.currentStatus,
+            // Additional custom fields
+            company: item.company,
+            materialName: item.materialName,
+            modelNo: item.modelNo,
+            selectedSize: item.selectedSize,
+            discount: item.discount || 0,
+            totalPrice: item.totalPrice
+          };
+        } else {
+          // Handle regular product
+          const product = item.productId || {};
+          const colorImageMap = product.colorImageMap || {};
+          const images = product.images || [];
 
-        // If not found, fallback to first product image
-        if (!image && images.length > 0) {
-          image = images[0];
+          let image = colorImageMap[item.color];
+          if (!image && images.length > 0) image = images[0];
+
+          return {
+            productId: product._id,
+            productName: product.name,
+            quantity: item.quantity,
+            color: item.color,
+            priceAtPurchase: item.priceAtPurchase,
+            image: image || null,
+            orderId: item.orderId,
+            currentStatus: item.currentStatus
+          };
         }
-
-        return {
-          productId: product._id,
-          productName: product.name,
-          quantity: item.quantity,
-          color: item.color,
-          priceAtPurchase: item.priceAtPurchase,
-          image: image || {}, // ensure it’s not undefined
-          orderId: item.orderId,
-          currentStatus: item.currentStatus
-        };
       });
 
       return populatedOrder;
@@ -350,6 +368,71 @@ exports.getOrders = async (req, res) => {
     });
   }
 };
+
+
+
+// exports.getOrders = async (req, res) => {
+//   try {
+//     const orders = await Order.find()
+//       .sort({ createdAt: -1 })
+//       .populate('userId', 'name email number')
+//       .populate('products.productId');
+
+//     const formattedOrders = orders.map(order => {
+//       const populatedOrder = order.toObject();
+
+//       // Add totalAmount calculation
+//       populatedOrder.totalAmount = order.products.reduce(
+//         (sum, item) => sum + (item.priceAtPurchase * item.quantity),
+//         0
+//       );
+
+//       // Add product details and ensure image
+//       populatedOrder.user = populatedOrder.userId;
+//       delete populatedOrder.userId;
+
+//       populatedOrder.products = populatedOrder.products.map(item => {
+//         const product = item.productId || {};
+//         const colorImageMap = product.colorImageMap || {};
+//         const images = product.images || [];
+
+//         // Try to fetch color-specific image
+//         let image = colorImageMap[item.color];
+
+//         // If not found, fallback to first product image
+//         if (!image && images.length > 0) {
+//           image = images[0];
+//         }
+
+//         return {
+//           productId: product._id,
+//           productName: product.name,
+//           quantity: item.quantity,
+//           color: item.color,
+//           priceAtPurchase: item.priceAtPurchase,
+//           image: image || {}, // ensure it’s not undefined
+//           orderId: item.orderId,
+//           currentStatus: item.currentStatus
+//         };
+//       });
+
+//       return populatedOrder;
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       count: formattedOrders.length,
+//       orders: formattedOrders
+//     });
+//   } catch (error) {
+//     console.error('Error fetching orders:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Server error fetching orders.',
+//       error: error.message
+//     });
+//   }
+// };
 
 
 
