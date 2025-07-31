@@ -9,19 +9,17 @@ const chatSchema = new mongoose.Schema({
 
   message: { type: String, default: null },
   
-  // --- THIS IS THE FIX ---
-  // Change mediaUrl from String to an Object that holds the id and url
+  // This is the correct way to define an optional nested object.
+  // Mongoose will simply not include this field if it's not provided.
   mediaUrl: { 
     id: { type: String },
     url: { type: String }
   },
-  // -----------------------
 
   timestamp: { type: Date, default: Date.now },
   isRead: { type: Boolean, default: false }
 });
 
-// Set default to null for the mediaUrl object if it's not provided
-chatSchema.path('mediaUrl').default(null);
+// REMOVE THIS LINE: chatSchema.path('mediaUrl').default(null);
 
 module.exports = mongoose.model('Chat', chatSchema);
