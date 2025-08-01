@@ -58,9 +58,10 @@ exports.createItem = async (req, res) => {
 
     res.status(201).json(item);
   } catch (error) {
-    console.error('Create Item Error:', error);
-    res.status(500).json({ error: 'Failed to create item' });
-  }
+  console.error('Create Item Error:', error.message, error.stack);
+  res.status(500).json({ error: error.message || 'Failed to create item' });
+}
+
 };
 
 
