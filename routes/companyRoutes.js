@@ -13,13 +13,13 @@ const upload = multer({ storage: storage });
 router.post('/add-company', upload.single('logo'), companyController.addCompany);
 // PUT /api/companies/:id - Update a company
 router.put(
-    'update/:id', 
+    '/update/:id', 
     upload.single('logo'), // Also use multer here for potential logo updates
     companyController.updateCompany
 );
 
 // DELETE /api/companies/:id - Delete a company
-router.delete('delete/:id', companyController.deleteCompany);
+router.delete('/delete/:id', companyController.deleteCompany);
 
 // GET /api/companies - Get all companies for dropdowns
 router.get('/get-company', companyController.getAllCompanies);
