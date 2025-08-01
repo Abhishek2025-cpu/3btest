@@ -4,11 +4,14 @@ const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
 
+
 exports.createItem = async (req, res) => {
   try {
     const { itemNo, length, noOfSticks, helperEid, operatorEid, shift, company } = req.body;
 
-    if (!req.file) return res.status(400).json({ error: 'Product image is required' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'Product image is required' });
+    }
 
     // Find helper/operator using eid
     const helper = await Employee.findOne({ eid: helperEid });
@@ -21,7 +24,7 @@ exports.createItem = async (req, res) => {
     // Generate unique QR code data
     const qrCodeData = `${Date.now()}-${itemNo}`;
 
-    // Generate QR code buffer (PNG)
+    // ✅ Generate QR code buffer (THIS LINE WAS MISSING BEFORE)
     const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
       type: 'png',
       errorCorrectionLevel: 'H',
@@ -29,23 +32,23 @@ exports.createItem = async (req, res) => {
       width: 500,
     });
 
-    // Upload QR code to GCS and extract URL
-    const qrCodeObject = await uploadBufferToGCS(
+    // Upload QR code image to GCS
+    const qrCodeUpload = await uploadBufferToGCS(
       qrCodeBuffer,
       `${qrCodeData}.png`,
       'qr-codes',
       'image/png'
     );
 
-    // Upload product image to GCS and extract URL
-    const productImageObject = await uploadBufferToGCS(
+    // Upload product image to GCS
+    const productImageUpload = await uploadBufferToGCS(
       req.file.buffer,
       req.file.originalname,
       'product-images',
       req.file.mimetype
     );
 
-    // Create item with only the URL strings
+    // Create new Item
     const item = await Item.create({
       itemNo,
       length,
@@ -54,8 +57,8 @@ exports.createItem = async (req, res) => {
       operator: { _id: operator._id, name: operator.name, eid: operator.eid },
       shift,
       company,
-      qrCodeUrl: qrCodeObject.url,
-      productImageUrl: productImageObject.url,
+      qrCodeUrl: qrCodeUpload.url,            // ⬅ only use the `.url` string
+      productImageUrl: productImageUpload.url // ⬅ only use the `.url` string
     });
 
     res.status(201).json(item);
