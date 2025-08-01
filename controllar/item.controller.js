@@ -20,41 +20,33 @@ exports.createItem = async (req, res) => {
     // Generate unique QR code data
     const qrCodeData = `${Date.now()}-${itemNo}`;
 
-    // Generate QR code buffer (PNG)
-    const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
-      type: 'png',
-      errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 500, // Ensures decent resolution
-    });
+  const qrCodeObject = await uploadBufferToGCS(
+  qrCodeBuffer,
+  `${qrCodeData}.png`,
+  'qr-codes',
+  'image/png'
+);
 
-    const qrCodeUrl = await uploadBufferToGCS(
-      qrCodeBuffer,
-      `${qrCodeData}.png`,
-      'qr-codes',
-      'image/png'
-    );
+const productImageObject = await uploadBufferToGCS(
+  req.file.buffer,
+  req.file.originalname,
+  'product-images',
+  req.file.mimetype
+);
 
-    // Upload product image
-    const productImageUrl = await uploadBufferToGCS(
-      req.file.buffer,
-      req.file.originalname,
-      'product-images',
-      req.file.mimetype
-    );
+// Create item with only the URL strings
+const item = await Item.create({
+  itemNo,
+  length,
+  noOfSticks,
+  helper: { _id: helper._id, name: helper.name, eid: helper.eid },
+  operator: { _id: operator._id, name: operator.name, eid: operator.eid },
+  shift,
+  company,
+  qrCodeUrl: qrCodeObject.url,
+  productImageUrl: productImageObject.url,
+});
 
-    // Create item
-    const item = await Item.create({
-      itemNo,
-      length,
-      noOfSticks,
-      helper: { _id: helper._id, name: helper.name, eid: helper.eid },
-      operator: { _id: operator._id, name: operator.name, eid: operator.eid },
-      shift,
-      company,
-      qrCodeUrl, // USE QR CODE URL instead of barcodeUrl
-      productImageUrl,
-    });
 
     res.status(201).json(item);
   } catch (error) {
