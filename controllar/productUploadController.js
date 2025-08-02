@@ -3,6 +3,7 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 const QRCode = require('qrcode');
 const sharp = require('sharp');
 
+const Category = require('../models/Category');
 const crypto = require('crypto');
 
 exports.createProduct = async (req, res) => {
@@ -132,15 +133,32 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find()
-      .sort({ createdAt: -1 })
-      .populate('categoryId', 'name') // ✅ Use 'categoryId' not 'category_id'
-      .lean();
+    const products = await Product.find().sort({ createdAt: -1 }).lean();
+
+    // Get all non-null categoryIds
+    const categoryIds = products
+      .map(p => p.categoryId)
+      .filter(id => id != null);
+
+    // Fetch all categories
+    const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
+
+    // Create a map from category ID to name
+    const categoryMap = {};
+    categories.forEach(cat => {
+      categoryMap[cat._id.toString()] = cat.name;
+    });
+
+    // Add categoryName to each product
+    const productsWithCategoryName = products.map(p => ({
+      ...p,
+      categoryName: categoryMap[p.categoryId?.toString()] || null
+    }));
 
     res.status(200).json({
       success: true,
       message: '✅ Products fetched successfully',
-      products
+      products: productsWithCategoryName
     });
   } catch (err) {
     console.error('❌ Error fetching products:', err);
@@ -151,7 +169,6 @@ exports.getAllProducts = async (req, res) => {
     });
   }
 };
-
 
 
 
