@@ -137,22 +137,26 @@ exports.createProduct = async (req, res) => {
 
 
 
+
 exports.getAllProducts = async (req, res) => {
   try {
-    // This query now directly populates the ObjectId reference
     const products = await Product.find()
       .sort({ createdAt: -1 })
-      .populate('categoryId', 'name') // <-- We populate the REAL 'categoryId' field
+      .populate('categoryId', 'name')
       .lean();
 
     const formattedProducts = products.map(p => {
-      // If population is successful, p.categoryId will be an object: { _id: ..., name: 'Some Category' }
-      // If it fails, p.categoryId will remain the original ObjectId.
+      // ✅ ROBUST MAPPING LOGIC
+      // Check if categoryId is an object and has a name property.
+      // This is true ONLY if populate succeeded.
+      const hasPopulatedCategory = p.categoryId && typeof p.categoryId === 'object' && p.categoryId.name;
+
       return {
         ...p,
-        categoryName: p.categoryId ? p.categoryId.name : null,
-        // For consistency, overwrite the populated object with just its ID string
-        categoryId: p.categoryId ? p.categoryId._id.toString() : p.categoryId,
+        // If populate worked, use the name. Otherwise, explicitly set it to null.
+        categoryName: hasPopulatedCategory ? p.categoryId.name : null,
+        // If populate worked, get the _id. Otherwise, use the original string.
+        categoryId: hasPopulatedCategory ? p.categoryId._id.toString() : p.categoryId,
       };
     });
 
