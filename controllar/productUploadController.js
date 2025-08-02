@@ -135,15 +135,19 @@ exports.getAllProducts = async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 }).lean();
 
-    // Get all non-null categoryIds
-    const categoryIds = products
-      .map(p => p.categoryId)
-      .filter(id => id != null);
+    // Get all unique, valid categoryIds as strings
+    const categoryIds = [
+      ...new Set(
+        products
+          .map(p => p.categoryId?.toString())
+          .filter(id => !!id)
+      )
+    ];
 
-    // Fetch all categories
+    // Fetch all matching categories
     const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
 
-    // Create a map from category ID to name
+    // Create a map: categoryId => category name
     const categoryMap = {};
     categories.forEach(cat => {
       categoryMap[cat._id.toString()] = cat.name;
@@ -152,6 +156,7 @@ exports.getAllProducts = async (req, res) => {
     // Add categoryName to each product
     const productsWithCategoryName = products.map(p => ({
       ...p,
+      categoryId: p.categoryId?.toString() || null,
       categoryName: categoryMap[p.categoryId?.toString()] || null
     }));
 
@@ -169,6 +174,7 @@ exports.getAllProducts = async (req, res) => {
     });
   }
 };
+
 
 
 
