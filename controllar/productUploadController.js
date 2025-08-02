@@ -135,52 +135,43 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    // 1. Get all products
-    const products = await Product.find().sort({ createdAt: -1 }).lean();
+    // 1. Fetch all products and populate the 'categoryId' field
+    //    .populate() will automatically fetch the referenced Category document.
+    //    The second argument 'name' tells Mongoose to only bring back the 'name' field
+    //    from the Category collection, which is more efficient.
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .populate('categoryId', 'name') // <-- The key change is here
+      .lean(); // .lean() makes the query faster and returns plain JS objects
 
-    // 2. Extract all unique, valid categoryIds as strings
-    const categoryIds = [
-      ...new Set(
-        products
-          .map(p => p.categoryId)
-          .filter(id => mongoose.Types.ObjectId.isValid(id))
-          .map(id => id.toString())
-      )
-    ];
+    // 2. The 'products' array now contains objects where 'categoryId' is an object itself
+    //    (e.g., { _id: '...', name: 'Electronics' }) or null if it wasn't found.
+    //    We can now map this to the desired final structure.
 
-    console.log('🟡 Found categoryIds:', categoryIds);
-
-    // 3. Fetch all matching categories
-    const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
-
-    console.log('🟢 Categories fetched:', categories);
-
-    // 4. Build categoryId → name map
-    const categoryMap = {};
-    categories.forEach(cat => {
-      categoryMap[cat._id.toString()] = cat.name;
+    const formattedProducts = products.map(product => {
+      // Create the new object with a flat categoryName property
+      return {
+        ...product,
+        // If product.categoryId was successfully populated, it's an object.
+        // If not (e.g., the category was deleted), it will be null.
+        categoryName: product.categoryId ? product.categoryId.name : null,
+        // Overwrite the categoryId object with just its string ID for consistency
+        categoryId: product.categoryId ? product.categoryId._id.toString() : null,
+      };
     });
-
-    console.log('🗺️ categoryMap:', categoryMap);
-
-    // 5. Add categoryName to each product
-    const productsWithCategoryName = products.map(p => ({
-      ...p,
-      categoryId: p.categoryId?.toString() || null,
-      categoryName: categoryMap[p.categoryId?.toString()] || null
-    }));
 
     res.status(200).json({
       success: true,
       message: '✅ Products fetched successfully',
-      products: productsWithCategoryName
+      products: formattedProducts, // Use the newly formatted array
     });
+
   } catch (err) {
     console.error('❌ Error fetching products:', err);
     res.status(500).json({
       success: false,
       message: '❌ Failed to fetch products',
-      error: err.message
+      error: err.message,
     });
   }
 };
