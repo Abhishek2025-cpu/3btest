@@ -134,7 +134,7 @@ exports.getAllProducts = async (req, res) => {
   try {
     const products = await Product.find()
       .sort({ createdAt: -1 })
-      .populate('category_id', 'name') // Only populate the "name" field from Category
+      .populate('categoryId', 'name') // ✅ Use 'categoryId' not 'category_id'
       .lean();
 
     res.status(200).json({
