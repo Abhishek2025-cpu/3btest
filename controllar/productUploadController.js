@@ -133,22 +133,27 @@ exports.createProduct = async (req, res) => {
 
 
 
+// In your productController.js
+
+
+
 exports.getAllProducts = async (req, res) => {
   try {
-    // 1. Find products and populate the 'category' virtual field.
-    //    We only select the 'name' from the category to be efficient.
+    // This query now directly populates the ObjectId reference
     const products = await Product.find()
       .sort({ createdAt: -1 })
-      .populate('category', 'name') // <-- Populate our new virtual field
-      .lean({ virtuals: true }); // <-- Use lean() for performance, ensuring virtuals are included
+      .populate('categoryId', 'name') // <-- We populate the REAL 'categoryId' field
+      .lean();
 
-    // 2. The mapping logic is now much cleaner.
     const formattedProducts = products.map(p => {
-        return {
-            ...p,
-            // The populated data is in 'p.category'. The original string is in 'p.categoryId'.
-            categoryName: p.category ? p.category.name : null
-        }
+      // If population is successful, p.categoryId will be an object: { _id: ..., name: 'Some Category' }
+      // If it fails, p.categoryId will remain the original ObjectId.
+      return {
+        ...p,
+        categoryName: p.categoryId ? p.categoryId.name : null,
+        // For consistency, overwrite the populated object with just its ID string
+        categoryId: p.categoryId ? p.categoryId._id.toString() : p.categoryId,
+      };
     });
 
     res.status(200).json({
