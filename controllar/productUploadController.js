@@ -2,6 +2,7 @@ const Product = require('../models/ProductUpload');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const QRCode = require('qrcode');
 const sharp = require('sharp');
+const mongoose = require('mongoose');
 
 const Category = require('../models/Category');
 const crypto = require('crypto');
@@ -131,29 +132,38 @@ exports.createProduct = async (req, res) => {
 
 
 
+
 exports.getAllProducts = async (req, res) => {
   try {
+    // 1. Get all products
     const products = await Product.find().sort({ createdAt: -1 }).lean();
 
-    // Get all unique, valid categoryIds as strings
+    // 2. Extract all unique, valid categoryIds as strings
     const categoryIds = [
       ...new Set(
         products
-          .map(p => p.categoryId?.toString())
-          .filter(id => !!id)
+          .map(p => p.categoryId)
+          .filter(id => mongoose.Types.ObjectId.isValid(id))
+          .map(id => id.toString())
       )
     ];
 
-    // Fetch all matching categories
+    console.log('🟡 Found categoryIds:', categoryIds);
+
+    // 3. Fetch all matching categories
     const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
 
-    // Create a map: categoryId => category name
+    console.log('🟢 Categories fetched:', categories);
+
+    // 4. Build categoryId → name map
     const categoryMap = {};
     categories.forEach(cat => {
       categoryMap[cat._id.toString()] = cat.name;
     });
 
-    // Add categoryName to each product
+    console.log('🗺️ categoryMap:', categoryMap);
+
+    // 5. Add categoryName to each product
     const productsWithCategoryName = products.map(p => ({
       ...p,
       categoryId: p.categoryId?.toString() || null,
