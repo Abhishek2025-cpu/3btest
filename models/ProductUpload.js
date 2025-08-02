@@ -1,15 +1,11 @@
+// In your productModel.js file
+
 const mongoose = require('mongoose');
 
-const imageSchema = new mongoose.Schema(
-  {
-    id: { type: String, required: true },
-    url: { type: String, required: true }
-  },
-  { _id: false } // Prevents Mongoose from adding _id inside map value
-);
-
 const productSchema = new mongoose.Schema({
-  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+  // CHANGE 1: The type is now String, to match the custom ID in the Category model.
+  // We also remove the 'ref' here because the link will be virtual.
+  categoryId: { type: String, required: true },
   name: { type: String, required: true },
   about: { type: String },
   dimensions: [String],
@@ -21,6 +17,7 @@ const productSchema = new mongoose.Schema({
   finalPricePerBox: { type: Number, required: true },
   images: [
     {
+      _id: false, // Don't add _id to sub-documents in the array
       id: { type: String, required: true },
       url: { type: String, required: true }
     }
@@ -31,7 +28,19 @@ const productSchema = new mongoose.Schema({
   },
   qrCodeUrl: { type: String }
 
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  // CHANGE 2: Enable virtuals so we can see the populated data in JSON/objects.
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-// 👇 This sets the collection name explicitly to `productuploads`
+// CHANGE 3: Define the virtual relationship.
+productSchema.virtual('category', {
+  ref: 'Category',            // The model to use for populating
+  localField: 'categoryId',     // Find the value of `categoryId` in this (Product) schema...
+  foreignField: 'categoryId', // ...and find the document in the 'Category' model where its `categoryId` matches.
+  justOne: true               // We only expect one category to match, not an array.
+});
+
 module.exports = mongoose.model('ProductUpload', productSchema, 'productuploads');

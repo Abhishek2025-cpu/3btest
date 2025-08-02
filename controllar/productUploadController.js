@@ -135,43 +135,33 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    // 1. Fetch all products and populate the 'categoryId' field
-    //    .populate() will automatically fetch the referenced Category document.
-    //    The second argument 'name' tells Mongoose to only bring back the 'name' field
-    //    from the Category collection, which is more efficient.
+    // 1. Find products and populate the 'category' virtual field.
+    //    We only select the 'name' from the category to be efficient.
     const products = await Product.find()
       .sort({ createdAt: -1 })
-      .populate('categoryId', 'name') // <-- The key change is here
-      .lean(); // .lean() makes the query faster and returns plain JS objects
+      .populate('category', 'name') // <-- Populate our new virtual field
+      .lean({ virtuals: true }); // <-- Use lean() for performance, ensuring virtuals are included
 
-    // 2. The 'products' array now contains objects where 'categoryId' is an object itself
-    //    (e.g., { _id: '...', name: 'Electronics' }) or null if it wasn't found.
-    //    We can now map this to the desired final structure.
-
-    const formattedProducts = products.map(product => {
-      // Create the new object with a flat categoryName property
-      return {
-        ...product,
-        // If product.categoryId was successfully populated, it's an object.
-        // If not (e.g., the category was deleted), it will be null.
-        categoryName: product.categoryId ? product.categoryId.name : null,
-        // Overwrite the categoryId object with just its string ID for consistency
-        categoryId: product.categoryId ? product.categoryId._id.toString() : null,
-      };
+    // 2. The mapping logic is now much cleaner.
+    const formattedProducts = products.map(p => {
+        return {
+            ...p,
+            // The populated data is in 'p.category'. The original string is in 'p.categoryId'.
+            categoryName: p.category ? p.category.name : null
+        }
     });
 
     res.status(200).json({
       success: true,
       message: '✅ Products fetched successfully',
-      products: formattedProducts, // Use the newly formatted array
+      products: formattedProducts
     });
-
   } catch (err) {
     console.error('❌ Error fetching products:', err);
     res.status(500).json({
       success: false,
       message: '❌ Failed to fetch products',
-      error: err.message,
+      error: err.message
     });
   }
 };
