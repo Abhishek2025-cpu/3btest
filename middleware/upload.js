@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 
 const storage = multer.memoryStorage();
-const limits = { fileSize: 100 * 1024 * 1024 };
+  limits: { fileSize: 200 * 1024 * 1024 } // 200MB
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
