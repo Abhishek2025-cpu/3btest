@@ -9,11 +9,6 @@ const crypto = require('crypto');
 
 // In your productUploadController.js file
 
-const Product = require('../models/ProductUpload');
-const { uploadBufferToGCS } = require('../utils/gcloud');
-const QRCode = require('qrcode');
-const sharp = require('sharp');
-const crypto = require('crypto');
 
 exports.createProduct = async (req, res) => {
   try {
