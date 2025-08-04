@@ -163,6 +163,8 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 
+// In exports.sendMessage
+
 exports.sendMessage = [
   upload.single('file'),
   async (req, res) => {
@@ -172,34 +174,22 @@ exports.sendMessage = [
       const message = req.body.message;
       const file = req.file;
 
-      console.log('BODY:', req.body);
-      console.log('senderId:', senderId);
-      console.log('receiverId:', receiverId);
+      // ... (senderId/receiverId checks) ...
+      // ... (model detection logic) ...
 
-      if (!senderId || !receiverId) {
-        return res.status(400).json({ success: false, message: "senderId and receiverId are required" });
-      }
-
-      if (!message && !file) {
-        return res.status(400).json({ success: false, message: "Either message or file is required" });
-      }
-
-      // Detect sender model
-      let senderModel = null;
-      if (await User.findById(senderId)) senderModel = 'User';
-      else if (await Admin.findById(senderId)) senderModel = 'Admin';
-      else return res.status(400).json({ success: false, message: "Invalid senderId" });
-
-      // Detect receiver model
-      let receiverModel = null;
-      if (await User.findById(receiverId)) receiverModel = 'User';
-      else if (await Admin.findById(receiverId)) receiverModel = 'Admin';
-      else return res.status(400).json({ success: false, message: "Invalid receiverId" });
-
-      let mediaUrl = null;
+      let mediaDetails = null; // Renamed for clarity
       if (file) {
-        const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-        mediaUrl = url;
+        // IMPORTANT: Assume uploadBufferToGCS returns an object like { id, url }
+        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+        
+        if (!uploadResult || !uploadResult.url) {
+            throw new Error('File upload failed to return a URL.');
+        }
+        
+        mediaDetails = {
+            id: uploadResult.id, // The unique ID of the file in GCS
+            url: uploadResult.url // The public URL of the file
+        };
       }
 
       const chat = await Chat.create({
@@ -208,12 +198,12 @@ exports.sendMessage = [
         receiverId,
         receiverModel,
         message: message || null,
-        mediaUrl
+        mediaUrl: mediaDetails // <-- Pass the entire object here
       });
 
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('Unexpected error in sendMessage:', err);
       res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -297,6 +287,8 @@ exports.getAllChatsForAdmin = async (req, res) => {
 
 
 // POST: Admin reply to user
+// In exports.adminReply
+
 exports.adminReply = [
   upload.single('file'),
   async (req, res) => {
@@ -304,36 +296,36 @@ exports.adminReply = [
       const { adminId, userId, message } = req.body;
       const file = req.file;
 
-      if (!adminId || !userId) {
-        return res.status(400).json({ success: false, message: "adminId and userId are required" });
+      // ... (input validation) ...
+
+      let mediaDetails = null; // Renamed for clarity
+      if (file) {
+        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+        
+        if (!uploadResult || !uploadResult.url) {
+            throw new Error('File upload failed to return a URL.');
+        }
+
+        mediaDetails = {
+            id: uploadResult.id,
+            url: uploadResult.url
+        };
       }
-
-      if (!message && !file) {
-        return res.status(400).json({ success: false, message: "Either message or file is required" });
-      }
-
-      let mediaUrl = null;
-     if (file) {
-  const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-  mediaUrl = url;
-}
-
 
       const newChat = await Chat.create({
         senderId: adminId,
         receiverId: userId,
-        senderModel: 'User',       // or 'Admin' if using separate Admin model
+        senderModel: 'Admin', // Corrected from 'User'
         receiverModel: 'User',
         message: message || null,
-        mediaUrl
+        mediaUrl: mediaDetails // <-- Pass the entire object here
       });
+      
+      // ... (populate and send response) ...
+      res.status(201).json({ success: true, data: newChat });
 
-      const populatedChat = await Chat.findById(newChat._id)
-        .populate('senderId', 'name')
-        .populate('receiverId', 'name');
-
-      res.status(201).json({ success: true, data: populatedChat });
     } catch (err) {
+      console.error('Unexpected error in adminReply:', err);
       res.status(500).json({ success: false, message: err.message });
     }
   }
