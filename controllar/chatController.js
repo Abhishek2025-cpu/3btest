@@ -313,9 +313,11 @@ exports.adminReply = [
       }
 
       let mediaUrl = null;
-      if (file) {
-        mediaUrl = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-      }
+     if (file) {
+  const { url } = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
+  mediaUrl = url;
+}
+
 
       const newChat = await Chat.create({
         senderId: adminId,
