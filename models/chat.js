@@ -11,8 +11,8 @@ const chatSchema = new mongoose.Schema({
 
   // This is the correct definition for an optional nested object
   mediaUrl: { 
-    id: { type: String },
-    url: { type: String }
+    type: String, // Just store the URL string
+    default: null
   },
 
   timestamp: { type: Date, default: Date.now },
