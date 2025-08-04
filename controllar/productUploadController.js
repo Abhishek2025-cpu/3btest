@@ -10,10 +10,6 @@ const crypto = require('crypto');
 // In your productUploadController.js file
 
 
-// In your productUploadController.js file
-
-
-
 exports.createProduct = async (req, res) => {
   try {
     const {
@@ -33,22 +29,15 @@ exports.createProduct = async (req, res) => {
     const parsedDiscount = Number(discountPercentage) || 0;
 
     if (!categoryId || !name || isNaN(parsedPrice) || isNaN(parsedTotal)) {
-      return res.status(400).json({
-        success: false,
-        message: '❌ Required fields missing or invalid'
-      });
+      return res.status(400).json({ success: false, message: '❌ Required fields missing or invalid' });
     }
 
     const productImages = req.files?.images || [];
     const colorImages = req.files?.colorImages || [];
 
     const uniqueFilesToUpload = new Map();
-    productImages.forEach(file => {
-      uniqueFilesToUpload.set(file.originalname, file);
-    });
-    colorImages.forEach(file => {
-      uniqueFilesToUpload.set(file.originalname, file);
-    });
+    productImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
+    colorImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
 
     const allUniqueFiles = Array.from(uniqueFilesToUpload.values());
 
@@ -58,10 +47,16 @@ exports.createProduct = async (req, res) => {
         .jpeg({ quality: 80 })
         .toBuffer();
       const filename = `product-${Date.now()}-${file.originalname}`;
-      const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+      
+      // --- START: THE FIX ---
+      // The uploadBufferToGCS function returns an object. We need to get the URL string from it.
+      const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+      const urlString = uploadResult.url; // Assuming the URL is in the 'url' property
+      // --- END: THE FIX ---
+
       return {
         id: crypto.randomUUID(),
-        url,
+        url: urlString, // Assign the STRING, not the object
         originalname: file.originalname
       };
     });
@@ -72,81 +67,61 @@ exports.createProduct = async (req, res) => {
       urlMap.set(data.originalname, { url: data.url, id: data.id });
     });
 
-    // --- START: THE FIX ---
-    // Safely map the images, ensuring data exists before trying to access its properties.
     const finalImagesForDB = productImages
       .map(file => {
         const data = urlMap.get(file.originalname);
-        if (!data) return null; // If no match is found, return null
+        if (!data) return null;
         return { id: data.id, url: data.url, originalname: file.originalname };
       })
-      .filter(Boolean); // Filter out any null entries
+      .filter(Boolean);
 
     const finalColorImageMap = new Map();
     colorImages.forEach(file => {
       const data = urlMap.get(file.originalname);
-      if (data) { // This part was already safe, but we'll keep the check.
+      if (data) {
         finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
       }
     });
-    // --- END: THE FIX ---
 
     const mrpPerBox = parsedPrice * parsedTotal;
-    const discountedPricePerBox =
-      parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
+    const discountedPricePerBox = parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
 
     const product = new Product({
-      categoryId,
-      name,
-      about,
+      categoryId, name, about,
       dimensions: dimensions ? dimensions.split(',').map(d => d.trim()) : [],
-      quantity: parsedQty,
-      pricePerPiece: parsedPrice,
-      totalPiecesPerBox: parsedTotal,
-      mrpPerBox,
-      discountPercentage: parsedDiscount,
-      finalPricePerBox: discountedPricePerBox,
+      quantity: parsedQty, pricePerPiece: parsedPrice, totalPiecesPerBox: parsedTotal,
+      mrpPerBox, discountPercentage: parsedDiscount, finalPricePerBox: discountedPricePerBox,
       images: finalImagesForDB,
       colorImageMap: Object.fromEntries(finalColorImageMap)
     });
 
     const qrData = product._id.toString();
     const qrBuffer = await QRCode.toBuffer(qrData);
-    const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
-    product.qrCodeUrl = qrUrl;
+
+    // --- START: THE FIX ---
+    // The same fix applies here for the QR code URL.
+    const qrUploadResult = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
+    product.qrCodeUrl = qrUploadResult.url; // Assign the STRING, not the object
+    // --- END: THE FIX ---
 
     await product.save();
 
-    res.status(201).json({
-      success: true,
-      message: '✅ Product created successfully',
-      product
-    });
+    res.status(201).json({ success: true, message: '✅ Product created successfully', product });
 
   } catch (err) {
-    // --- START: Enhanced Error Logging ---
     console.error('❌ FATAL ERROR IN createProduct:', err);
-
-    // Specifically check for Mongoose Validation Errors, which are very common
     if (err.name === 'ValidationError') {
       return res.status(422).json({
-        success: false,
-        message: '❌ Validation Failed. Please check your input data.',
-        error: err.message,
-        details: err.errors // Provides field-specific error details
+        success: false, message: '❌ Validation Failed. Please check your input data.',
+        error: err.message, details: err.errors
       });
     }
-
-    // Generic fallback for all other errors
     return res.status(500).json({
-      success: false,
-      message: '❌ An internal server error occurred.',
-      error: err.message // Send the actual error message to the frontend for debugging
+      success: false, message: '❌ An internal server error occurred.',
+      error: err.message
     });
-    // --- END: Enhanced Error Logging ---
   }
 };
-
 
 
 
