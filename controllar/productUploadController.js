@@ -10,13 +10,17 @@ const crypto = require('crypto');
 // In your productUploadController.js file
 
 
+// In your productUploadController.js file
+
+
+
 exports.createProduct = async (req, res) => {
   try {
     const {
       categoryId,
       name,
       about,
-      dimensions, // This will be a comma-separated string from the frontend
+      dimensions,
       quantity,
       pricePerPiece,
       totalPiecesPerBox,
@@ -35,34 +39,26 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // --- START: Refactored Image Handling Logic ---
-
     const productImages = req.files?.images || [];
     const colorImages = req.files?.colorImages || [];
 
-    // 1. Combine and De-duplicate all files to upload
     const uniqueFilesToUpload = new Map();
-    // Add all product images to the map
     productImages.forEach(file => {
       uniqueFilesToUpload.set(file.originalname, file);
     });
-    // Add all color images to the map (duplicates will be automatically ignored by Map's set)
     colorImages.forEach(file => {
       uniqueFilesToUpload.set(file.originalname, file);
     });
 
     const allUniqueFiles = Array.from(uniqueFilesToUpload.values());
 
-    // 2. Upload every unique image once
     const uploadPromises = allUniqueFiles.map(async (file) => {
       const compressedBuffer = await sharp(file.buffer)
-        .resize({ width: 1000, withoutEnlargement: true }) // Don't enlarge small images
+        .resize({ width: 1000, withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toBuffer();
-
       const filename = `product-${Date.now()}-${file.originalname}`;
       const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-
       return {
         id: crypto.randomUUID(),
         url,
@@ -71,34 +67,33 @@ exports.createProduct = async (req, res) => {
     });
 
     const uploadedFilesData = await Promise.all(uploadPromises);
-
-    // 3. Create a map from originalname to its new URL and ID for easy lookup
     const urlMap = new Map();
     uploadedFilesData.forEach(data => {
       urlMap.set(data.originalname, { url: data.url, id: data.id });
     });
 
-    // 4. Assign Roles: Build the final arrays using the urlMap
-    const finalImagesForDB = productImages.map(file => {
+    // --- START: THE FIX ---
+    // Safely map the images, ensuring data exists before trying to access its properties.
+    const finalImagesForDB = productImages
+      .map(file => {
         const data = urlMap.get(file.originalname);
+        if (!data) return null; // If no match is found, return null
         return { id: data.id, url: data.url, originalname: file.originalname };
-    });
+      })
+      .filter(Boolean); // Filter out any null entries
 
     const finalColorImageMap = new Map();
     colorImages.forEach(file => {
-        const data = urlMap.get(file.originalname);
-        if (data) {
-            finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
-        }
+      const data = urlMap.get(file.originalname);
+      if (data) { // This part was already safe, but we'll keep the check.
+        finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
+      }
     });
-
-    // --- END: Refactored Image Handling Logic ---
+    // --- END: THE FIX ---
 
     const mrpPerBox = parsedPrice * parsedTotal;
     const discountedPricePerBox =
-      parsedDiscount > 0
-        ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100
-        : mrpPerBox;
+      parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
 
     const product = new Product({
       categoryId,
@@ -111,11 +106,10 @@ exports.createProduct = async (req, res) => {
       mrpPerBox,
       discountPercentage: parsedDiscount,
       finalPricePerBox: discountedPricePerBox,
-      images: finalImagesForDB, // Use the correctly constructed array
-      colorImageMap: Object.fromEntries(finalColorImageMap) // Use the new map
+      images: finalImagesForDB,
+      colorImageMap: Object.fromEntries(finalColorImageMap)
     });
 
-    // Generate and upload QR code
     const qrData = product._id.toString();
     const qrBuffer = await QRCode.toBuffer(qrData);
     const qrUrl = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
@@ -130,13 +124,26 @@ exports.createProduct = async (req, res) => {
     });
 
   } catch (err) {
-    // This will now provide a more meaningful error message in the console
-    console.error('❌ Error creating product:', err); 
-    res.status(500).json({
+    // --- START: Enhanced Error Logging ---
+    console.error('❌ FATAL ERROR IN createProduct:', err);
+
+    // Specifically check for Mongoose Validation Errors, which are very common
+    if (err.name === 'ValidationError') {
+      return res.status(422).json({
+        success: false,
+        message: '❌ Validation Failed. Please check your input data.',
+        error: err.message,
+        details: err.errors // Provides field-specific error details
+      });
+    }
+
+    // Generic fallback for all other errors
+    return res.status(500).json({
       success: false,
-      message: '❌ Internal server error during product creation.',
-      error: err.message
+      message: '❌ An internal server error occurred.',
+      error: err.message // Send the actual error message to the frontend for debugging
     });
+    // --- END: Enhanced Error Logging ---
   }
 };
 
