@@ -7,13 +7,21 @@ const mongoose = require('mongoose');
 const Category = require('../models/Category');
 const crypto = require('crypto');
 
+// In your productUploadController.js file
+
+const Product = require('../models/ProductUpload');
+const { uploadBufferToGCS } = require('../utils/gcloud');
+const QRCode = require('qrcode');
+const sharp = require('sharp');
+const crypto = require('crypto');
+
 exports.createProduct = async (req, res) => {
   try {
     const {
       categoryId,
       name,
       about,
-      dimensions,
+      dimensions, // This will be a comma-separated string from the frontend
       quantity,
       pricePerPiece,
       totalPiecesPerBox,
@@ -32,58 +40,64 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const allImageFiles = req.files?.images || [];
-    const colorImageFiles = req.files?.colorImages || [];
+    // --- START: Refactored Image Handling Logic ---
 
-    // Compress and upload all images
-    const uploadedImages = await Promise.all(
-      allImageFiles.map(async (file) => {
-        const compressedBuffer = await sharp(file.buffer)
-          .resize({ width: 1000 }) // optional: resize
-          .jpeg({ quality: 70 })   // compression level
-          .toBuffer();
+    const productImages = req.files?.images || [];
+    const colorImages = req.files?.colorImages || [];
 
-        const filename = `compressed-${Date.now()}-${file.originalname}`;
-        const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-
-        return {
-          id: crypto.randomUUID(),
-          url,
-          originalname: file.originalname
-        };
-      })
-    );
-
-    // Build filename -> {id, url} map
-    const filenameToImageMap = {};
-    uploadedImages.forEach(({ id, url, originalname }) => {
-      filenameToImageMap[originalname] = { id, url };
+    // 1. Combine and De-duplicate all files to upload
+    const uniqueFilesToUpload = new Map();
+    // Add all product images to the map
+    productImages.forEach(file => {
+      uniqueFilesToUpload.set(file.originalname, file);
+    });
+    // Add all color images to the map (duplicates will be automatically ignored by Map's set)
+    colorImages.forEach(file => {
+      uniqueFilesToUpload.set(file.originalname, file);
     });
 
-    // Map color images using original filenames
-    const colorImageMap = new Map();
+    const allUniqueFiles = Array.from(uniqueFilesToUpload.values());
 
-    for (const file of colorImageFiles) {
-      const matched = filenameToImageMap[file.originalname];
-      if (matched) {
-        colorImageMap.set(file.originalname, {
-          id: matched.id,
-          url: matched.url
-        });
-      } else {
-        // Optionally: compress & upload unmatched color images too
-        const compressedBuffer = await sharp(file.buffer)
-          .resize({ width: 1000 })
-          .jpeg({ quality: 70 })
-          .toBuffer();
+    // 2. Upload every unique image once
+    const uploadPromises = allUniqueFiles.map(async (file) => {
+      const compressedBuffer = await sharp(file.buffer)
+        .resize({ width: 1000, withoutEnlargement: true }) // Don't enlarge small images
+        .jpeg({ quality: 80 })
+        .toBuffer();
 
-        const filename = `compressed-${Date.now()}-${file.originalname}`;
-        const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-        const id = crypto.randomUUID();
-        colorImageMap.set(file.originalname, { id, url });
-        uploadedImages.push({ id, url, originalname: file.originalname });
-      }
-    }
+      const filename = `product-${Date.now()}-${file.originalname}`;
+      const url = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+
+      return {
+        id: crypto.randomUUID(),
+        url,
+        originalname: file.originalname
+      };
+    });
+
+    const uploadedFilesData = await Promise.all(uploadPromises);
+
+    // 3. Create a map from originalname to its new URL and ID for easy lookup
+    const urlMap = new Map();
+    uploadedFilesData.forEach(data => {
+      urlMap.set(data.originalname, { url: data.url, id: data.id });
+    });
+
+    // 4. Assign Roles: Build the final arrays using the urlMap
+    const finalImagesForDB = productImages.map(file => {
+        const data = urlMap.get(file.originalname);
+        return { id: data.id, url: data.url, originalname: file.originalname };
+    });
+
+    const finalColorImageMap = new Map();
+    colorImages.forEach(file => {
+        const data = urlMap.get(file.originalname);
+        if (data) {
+            finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
+        }
+    });
+
+    // --- END: Refactored Image Handling Logic ---
 
     const mrpPerBox = parsedPrice * parsedTotal;
     const discountedPricePerBox =
@@ -95,15 +109,15 @@ exports.createProduct = async (req, res) => {
       categoryId,
       name,
       about,
-      dimensions: dimensions ? dimensions.split(',') : [],
+      dimensions: dimensions ? dimensions.split(',').map(d => d.trim()) : [],
       quantity: parsedQty,
       pricePerPiece: parsedPrice,
       totalPiecesPerBox: parsedTotal,
       mrpPerBox,
       discountPercentage: parsedDiscount,
       finalPricePerBox: discountedPricePerBox,
-      images: uploadedImages,
-      colorImageMap: Object.fromEntries(colorImageMap)
+      images: finalImagesForDB, // Use the correctly constructed array
+      colorImageMap: Object.fromEntries(finalColorImageMap) // Use the new map
     });
 
     // Generate and upload QR code
@@ -121,10 +135,11 @@ exports.createProduct = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Error creating product:', err);
+    // This will now provide a more meaningful error message in the console
+    console.error('❌ Error creating product:', err); 
     res.status(500).json({
       success: false,
-      message: '❌ Internal server error',
+      message: '❌ Internal server error during product creation.',
       error: err.message
     });
   }
