@@ -6,7 +6,7 @@ const storage = multer.memoryStorage(); // store in memory for streaming to GCS
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  limits: { fileSize: 200 * 1024 * 1024 }, // 100MB limit
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     if (!['.jpg', '.jpeg', '.png'].includes(ext.toLowerCase())) {
