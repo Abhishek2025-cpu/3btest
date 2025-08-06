@@ -31,7 +31,7 @@ const productUploadRoutes = require('./routes/productUploadRoutes');
 const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const adminRoutes = require('./routes/admin');
-
+const translationRoutes = require('./routes/translationRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -56,7 +56,7 @@ app.use('/api/other-categories', otherCategoryRoutes);
 app.use('/api/other-products', otherProductRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/gst', gstRoutes);    
-
+app.use('/api/language', translationRoutes);
 
 
 // Default route
