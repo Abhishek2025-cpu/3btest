@@ -3,3 +3,4 @@ gcs-key.json
 node_modules/
 .google-credentials.json
 .env
+./google-credentials.json
