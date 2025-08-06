@@ -1,23 +1,18 @@
-# Use official Node.js 18 image
+# Use Node.js LTS base image
 FROM node:18
 
-# Set working directory inside the container
+# Create app directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Install app dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy the rest of the application files
+# Copy the app source
 COPY . .
 
-# Expose the port the app runs on
+# Expose the port that Cloud Run expects
 EXPOSE 8080
 
-# Set environment variable for Cloud Run
-ENV PORT=8080
-
-# Command to run the app
-CMD ["npm", "start"]
+# Start the server
+CMD [ "node", "server.js" ]

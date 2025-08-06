@@ -1,18 +1,23 @@
 steps:
+  # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/b-profiles-461910/3bprofiles', '.']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/3bprofiles', '.']
 
+  # Step 2: Push image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/b-profiles-461910/3bprofiles']
 
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Step 3: Deploy to Cloud Run using the image
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
     args:
       [
-        'run', 'deploy', '3bprofiles',
+        'run', 'deploy', 'threeb',
         '--image', 'gcr.io/b-profiles-461910/3bprofiles',
         '--region', 'asia-south1',
         '--platform', 'managed',
-        '--allow-unauthenticated'
+        '--allow-unauthenticated',
+        '--port', '8080'
       ]
 
 options:
