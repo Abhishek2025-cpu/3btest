@@ -1,6 +1,7 @@
 # .gitignore file at the root
 gcs-key.json
+google-credentials.json
 node_modules/
-.google-credentials.json
+
 .env
-./google-credentials.json
+
