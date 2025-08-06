@@ -1,8 +1,7 @@
-// routes/translationRoutes.js
 const express = require('express');
 const router = express.Router();
-const { translate } = require('../controllar/translationController');
+const { getAllTranslatedData } = require('../controllar/translationController');
 
-router.post('/translate', translate);
+router.get('/translated-data', getAllTranslatedData);
 
 module.exports = router;
