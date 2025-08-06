@@ -1,12 +1,15 @@
 steps:
-  - name: 'gcr.io/cloud-builders/npm'
-    args: ['install']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/b-profiles-461910/3bprofiles', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/b-profiles-461910/3bprofiles']
 
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       [
-        'run', 'deploy', '3bprofiles',       # You can change 'node-api' to your desired service name
-        '--source', '.',
+        'run', 'deploy', '3bprofiles',
+        '--image', 'gcr.io/b-profiles-461910/3bprofiles',
         '--region', 'asia-south1',
         '--platform', 'managed',
         '--allow-unauthenticated'
