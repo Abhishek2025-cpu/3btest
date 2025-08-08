@@ -164,41 +164,67 @@ const upload = multer({ storage });
 
 
 // In exports.sendMessage
-
+// In exports.sendMessage
 exports.sendMessage = [
   upload.single('file'),
   async (req, res) => {
     try {
-      const senderId = req.body.senderId?.trim();
-      const receiverId = req.body.receiverId?.trim();
-      const message = req.body.message;
+      const { senderId, receiverId, message } = req.body;
       const file = req.file;
 
-      // ... (senderId/receiverId checks) ...
-      // ... (model detection logic) ...
+      // --- 1. Input Validation ---
+      if (!senderId || !receiverId) {
+        return res.status(400).json({ success: false, message: 'senderId and receiverId are required.' });
+      }
+      if (!message && !file) {
+        return res.status(400).json({ success: false, message: 'A message or a file is required to send.' });
+      }
 
-      let mediaDetails = null; // Renamed for clarity
+      // --- 2. FIX: Define senderModel and receiverModel ---
+      // We must query the database to determine if the sender/receiver is a 'User' or an 'Admin'.
+      let senderModel;
+      let receiverModel;
+
+      // Determine sender's model
+      if (await User.findById(senderId)) {
+        senderModel = 'User';
+      } else if (await Admin.findById(senderId)) {
+        senderModel = 'Admin';
+      } else {
+        return res.status(404).json({ success: false, message: `Sender with ID ${senderId} not found.` });
+      }
+
+      // Determine receiver's model
+      if (await User.findById(receiverId)) {
+        receiverModel = 'User';
+      } else if (await Admin.findById(receiverId)) {
+        receiverModel = 'Admin';
+      } else {
+        return res.status(404).json({ success: false, message: `Receiver with ID ${receiverId} not found.` });
+      }
+
+      // --- 3. Handle File Upload ---
+      let fileUrl = null;
       if (file) {
-        // IMPORTANT: Assume uploadBufferToGCS returns an object like { id, url }
         const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
         
         if (!uploadResult || !uploadResult.url) {
             throw new Error('File upload failed to return a URL.');
         }
         
-        mediaDetails = {
-            id: uploadResult.id, // The unique ID of the file in GCS
-            url: uploadResult.url // The public URL of the file
-        };
+        // FIX: Only store the URL string, not the whole object
+        fileUrl = uploadResult.url;
       }
 
+      // --- 4. Create the Chat Document ---
+      // Now senderModel and receiverModel are correctly defined.
       const chat = await Chat.create({
         senderId,
-        senderModel,
+        senderModel, // Now defined
         receiverId,
-        receiverModel,
+        receiverModel, // Now defined
         message: message || null,
-        mediaUrl: mediaDetails // <-- Pass the entire object here
+        mediaUrl: fileUrl // Pass the URL string or null
       });
 
       res.status(201).json({ success: true, data: chat });
@@ -289,6 +315,7 @@ exports.getAllChatsForAdmin = async (req, res) => {
 // POST: Admin reply to user
 // In exports.adminReply
 
+// In exports.adminReply
 exports.adminReply = [
   upload.single('file'),
   async (req, res) => {
@@ -298,7 +325,7 @@ exports.adminReply = [
 
       // ... (input validation) ...
 
-      let mediaDetails = null; // Renamed for clarity
+      let fileUrl = null; // Changed from mediaDetails
       if (file) {
         const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
         
@@ -306,19 +333,17 @@ exports.adminReply = [
             throw new Error('File upload failed to return a URL.');
         }
 
-        mediaDetails = {
-            id: uploadResult.id,
-            url: uploadResult.url
-        };
+        // FIX: Assign only the URL string
+        fileUrl = uploadResult.url; 
       }
 
       const newChat = await Chat.create({
         senderId: adminId,
         receiverId: userId,
-        senderModel: 'Admin', // Corrected from 'User'
+        senderModel: 'Admin',
         receiverModel: 'User',
         message: message || null,
-        mediaUrl: mediaDetails // <-- Pass the entire object here
+        mediaUrl: fileUrl // <-- Pass the URL string or null
       });
       
       // ... (populate and send response) ...
