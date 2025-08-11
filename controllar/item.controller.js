@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const MainItem = require('../models/mainItem.model'); // IMPORTANT: Use the new MainItem model
+const MainItem = require('../models/item.model'); // IMPORTANT: Use the new MainItem model
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
