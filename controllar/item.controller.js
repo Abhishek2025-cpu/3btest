@@ -109,6 +109,42 @@ exports.createItemWithBoxes = async (req, res) => {
   }
 };
 
+exports.getAllItemsForList = async (req, res) => {
+  try {
+    const items = await MainItem.aggregate([
+      {
+        $sort: { createdAt: -1 } // Sort newest first
+      },
+      {
+        $addFields: {
+          // Create a new field 'boxCount' with the size of the 'boxes' array
+          boxCount: { $size: "$boxes" }
+        }
+      },
+      {
+        $project: {
+          boxes: 0 // Now, explicitly remove the large 'boxes' array from the output
+        }
+      }
+    ]);
+    res.status(200).json(items);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch items' });
+  }
+};
+
+// CORRECTED CODE (includes the 'boxes' array)
+exports.getAllItems = async (req, res) => {
+  try {
+    // Fetch all items and include their full details, including the 'boxes' array.
+    // The sort({ createdAt: -1 }) will show the newest items first.
+    const items = await MainItem.find().sort({ createdAt: -1 });
+    res.status(200).json(items);
+  } catch (error) {
+    console.error("Failed to fetch items:", error);
+    res.status(500).json({ error: 'Failed to fetch items' });
+  }
+};
 
 // You might want a new function to get a single item with its boxes
 exports.getItemByItemNo = async (req, res) => {
@@ -124,15 +160,7 @@ exports.getItemByItemNo = async (req, res) => {
 };
 
 
-exports.getAllItems = async (req, res) => {
-  try {
-    // We can exclude the large 'boxes' array from the list view for performance
-    const items = await MainItem.find().select('-boxes');
-    res.status(200).json(items);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch items' });
-  }
-};
+
 
 exports.deleteItem = async (req, res) => {
   try {
