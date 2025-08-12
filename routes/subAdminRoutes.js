@@ -35,9 +35,9 @@ router.get('/sub-admin/:id', getSubAdminById);
 router.put('/update/:id', uploadProfilePic, updateSubAdmin);
 
 // UPDATE: Change a sub-admin's status.
-router.patch('sub-admin/status/:id', updateSubAdminStatus);
+router.patch('/status/:id', updateSubAdminStatus);
 
 // DELETE: Delete a sub-admin.
-router.delete('delete/:id', deleteSubAdmin);
+router.delete('/delete/:id', deleteSubAdmin);
 
 module.exports = router;
