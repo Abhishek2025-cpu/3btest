@@ -11,7 +11,7 @@ const {
   updateSubAdmin,
   updateSubAdminStatus,
   deleteSubAdmin,
-} = require('../controllers/subAdminController');
+} = require('../controllar/subAdminController');
 
 // Import the specific middleware functions you need by destructuring the export
 const {
