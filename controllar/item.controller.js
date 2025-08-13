@@ -109,6 +109,107 @@ exports.createItemWithBoxes = async (req, res) => {
   }
 };
 
+exports.addBoxesToItem = async (req, res) => {
+  const { itemNo } = req.params;
+  const { numberOfNewBoxes } = req.body;
+
+  try {
+    // --- 1. Validation ---
+    const numBoxesToAdd = parseInt(numberOfNewBoxes, 10);
+    if (isNaN(numBoxesToAdd) || numBoxesToAdd <= 0) {
+      return res.status(400).json({ error: 'A valid, positive number of new boxes is required.' });
+    }
+
+    // --- 2. Find the Existing Item ---
+    const existingItem = await MainItem.findOne({ itemNo });
+    if (!existingItem) {
+      return res.status(404).json({ error: `Item with itemNo '${itemNo}' not found.` });
+    }
+
+    // --- 3. Determine Starting Point and New Total ---
+    const lastBoxCount = existingItem.boxes.length;
+    const newTotalBoxes = lastBoxCount + numBoxesToAdd;
+
+    // --- 4. Generate New Box Data in Parallel ---
+    const newBoxIndexes = Array.from({ length: numBoxesToAdd }, (_, i) => i + 1);
+
+    const generatedNewBoxes = await Promise.all(
+      newBoxIndexes.map(async (index) => {
+        // A. Calculate the next serial number in the sequence
+        const newSerialNumber = lastBoxCount + index;
+        const boxSerialNo = String(newSerialNumber).padStart(3, '0'); // e.g., if last was 10, this starts at '011'
+
+        // B. Create rich QR code data, reflecting the *new* total
+        const qrCodeData = JSON.stringify({
+          itemNo: existingItem.itemNo,
+          boxSerialNo: boxSerialNo,
+          totalBoxes: newTotalBoxes, // IMPORTANT: The QR code reflects the new total
+          length: existingItem.length,
+          noOfSticks: existingItem.noOfSticks,
+          operator: existingItem.operator.name,
+          helper: existingItem.helper.name,
+          shift: existingItem.shift,
+          company: existingItem.company,
+          createdAt: new Date().toISOString()
+        });
+
+        // C. Generate QR code image buffer
+        const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
+          type: 'png',
+          errorCorrectionLevel: 'H',
+          margin: 1,
+          width: 500,
+        });
+
+        // D. Upload the unique QR code to GCS
+        const qrCodeFileName = `qr-${existingItem.itemNo}-${boxSerialNo}.png`;
+        const qrCodeUpload = await uploadBufferToGCS(qrCodeBuffer, qrCodeFileName, 'qr-codes', 'image/png');
+
+        // E. Return the final sub-document object for this new box
+        return {
+          _id: new mongoose.Types.ObjectId(), // Ensure a new unique ID for the subdocument
+          boxSerialNo: boxSerialNo,
+          qrCodeUrl: qrCodeUpload.url,
+          stockStatus: 'In Stock', // Default status for new boxes
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+      })
+    );
+    
+    // --- 5. Update the MainItem with the new boxes ---
+    // Use $push with $each to add all new boxes to the array at once.
+    // This is more efficient than saving the document multiple times.
+    await MainItem.updateOne(
+      { _id: existingItem._id },
+      {
+        $push: {
+          boxes: { $each: generatedNewBoxes }
+        }
+      }
+    );
+
+    // --- 6. Fetch and return the fully updated document ---
+    const updatedItem = await MainItem.findById(existingItem._id);
+
+    res.status(200).json({
+      message: `${numBoxesToAdd} boxes added successfully.`,
+      data: updatedItem
+    });
+
+  } catch (error) {
+    console.error('Add Boxes to Item Error:', error.message, error.stack);
+    res.status(500).json({ error: error.message || 'Failed to add boxes to the item' });
+  }
+};
+
+
+
+
+
+
+
+
 exports.getAllItemsForList = async (req, res) => {
   try {
     const items = await MainItem.aggregate([
