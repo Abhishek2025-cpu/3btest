@@ -12,7 +12,7 @@ router.get('/get-items', controller.getAllItems);
 router.get('/get-Allitems', controller.getAllItemsForList);
 router.get('/item/:itemNo', controller.getItemByItemNo);
 router.delete('/delete-items/:id', controller.deleteItem);
-router.patch('/add-boxes/:id', controller.addBoxesToItem);
+router.patch('/:id/add-boxes', controller.addBoxesToItem);
 router.patch('/update-stock-status/:id', controller.updateStockStatus);
 
 
