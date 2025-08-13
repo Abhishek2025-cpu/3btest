@@ -43,10 +43,17 @@ exports.createFeedback = async (req, res) => {
 };
 
 // Get public feedbacks only
+// In feedbackController.js
+
 exports.getPublicFeedbacks = async (req, res) => {
   try {
-    // Find feedbacks that are NOT private AND ARE enabled
-    const feedbacks = await Feedback.find({ isPrivate: false, isEnabled: true }) 
+    const feedbacks = await Feedback.find({
+      isPrivate: false, // Condition 1: Must be public
+      $or: [
+        { isEnabled: true },             // OR it is explicitly enabled
+        { isEnabled: { $exists: false } } // OR the isEnabled field doesn't exist yet
+      ]
+    })
       .populate('user', 'name profileImage')
       .sort({ createdAt: -1 });
 
