@@ -7,6 +7,7 @@ const {
   getEmployee,
   updateEmployee,
   deleteEmployee,
+  updateEmployeeStatus,
 } = require('../controllar/employeeController');
 
 const upload = multer({ storage: multer.memoryStorage() });
