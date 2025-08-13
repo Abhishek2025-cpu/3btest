@@ -25,21 +25,7 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 // Connect to MongoDB
 connectDB();
 // Kill switch route BEFORE middleware
-const maintenance = require("./config/maintenance");
-app.patch("/super-api", (req, res) => {
-  const { enable } = req.body;
-  if (enable) {
-    maintenance.enable();
-    return res.json({ message: "Maintenance mode enabled" });
-  } else {
-    maintenance.disable();
-    return res.json({ message: "Maintenance mode disabled" });
-  }
-});
 
-// Now apply maintenance middleware
-const maintenanceMiddleware = require("./middleware/maintenanceMode");
-app.use(maintenanceMiddleware);
 
 
 // Routes
