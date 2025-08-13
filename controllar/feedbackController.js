@@ -45,7 +45,8 @@ exports.createFeedback = async (req, res) => {
 // Get public feedbacks only
 exports.getPublicFeedbacks = async (req, res) => {
   try {
-    const feedbacks = await Feedback.find({ isPrivate: false })
+    // Find feedbacks that are NOT private AND ARE enabled
+    const feedbacks = await Feedback.find({ isPrivate: false, isEnabled: true }) 
       .populate('user', 'name profileImage')
       .sort({ createdAt: -1 });
 
@@ -56,6 +57,57 @@ exports.getPublicFeedbacks = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: '❌ Failed to fetch feedbacks', error: error.message });
+  }
+};
+
+exports.getAllFeedbacksForAdmin = async (req, res) => {
+  try {
+    // We use an empty object {} in find() to get ALL documents
+    const feedbacks = await Feedback.find({})
+      .populate('user', 'name profileImage')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: '✅ All user feedbacks fetched successfully for admin',
+      feedbacks
+    });
+  } catch (error) {
+    console.error('Admin get all feedbacks error:', error);
+    res.status(500).json({ success: false, message: '❌ Failed to fetch all feedbacks', error: error.message });
+  }
+};
+
+exports.updateFeedbackStatus = async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+    const { isEnabled } = req.body;
+
+    // Validate input: isEnabled must be a boolean
+    if (typeof isEnabled !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Invalid input: isEnabled must be true or false.' });
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({ success: false, message: 'Feedback not found' });
+    }
+
+    // Update the status and save
+    feedback.isEnabled = isEnabled;
+    await feedback.save();
+
+    const statusMessage = isEnabled ? 'enabled' : 'disabled';
+
+    res.status(200).json({ 
+        success: true, 
+        message: `✅ Feedback has been successfully ${statusMessage}`, 
+        feedback 
+    });
+  } catch (error) {
+    console.error('Update feedback status error:', error);
+    res.status(500).json({ success: false, message: '❌ Failed to update feedback status', error: error.message });
   }
 };
 

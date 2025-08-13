@@ -5,6 +5,8 @@ const feedbackController = require('../controllar/feedbackController');
 router.post('/add-feedback', feedbackController.createFeedback);
 router.get('/get-feedbacks', feedbackController.getPublicFeedbacks);
 router.get('/get-feedback/user/:userId', feedbackController.getFeedbackByUser);
+router.get('/getall/admin', feedbackController.getAllFeedbacksForAdmin);
+router.patch('/status/:feedbackId',feedbackController.updateFeedbackStatus);
 router.patch('/update-feedback/:feedbackId', feedbackController.updateFeedback);
 router.delete('/delete-feedback/:feedbackId', feedbackController.deleteFeedback);
 
