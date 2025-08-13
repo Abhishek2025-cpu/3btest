@@ -67,6 +67,59 @@ exports.createEmployee = async (req, res) => {
 };
 
 
+exports.updateEmployeeStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // Expecting true/false
+
+    if (typeof status !== 'boolean') {
+      return res.status(400).json({
+        statusCode: 400,
+        success: false,
+        message: "Status must be a boolean value (true for active, false for inactive)."
+      });
+    }
+
+    // Find employee
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        message: "Employee not found."
+      });
+    }
+
+    // Update status and log history
+    employee.status = status;
+    employee.statusHistory = employee.statusHistory || [];
+    employee.statusHistory.push({
+      status,
+      changedAt: new Date()
+    });
+
+    await employee.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: `Employee status updated to ${status ? 'active' : 'inactive'}.`,
+      employee
+    });
+
+  } catch (error) {
+    console.error('Update Employee Status Error:', error);
+    res.status(500).json({
+      statusCode: 500,
+      success: false,
+      message: "Failed to update employee status.",
+      error: error.message
+    });
+  }
+};
+
+
+
 
 
 exports.getAllEmployees = async (req, res) => {

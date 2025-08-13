@@ -10,6 +10,13 @@ const employeeSchema = new mongoose.Schema({
   password: { type: String, required: true },
   adharNumber: { type: String, required: true },
   adharImageUrl: { type: String, required: true },
+    status: { type: Boolean, default: true }, // active by default
+  statusHistory: [
+    {
+      status: { type: Boolean, required: true },
+      changedAt: { type: Date, default: Date.now }
+    }
+  ]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Employee', employeeSchema);
