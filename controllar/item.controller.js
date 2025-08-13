@@ -109,41 +109,54 @@ exports.createItemWithBoxes = async (req, res) => {
   }
 };
 
+// REPLACE your old function with this corrected version in your controller file
+
+
+
+
 exports.addBoxesToItem = async (req, res) => {
-  const { itemNo } = req.params;
+  // MODIFICATION 1: We are getting 'id' from the URL, not 'itemNo'.
+  const { id } = req.params; 
   const { numberOfNewBoxes } = req.body;
 
   try {
     // --- 1. Validation ---
+    // ADDED: A crucial check to ensure the ID is a valid MongoDB ObjectId format before querying.
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid item ID format.' });
+    }
+
     const numBoxesToAdd = parseInt(numberOfNewBoxes, 10);
     if (isNaN(numBoxesToAdd) || numBoxesToAdd <= 0) {
       return res.status(400).json({ error: 'A valid, positive number of new boxes is required.' });
     }
 
     // --- 2. Find the Existing Item ---
-    const existingItem = await MainItem.findOne({ itemNo });
+    // MODIFICATION 2: Use findById() which is faster and designed for this purpose.
+    const existingItem = await MainItem.findById(id); 
     if (!existingItem) {
-      return res.status(404).json({ error: `Item with itemNo '${itemNo}' not found.` });
+      // MODIFICATION 3: The error message now correctly refers to the ID.
+      return res.status(404).json({ error: `Item with ID '${id}' not found.` });
     }
 
     // --- 3. Determine Starting Point and New Total ---
+    // (This logic is correct and remains unchanged)
     const lastBoxCount = existingItem.boxes.length;
     const newTotalBoxes = lastBoxCount + numBoxesToAdd;
 
     // --- 4. Generate New Box Data in Parallel ---
+    // (This logic is correct and remains unchanged)
     const newBoxIndexes = Array.from({ length: numBoxesToAdd }, (_, i) => i + 1);
 
     const generatedNewBoxes = await Promise.all(
       newBoxIndexes.map(async (index) => {
-        // A. Calculate the next serial number in the sequence
         const newSerialNumber = lastBoxCount + index;
-        const boxSerialNo = String(newSerialNumber).padStart(3, '0'); // e.g., if last was 10, this starts at '011'
+        const boxSerialNo = String(newSerialNumber).padStart(3, '0');
 
-        // B. Create rich QR code data, reflecting the *new* total
         const qrCodeData = JSON.stringify({
           itemNo: existingItem.itemNo,
           boxSerialNo: boxSerialNo,
-          totalBoxes: newTotalBoxes, // IMPORTANT: The QR code reflects the new total
+          totalBoxes: newTotalBoxes,
           length: existingItem.length,
           noOfSticks: existingItem.noOfSticks,
           operator: existingItem.operator.name,
@@ -153,24 +166,18 @@ exports.addBoxesToItem = async (req, res) => {
           createdAt: new Date().toISOString()
         });
 
-        // C. Generate QR code image buffer
         const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
-          type: 'png',
-          errorCorrectionLevel: 'H',
-          margin: 1,
-          width: 500,
+          type: 'png', errorCorrectionLevel: 'H', margin: 1, width: 500,
         });
 
-        // D. Upload the unique QR code to GCS
         const qrCodeFileName = `qr-${existingItem.itemNo}-${boxSerialNo}.png`;
         const qrCodeUpload = await uploadBufferToGCS(qrCodeBuffer, qrCodeFileName, 'qr-codes', 'image/png');
 
-        // E. Return the final sub-document object for this new box
         return {
-          _id: new mongoose.Types.ObjectId(), // Ensure a new unique ID for the subdocument
+          _id: new mongoose.Types.ObjectId(),
           boxSerialNo: boxSerialNo,
           qrCodeUrl: qrCodeUpload.url,
-          stockStatus: 'In Stock', // Default status for new boxes
+          stockStatus: 'In Stock',
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -178,18 +185,14 @@ exports.addBoxesToItem = async (req, res) => {
     );
     
     // --- 5. Update the MainItem with the new boxes ---
-    // Use $push with $each to add all new boxes to the array at once.
-    // This is more efficient than saving the document multiple times.
+    // (This logic is correct and remains unchanged)
     await MainItem.updateOne(
       { _id: existingItem._id },
-      {
-        $push: {
-          boxes: { $each: generatedNewBoxes }
-        }
-      }
+      { $push: { boxes: { $each: generatedNewBoxes } } }
     );
 
     // --- 6. Fetch and return the fully updated document ---
+    // (This logic is correct and remains unchanged)
     const updatedItem = await MainItem.findById(existingItem._id);
 
     res.status(200).json({
@@ -202,7 +205,6 @@ exports.addBoxesToItem = async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to add boxes to the item' });
   }
 };
-
 
 
 
