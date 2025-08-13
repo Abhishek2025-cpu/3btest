@@ -41,11 +41,11 @@ app.patch("/super-api", (req, res) => {
 });
 
 // Load maintenance middleware AFTER kill switch route
-const maintenanceMiddleware = require("./middleware/maintenanceMode");
+
 app.use(maintenanceMiddleware);
 
 
-app.use(maintenanceMiddleware); 
+
 // Routes
 const authRoutes  = require('./routes/authRoutes')
 const productUploadRoutes = require('./routes/productUploadRoutes');
