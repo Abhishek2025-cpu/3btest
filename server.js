@@ -24,26 +24,22 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
 // Connect to MongoDB
 connectDB();
-const maintenanceMiddleware = require("./middleware/maintenanceMode");
-// Kill switch route FIRST
+// Kill switch route BEFORE middleware
 const maintenance = require("./config/maintenance");
-
 app.patch("/super-api", (req, res) => {
-  const { enable } = req.body; // true or false
-
+  const { enable } = req.body;
   if (enable) {
     maintenance.enable();
-    return res.json({ message: "All APIs disabled except admin login and super-api" });
+    return res.json({ message: "Maintenance mode enabled" });
   } else {
     maintenance.disable();
-    return res.json({ message: "All APIs re-enabled" });
+    return res.json({ message: "Maintenance mode disabled" });
   }
 });
 
-// Load maintenance middleware AFTER kill switch route
-
+// Now apply maintenance middleware
+const maintenanceMiddleware = require("./middleware/maintenanceMode");
 app.use(maintenanceMiddleware);
-
 
 
 // Routes
