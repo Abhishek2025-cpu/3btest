@@ -14,7 +14,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.post('/add-employees', upload.single('adharImage'), createEmployee);
 router.get('/get-employees', getAllEmployees);
-router.patch('/:id/status', updateEmployeeStatus);
+router.patch('/employees/:id/status', updateEmployeeStatus);
 
 router.get('/employees/:id', getEmployee);
 router.put('/update-employees/:id', upload.single('adharImage'), updateEmployee);
