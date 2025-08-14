@@ -1,50 +1,69 @@
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
+/**
+ * Generates a robust Employee ID (EID).
+ * If DOB is provided, it uses your original logic.
+ * If DOB is missing, it uses the current date and adds a random part for uniqueness.
+ */
 function generateEid(dob) {
-  const date = new Date(dob);
+  const date = dob ? new Date(dob) : new Date(); // Use current date as a fallback
+  if (isNaN(date.getTime())) {
+    // If an invalid date string was passed, fallback to current date
+    date = new Date();
+  }
+  
+  const year = date.getFullYear() + (dob ? 1 : 0); // Only add +1 if DOB was provided
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear() + 1; // Assuming your logic here is correct
   const yearSuffix = year.toString().slice(-2);
-  return `${month}${yearSuffix}`;
+  
+  // If DOB was missing, add a random 2-digit number to avoid collisions
+  const randomPart = !dob ? Math.floor(10 + Math.random() * 90) : '';
+
+  return `${month}${yearSuffix}${randomPart}`;
 }
 
-function generatePassword(name, adhar) {
-  // Add a check for missing adhar to prevent errors
-  if (!name || !adhar) {
-    // Return a default or throw an error
-    return 'default1234'; 
-  }
+/**
+ * Generates a robust password.
+ * Uses the first 4 letters of the name.
+ * Uses the last 4 digits of the Adhar number if it exists.
+ * Otherwise, it uses the last 4 digits of the mobile number as a reliable fallback.
+ */
+function generatePassword(name, adhar, mobile) {
   const namePart = name.slice(0, 4).toLowerCase();
-  const adharPart = adhar.slice(-4);
-  return `${namePart}${adharPart}`;
+  
+  // Use last 4 of Adhar if available, otherwise use last 4 of mobile
+  const numericPart = adhar ? adhar.slice(-4) : mobile.slice(-4);
+  
+  return `${namePart}${numericPart}`;
 }
 
 exports.createEmployee = async (req, res) => {
   try {
-    // --- CHANGE 1: Remove 'otherRole' from here ---
     const { name, mobile, role, dob, adharNumber } = req.body;
 
-    // --- CHANGE 2: The validation for 'otherRole' is no longer needed. REMOVED. ---
-    // The frontend already ensures a 'role' is submitted.
-
+    // --- Added stricter validation for required fields ---
+    if (!name || !mobile || !role) {
+      return res.status(400).json({ message: 'Name, Mobile, and Role are required.' });
+    }
     if (!req.file) {
-      // You may want to make the image optional if it's not always required
-      return res.status(400).json({ message: 'Adhar image is required' });
+      return res.status(400).json({ message: 'Adhar image is required.' });
     }
 
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
-      return res.status(400).json({ message: 'Mobile number already exists' });
+      return res.status(400).json({ message: 'Mobile number already exists.' });
     }
 
-    const dobDate = new Date(dob);
-    if (isNaN(dobDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid date of birth format' });
+    // --- Safely handle optional Date of Birth ---
+    const dobDate = dob ? new Date(dob) : null;
+    if (dob && isNaN(dobDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid date of birth format.' });
     }
 
+    // --- Generate credentials using robust functions ---
     const eid = generateEid(dob);
-    const password = generatePassword(name, adharNumber);
+    const password = generatePassword(name, adharNumber, mobile); // Pass mobile as a fallback
 
     const { url: adharImageUrl } = await uploadBufferToGCS(
       req.file.buffer,
@@ -53,30 +72,28 @@ exports.createEmployee = async (req, res) => {
       req.file.mimetype
     );
 
-    // --- CHANGE 3: Simplified employee object creation ---
+    // --- Create employee with safe values ---
     const employee = await Employee.create({
       name,
       mobile,
-      role, // The 'role' from the request now correctly holds "Supervisor", "Operator", etc.
-      dob: dobDate,
+      role,
+      dob: dobDate, // This will be null if not provided, which is safe
       eid,
       password,
-      adharNumber,
+      adharNumber: adharNumber || '', // Save as empty string if not provided
       adharImageUrl,
-      // The 'otherRole' field is no longer needed here.
-      // If your Mongoose model requires it, you can remove it from the schema.
     });
 
-    // --- CHANGE 4: Send a response that includes the password for the frontend popup ---
+    // --- Send a successful response with the password ---
     res.status(201).json({
       message: "Employee created successfully",
-      password: employee.password, // Explicitly send the password
-      employee: employee, // You can also send the full employee object if needed
+      password: employee.password,
+      employee: employee,
     });
 
   } catch (error) {
+    // This block catches any other unexpected errors
     console.error('Create Employee Error:', error.message, error.stack);
-    // Send back a more user-friendly error message
     res.status(500).json({ message: 'Failed to create employee due to a server error.' });
   }
 };
