@@ -173,73 +173,85 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+/**
+ * Updates an existing employee's details.
+ * EID is considered immutable and is not changed.
+ * Password is regenerated if relevant details (name, adhar, mobile) change.
+ */
 exports.updateEmployee = async (req, res) => {
   try {
-    const updateData = req.body;
-    if (req.file) {
-      const adharImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'adhar-images');
-      updateData.adharImageUrl = adharImageUrl;
-    }
-    const employee = await Employee.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!employee) return res.status(404).json({ error: 'Employee not found' });
-    res.status(200).json(employee);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update employee' });
-  }
-};
+    const { id } = req.params;
+    const { name, mobile, role, dob, adharNumber } = req.body;
 
-exports.deleteEmployee = async (req, res) => {
-  try {
-    const employee = await Employee.findByIdAndDelete(req.params.id);
-    if (!employee) return res.status(404).json({ error: 'Employee not found' });
-    res.status(200).json({ message: 'Employee deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete employee' });
-  }
-};
-
-exports.getEmployee = async (req, res) => {
-  try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ error: 'Employee not found' });
-    res.json(employee);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch employee' });
-  }
-};
-
-exports.updateEmployee = async (req, res) => {
-  try {
-    const { name, mobile, role, otherRole, dob, adharNumber } = req.body;
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ error: 'Employee not found' });
-
-    let adharImageUrl = employee.adharImageUrl;
-    if (req.file) {
-      adharImageUrl = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'adhar-images');
+    // 1. Find the employee to update
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found.' });
     }
 
-    const eid = generateEid(dob);
-    const password = generatePassword(name, adharNumber);
+    // 2. Validate inputs
+    // Check if the new mobile number is already taken by another employee
+    if (mobile && mobile !== employee.mobile) {
+      const existingEmployee = await Employee.findOne({ mobile, _id: { $ne: id } });
+      if (existingEmployee) {
+        return res.status(400).json({ message: 'This mobile number is already in use by another employee.' });
+      }
+    }
 
-    employee.set({
-      name,
-      mobile,
-      role,
-      otherRole: role === 'Other' ? otherRole : undefined,
-      dob,
-      eid,
-      password,
-      adharNumber,
-      adharImageUrl,
-    });
+    // Safely handle optional Date of Birth
+    let dobDate = employee.dob; // Default to existing DOB
+    if (dob) { // If a new DOB is provided in the request
+        const parsedDate = new Date(dob);
+        if (isNaN(parsedDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid date of birth format.' });
+        }
+        dobDate = parsedDate;
+    }
+
+    // 3. Handle Adhar Image Upload (if a new file is provided)
+    let adharImageUrl = employee.adharImageUrl; // Default to the existing image URL
+    if (req.file) {
+      const { url } = await uploadBufferToGCS(
+        req.file.buffer,
+        req.file.originalname,
+        'adhar-images',
+        req.file.mimetype // Pass mimetype for consistency
+      );
+      adharImageUrl = url;
+    }
+
+    // 4. Regenerate password with potentially updated information
+    // Use new data if provided, otherwise fall back to existing employee data
+    const updatedName = name || employee.name;
+    const updatedAdhar = adharNumber || employee.adharNumber;
+    const updatedMobile = mobile || employee.mobile;
+    const newPassword = generatePassword(updatedName, updatedAdhar, updatedMobile);
+
+    // 5. Update employee fields with new data, falling back to existing data
+    employee.name = name || employee.name;
+    employee.mobile = mobile || employee.mobile;
+    employee.role = role || employee.role;
+    employee.dob = dobDate;
+    employee.adharNumber = adharNumber || employee.adharNumber;
+    employee.adharImageUrl = adharImageUrl;
+    employee.password = newPassword; // Always update the password to reflect current details
+
+    // Note: EID is NOT updated, preserving it as a stable identifier.
 
     await employee.save();
-    res.json(employee);
+
+    // 6. Send a successful response
+    res.status(200).json({
+      message: "Employee updated successfully",
+      // It's good practice to inform the admin of the new password
+      newPassword: employee.password, 
+      employee: employee,
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to update employee' });
+    // Consistent, robust error handling
+    console.error('Update Employee Error:', error.message, error.stack);
+    res.status(500).json({ message: 'Failed to update employee due to a server error.' });
   }
 };
 
