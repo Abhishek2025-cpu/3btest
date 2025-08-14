@@ -4,7 +4,7 @@ const router = express.Router();
 const {
   createEmployee,
   getAllEmployees,
-  getEmployee,
+  getEmployeeById,
   updateEmployee,
   deleteEmployee,
   updateEmployeeStatus,
