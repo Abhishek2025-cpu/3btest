@@ -4,12 +4,17 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 function generateEid(dob) {
   const date = new Date(dob);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear() + 1;
+  const year = date.getFullYear() + 1; // Assuming your logic here is correct
   const yearSuffix = year.toString().slice(-2);
   return `${month}${yearSuffix}`;
 }
 
 function generatePassword(name, adhar) {
+  // Add a check for missing adhar to prevent errors
+  if (!name || !adhar) {
+    // Return a default or throw an error
+    return 'default1234'; 
+  }
   const namePart = name.slice(0, 4).toLowerCase();
   const adharPart = adhar.slice(-4);
   return `${namePart}${adharPart}`;
@@ -17,24 +22,25 @@ function generatePassword(name, adhar) {
 
 exports.createEmployee = async (req, res) => {
   try {
-    const { name, mobile, role, otherRole, dob, adharNumber } = req.body;
+    // --- CHANGE 1: Remove 'otherRole' from here ---
+    const { name, mobile, role, dob, adharNumber } = req.body;
+
+    // --- CHANGE 2: The validation for 'otherRole' is no longer needed. REMOVED. ---
+    // The frontend already ensures a 'role' is submitted.
 
     if (!req.file) {
-      return res.status(400).json({ error: 'Adhar image is required' });
-    }
-
-    if (role === 'Other' && !otherRole) {
-      return res.status(400).json({ error: 'Other role must be specified when role is Other' });
+      // You may want to make the image optional if it's not always required
+      return res.status(400).json({ message: 'Adhar image is required' });
     }
 
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
-      return res.status(400).json({ error: 'Mobile number already exists' });
+      return res.status(400).json({ message: 'Mobile number already exists' });
     }
 
     const dobDate = new Date(dob);
     if (isNaN(dobDate.getTime())) {
-      return res.status(400).json({ error: 'Invalid date of birth format' });
+      return res.status(400).json({ message: 'Invalid date of birth format' });
     }
 
     const eid = generateEid(dob);
@@ -47,22 +53,31 @@ exports.createEmployee = async (req, res) => {
       req.file.mimetype
     );
 
+    // --- CHANGE 3: Simplified employee object creation ---
     const employee = await Employee.create({
       name,
       mobile,
-      role,
-      otherRole: role === 'Other' ? otherRole : '',
+      role, // The 'role' from the request now correctly holds "Supervisor", "Operator", etc.
       dob: dobDate,
       eid,
       password,
       adharNumber,
       adharImageUrl,
+      // The 'otherRole' field is no longer needed here.
+      // If your Mongoose model requires it, you can remove it from the schema.
     });
 
-    res.status(201).json(employee);
+    // --- CHANGE 4: Send a response that includes the password for the frontend popup ---
+    res.status(201).json({
+      message: "Employee created successfully",
+      password: employee.password, // Explicitly send the password
+      employee: employee, // You can also send the full employee object if needed
+    });
+
   } catch (error) {
     console.error('Create Employee Error:', error.message, error.stack);
-    res.status(500).json({ error: 'Failed to create employee' });
+    // Send back a more user-friendly error message
+    res.status(500).json({ message: 'Failed to create employee due to a server error.' });
   }
 };
 
