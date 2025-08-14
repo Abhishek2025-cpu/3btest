@@ -16,7 +16,8 @@ router.post('/add-employees', upload.single('adharImage'), createEmployee);
 router.get('/get-employees', getAllEmployees);
 router.patch('/employees/:id/status', updateEmployeeStatus);
 
-router.get('/employees/:id', getEmployee);
+router.get('/employees/:id', getEmployeeById);
+
 router.put('/update-employees/:id', upload.single('adharImage'), updateEmployee);
 router.delete('/delete-employees/:id', deleteEmployee);
 
