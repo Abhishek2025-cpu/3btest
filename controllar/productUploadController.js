@@ -3,11 +3,18 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 const QRCode = require('qrcode');
 const sharp = require('sharp');
 const mongoose = require('mongoose');
-
+const { translateResponse } = require('../services/translation.service');
 const Category = require('../models/Category');
 const crypto = require('crypto');
 
 // In your productUploadController.js file
+
+const productFieldsToTranslate = [
+  'name',                 // The product's name
+  'about',                // The product's about section
+  'materials.materialName', // A nested field inside the materials array
+  'categoryId.name'       // The name of the populated category
+];
 
 
 exports.createProduct = async (req, res) => {
@@ -137,17 +144,20 @@ exports.getAllProducts = async (req, res) => {
       .populate('categoryId', 'name')
       .lean();
 
-    const formattedProducts = products.map(p => {
-      // ✅ ROBUST MAPPING LOGIC
-      // Check if categoryId is an object and has a name property.
-      // This is true ONLY if populate succeeded.
+    // 3. Apply the translation logic.
+    //    This function checks for a `?lang=` query parameter.
+    //    If it exists, it translates the fields defined above.
+    //    If not, it returns the original 'products' array instantly.
+    const translatableProducts = await translateResponse(req, products, productFieldsToTranslate);
+
+    // Your existing mapping logic now works on the POTENTIALLY TRANSLATED data.
+    const formattedProducts = translatableProducts.map(p => {
       const hasPopulatedCategory = p.categoryId && typeof p.categoryId === 'object' && p.categoryId.name;
 
       return {
         ...p,
-        // If populate worked, use the name. Otherwise, explicitly set it to null.
+        // The categoryName will now be the translated name if lang was provided
         categoryName: hasPopulatedCategory ? p.categoryId.name : null,
-        // If populate worked, get the _id. Otherwise, use the original string.
         categoryId: hasPopulatedCategory ? p.categoryId._id.toString() : p.categoryId,
       };
     });
