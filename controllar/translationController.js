@@ -13,7 +13,7 @@ const translateText = require('../utils/translateText');
 
 // Helper function to translate specified fields in an object
 const translateFields = async (item, fields, lang) => {
-  const translated = { ...item._doc };
+    const translated = item.toObject();
 
   for (const field of fields) {
     if (field.includes('.')) {
