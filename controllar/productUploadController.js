@@ -139,24 +139,22 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find()
+    const productsFromDB = await Product.find()
       .sort({ createdAt: -1 })
       .populate('categoryId', 'name')
-      .lean();
+      .lean(); // .lean() is good! Keep it.
 
-    // 3. Apply the translation logic.
-    //    This function checks for a `?lang=` query parameter.
-    //    If it exists, it translates the fields defined above.
-    //    If not, it returns the original 'products' array instantly.
-    const translatableProducts = await translateResponse(req, products, productFieldsToTranslate);
+    // Pass the raw data from the DB to our robust translation service
+    const translatedProducts = await translateResponse(req, productsFromDB, productFieldsToTranslate);
 
-    // Your existing mapping logic now works on the POTENTIALLY TRANSLATED data.
-    const formattedProducts = translatableProducts.map(p => {
+    // Now, perform your mapping logic on the translated data
+    const formattedProducts = translatedProducts.map(p => {
+      // This check is still valid and important
       const hasPopulatedCategory = p.categoryId && typeof p.categoryId === 'object' && p.categoryId.name;
 
       return {
         ...p,
-        // The categoryName will now be the translated name if lang was provided
+        // This will now be the translated name if ?lang=hi was used
         categoryName: hasPopulatedCategory ? p.categoryId.name : null,
         categoryId: hasPopulatedCategory ? p.categoryId._id.toString() : p.categoryId,
       };
