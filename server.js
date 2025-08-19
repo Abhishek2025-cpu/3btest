@@ -46,6 +46,7 @@ const otherProductRoutes = require('./routes/otherProduct');
 const companyRoutes = require('./routes/companyRoutes');
 const gstRoutes = require('./routes/gstRoutes');
 const subAdminRoutes = require('./routes/subAdminRoutes');
+const stockTransferRoutes = require('./routes/stockTransferRoutes'); 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
 app.use('/api/feedback', feedbackRoutes);
@@ -62,6 +63,7 @@ app.use('/api/company', companyRoutes);
 app.use('/api/gst', gstRoutes);    
 app.use('/api/language', translationRoutes);
 app.use('/api/sub-admin', subAdminRoutes);
+app.use('/api/transfers', stockTransferRoutes);
 
 
 
