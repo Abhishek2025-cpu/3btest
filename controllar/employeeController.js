@@ -265,3 +265,61 @@ exports.deleteEmployee = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete employee' });
   }
 };
+
+
+/**
+ * Login an employee using mobile number and password.
+ * @route POST /api/employees/login
+ */
+exports.loginEmployee = async (req, res) => {
+  try {
+    const { mobile, password } = req.body;
+
+    // 1. Validate input
+    if (!mobile || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number and password are required.',
+      });
+    }
+
+    // 2. Find employee by mobile number
+    const employee = await Employee.findOne({ mobile });
+
+    // 3. Check if employee exists and if the password is correct
+    // NOTE: In a real-world application, passwords should be hashed using a library
+    // like bcrypt. This is a simple string comparison based on your current setup.
+    if (!employee || employee.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid mobile number or password.',
+      });
+    }
+
+    // 4. Check if the employee's account is active (based on your `updateEmployeeStatus` logic)
+    if (employee.status === false) { // Explicitly check for false
+      return res.status(403).json({ // 403 Forbidden is more appropriate here
+        success: false,
+        message: 'Your account is inactive. Please contact the administrator.',
+      });
+    }
+
+    // 5. Successful login: Return employee details
+    // It's good practice to not send the password back in the response.
+    const employeeData = employee.toObject();
+    delete employeeData.password;
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      employee: employeeData, // This object contains all details, including the role
+    });
+
+  } catch (error) {
+    console.error('Login Employee Error:', error.message, error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'An internal server error occurred during login.',
+    });
+  }
+};

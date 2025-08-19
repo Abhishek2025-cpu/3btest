@@ -8,6 +8,7 @@ const {
   updateEmployee,
   deleteEmployee,
   updateEmployeeStatus,
+  loginEmployee,
 } = require('../controllar/employeeController');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -20,5 +21,6 @@ router.get('/employees/:id', getEmployeeById);
 
 router.put('/update-employees/:id', upload.single('adharImage'), updateEmployee);
 router.delete('/delete-employees/:id', deleteEmployee);
+router.post('/login', loginEmployee);
 
 module.exports = router;
