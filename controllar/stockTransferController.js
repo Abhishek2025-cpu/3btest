@@ -1,8 +1,8 @@
 // controllers/stockTransferController.js
 
 const StockTransfer = require('../models/stockTransferModel');
-const Product = require('../models/productModel'); // Make sure path is correct
-const Employee = require('../models/employeeModel'); // Make sure path is correct
+const Product = require('../models/ProductUpload'); // Make sure path is correct
+const Employee = require('../models/Employee'); // Make sure path is correct
 
 // A helper to populate the necessary fields for a consistent response
 const populateFields = (query) => {

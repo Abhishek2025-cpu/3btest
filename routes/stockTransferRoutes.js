@@ -9,7 +9,7 @@ const {
   updateTransferStatus,
   getTransferById,
   getAllTransfers
-} = require('../controllers/stockTransferController');
+} = require('../controllar/stockTransferController');
 
 // --- POST APIs ---
 // 1. Create a new "Loading" record
