@@ -2,12 +2,15 @@ const OtherCategory = require('../models/otherCategory');
 const sharp = require('sharp');
 const mongoose = require('mongoose');
 const { uploadBufferToGCS, deleteFileFromGCS } = require('../utils/gcloud'); // Ensure this path is correct
-
+const { translateResponse } = require('../services/translation.service');
 /**
  * @route   POST /api/other-categories
  * @desc    Add a new OtherCategory
  */
 // In controllers/otherCategoryController.js
+const OtherCatFieldsToTranslate = [
+  'name'
+];
 
 exports.addOtherCategory = async (req, res) => {
   console.log("--- [DEBUG] Received request to add OtherCategory ---");
@@ -84,10 +87,30 @@ exports.addOtherCategory = async (req, res) => {
  */
 exports.getOtherCategories = async (req, res) => {
   try {
-    const otherCategories = await OtherCategory.find().sort({ createdAt: -1 });
-    res.status(200).json(otherCategories);
+    // Step 1: Fetch all "other" categories from the database, using .lean() for performance
+    const otherCategoriesFromDB = await OtherCategory.find()
+      .sort({ createdAt: -1 })
+      .lean(); // Use .lean() for faster processing and plain JS objects
+
+    // Step 2: Pass the raw data to the translation service
+    const translatedOtherCategories = await translateResponse(req, otherCategoriesFromDB, OtherCatFieldsToTranslate);
+    
+    // Step 3: Send a consistent, successful response
+    // The result from the translation service is already in the correct format
+    res.status(200).json({
+      success: true,
+      message: '✅ Other Categories fetched successfully',
+      otherCategories: translatedOtherCategories // Use the translated data here
+    });
+
   } catch (error) {
-    res.status(500).json({ message: '❌ Failed to fetch OtherCategories', error: error.message });
+    // Step 4: Use consistent error handling
+    console.error('❌ Error fetching Other Categories:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch Other Categories',
+      error: error.message
+    });
   }
 };
 
