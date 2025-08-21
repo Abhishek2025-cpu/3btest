@@ -2,7 +2,12 @@ const Category = require('../models/Category');
 const sharp = require('sharp');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
+const { translateResponse } = require('../services/translation.service');
 const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud'); // ✅ Fixed named import
+
+const CatFieldsToTranslate = [
+  'name'         
+];
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
@@ -65,53 +70,68 @@ exports.createCategory = async (req, res) => {
 
 
 
+/**
+ * @desc    Get all categories with product counts and translations
+ * @route   GET /api/v1/categories
+ * @access  Public
+ */
 exports.getCategories = async (req, res) => {
   try {
-    // Fetch all categories from the database
-    const categoriesFromDB = await Category.find().sort({ position: 1, createdAt: -1 });
-    
-    // Fetch product counts (your existing logic is good)
+    // Step 1: Fetch product counts (this logic is efficient and remains unchanged)
     const productCounts = await Product.aggregate([
       { $match: { quantity: { $gt: 0 } } },
       { $group: { _id: "$categoryId", count: { $sum: 1 } } }
     ]);
     const productCountMap = productCounts.reduce((acc, pc) => {
-      acc[pc._id] = pc.count;
+      if (pc._id) { // Ensure we don't process null IDs
+          acc[pc._id.toString()] = pc.count;
+      }
       return acc;
     }, {});
 
-    // ✅ MODIFICATION HAPPENS HERE:
-    // Process the categories to ensure every image has an _id
-    const categoriesForResponse = categoriesFromDB.map(cat => {
-      
-      const processedImages = cat.images.map(img => {
-        // Convert the Mongoose subdocument to a plain JavaScript object
-        const imageObject = img.toObject();
+    // Step 2: Fetch all categories from the database, using .lean() for performance
+    const categoriesFromDB = await Category.find()
+      .sort({ position: 1, createdAt: -1 })
+      .lean(); // Use .lean() for faster processing
 
-        // If the image doesn't have an _id (old data), create one.
-        // If it does (new data), use the existing one.
-        return {
-          _id: imageObject._id || new mongoose.Types.ObjectId(), // <-- THE KEY CHANGE
-          url: imageObject.url,
-          id: imageObject.id || null // Use 'id' (file path), not 'public_id'
-        };
-      });
+    // Step 3: Pass the raw data to the translation service
+    const translatedCategories = await translateResponse(req, categoriesFromDB, CatFieldsToTranslate);
+
+    // Step 4: Map the translated data to the final response format
+    const formattedCategories = translatedCategories.map(cat => {
+      
+      // Process images to ensure every image has an _id
+      // No .toObject() needed here because we used .lean()
+      const processedImages = cat.images.map(img => ({
+        _id: img._id || new mongoose.Types.ObjectId(),
+        url: img.url,
+        id: img.id || null
+      }));
 
       // Return the final, structured category object for the response
       return {
-        _id: cat._id,
-        categoryId: cat.categoryId,
-        name: cat.name,
-        position: cat.position ?? null,
-        images: processedImages, // Use the newly processed images array
+        ...cat, // Spread the (potentially translated) category object
+        images: processedImages,
+        // The 'name' field from the spread will already be translated if a lang was specified
         totalProducts: productCountMap[cat.categoryId] || 0
       };
     });
 
-    res.status(200).json(categoriesForResponse);
+    // Step 5: Send a consistent, successful response
+    res.status(200).json({
+      success: true,
+      message: '✅ Categories fetched successfully',
+      categories: formattedCategories
+    });
 
   } catch (error) {
-    res.status(500).json({ message: '❌ Failed to fetch categories', error: error.message });
+    // Consistent error handling
+    console.error('❌ Error fetching categories:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch categories',
+      error: error.message
+    });
   }
 };
 
