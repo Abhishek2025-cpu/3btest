@@ -1,4 +1,9 @@
 const User = require('../models/User');
+const { translateResponse } = require('../services/translation.service');
+
+const shippingAddressFieldsToTranslate = [
+  'addressType' 
+];
 
 // Add Address
 exports.addAddress = async (req, res) => {
@@ -78,18 +83,37 @@ exports.getShippingAddresses = async (req, res) => {
   const { userId } = req.params;
 
   try {
-    const user = await User.findById(userId).select('shippingAddresses');
+    // Step 1: Find the user and get their addresses. Use .lean() for performance.
+    const user = await User.findById(userId).select('shippingAddresses').lean();
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({
+        success: false,
+        message: '❌ User not found'
+      });
     }
 
+    // `user.shippingAddresses` is the array we need to translate.
+    // It will be an empty array if the user has no addresses, which is handled correctly.
+    
+    // Step 2: Pass the addresses array to the translation service
+    const translatedAddresses = await translateResponse(req, user.shippingAddresses, shippingAddressFieldsToTranslate);
+
+    // Step 3: Send a consistent, successful response
     res.status(200).json({
-      message: 'Shipping addresses fetched successfully',
-      shippingAddresses: user.shippingAddresses
+      success: true,
+      message: '✅ Shipping addresses fetched successfully',
+      shippingAddresses: translatedAddresses // Use the translated array
     });
+    
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch shipping addresses', error: error.message });
+    // Step 4: Use consistent error handling
+    console.error('❌ Error fetching shipping addresses:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch shipping addresses',
+      error: error.message
+    });
   }
 };
 
