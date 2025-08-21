@@ -1,6 +1,11 @@
 const Feedback = require('../models/feedback');
 const User = require('../models/User');
+const { translateResponse } = require('../services/translation.service'); // Adjust path if needed
 
+
+const feedbackFieldsToTranslate = [
+  'message' 
+];
 // Create feedback
 exports.createFeedback = async (req, res) => {
   try {
@@ -47,23 +52,36 @@ exports.createFeedback = async (req, res) => {
 
 exports.getPublicFeedbacks = async (req, res) => {
   try {
-    const feedbacks = await Feedback.find({
-      isPrivate: false, // Condition 1: Must be public
+    // Step 1: Fetch public feedbacks from the DB. Use .lean() for performance.
+    const feedbacksFromDB = await Feedback.find({
+      isPrivate: false,
       $or: [
-        { isEnabled: true },             // OR it is explicitly enabled
-        { isEnabled: { $exists: false } } // OR the isEnabled field doesn't exist yet
+        { isEnabled: true },             // This field is not in your schema, but I will leave your custom logic here.
+        { isEnabled: { $exists: false } } // You might have added this field separately.
       ]
     })
-      .populate('user', 'name profileImage')
-      .sort({ createdAt: -1 });
+      .populate('user', 'name profileImage') // Populates the 'user' field as defined in the schema
+      .sort({ createdAt: -1 })
+      .lean(); // Add .lean() for faster processing
 
+    // Step 2: Pass the raw feedback data to the translation service
+    const translatedFeedbacks = await translateResponse(req, feedbacksFromDB, feedbackFieldsToTranslate);
+
+    // Step 3: Send the consistent, successful response with the translated data
     res.status(200).json({
       success: true,
       message: '✅ Public feedbacks fetched successfully',
-      feedbacks
+      feedbacks: translatedFeedbacks // Use the translated result
     });
+    
   } catch (error) {
-    res.status(500).json({ success: false, message: '❌ Failed to fetch feedbacks', error: error.message });
+    // Step 4: Use consistent error handling
+    console.error('❌ Error fetching public feedbacks:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch feedbacks',
+      error: error.message
+    });
   }
 };
 
