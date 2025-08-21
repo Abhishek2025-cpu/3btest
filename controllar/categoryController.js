@@ -120,43 +120,30 @@ exports.getCategories = async (req, res) => {
 exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, position } = req.body;
+    const { name, position, removeIds } = req.body; // <-- removeIds will come as JSON string
 
     const existingCategory = await Category.findById(id);
     if (!existingCategory) {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // Group uploaded files by field name
-    const filesByField = req.files?.reduce((acc, file) => {
-      if (!acc[file.fieldname]) acc[file.fieldname] = [];
-      acc[file.fieldname].push(file);
-      return acc;
-    }, {}) || {};
-
-    // 1. Handle image removals
-    if (filesByField.removeImages && filesByField.removeImages.length > 0) {
-      const removeFiles = filesByField.removeImages;
-
-      // get stored image IDs from filenames
-      const removeIds = removeFiles.map(file => {
-        // we assume file.originalname matches stored fileName
-        return `categories/${file.originalname}`;
-      });
+    // 1. Handle image removals (by IDs, not by uploading again)
+    if (removeIds) {
+      const removeIdsArr = JSON.parse(removeIds);
 
       // Delete from GCS
-      const deletionPromises = removeIds.map(imageId => deleteFileFromGCS(imageId));
+      const deletionPromises = removeIdsArr.map(imageId => deleteFileFromGCS(imageId));
       await Promise.all(deletionPromises);
 
-      // Filter them out of DB
+      // Remove from DB
       existingCategory.images = existingCategory.images.filter(
-        img => !removeIds.includes(img.id)
+        img => !removeIdsArr.includes(img.id)
       );
     }
 
-    // 2. Handle new image uploads
-    if (filesByField.newImages && filesByField.newImages.length > 0) {
-      const uploadPromises = filesByField.newImages.map(async (file) => {
+    // 2. Handle new image uploads (from `images`)
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(async (file) => {
         const compressedBuffer = await sharp(file.buffer)
           .resize({ width: 1000 })
           .jpeg({ quality: 70 })
