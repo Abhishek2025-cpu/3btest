@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema({
   categoryId: { type: String, required: true },
   name: { type: String, required: true },
   about: { type: String },
+   description: { type: String },
   dimensions: [String],
   quantity: { type: Number, default: 0 },
   pricePerPiece: { type: Number, required: true },

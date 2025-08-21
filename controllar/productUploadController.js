@@ -19,10 +19,12 @@ const productFieldsToTranslate = [
 
 exports.createProduct = async (req, res) => {
   try {
+    // CHANGE 1: Destructure the new 'description' field from the request body.
     const {
       categoryId,
       name,
       about,
+      description, // <-- ADDED
       dimensions,
       quantity,
       pricePerPiece,
@@ -55,15 +57,12 @@ exports.createProduct = async (req, res) => {
         .toBuffer();
       const filename = `product-${Date.now()}-${file.originalname}`;
       
-      // --- START: THE FIX ---
-      // The uploadBufferToGCS function returns an object. We need to get the URL string from it.
       const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-      const urlString = uploadResult.url; // Assuming the URL is in the 'url' property
-      // --- END: THE FIX ---
+      const urlString = uploadResult.url;
 
       return {
         id: crypto.randomUUID(),
-        url: urlString, // Assign the STRING, not the object
+        url: urlString,
         originalname: file.originalname
       };
     });
@@ -94,10 +93,17 @@ exports.createProduct = async (req, res) => {
     const discountedPricePerBox = parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
 
     const product = new Product({
-      categoryId, name, about,
+      categoryId, 
+      name, 
+      about,
+      description, // <-- CHANGE 2: Add the description field here.
       dimensions: dimensions ? dimensions.split(',').map(d => d.trim()) : [],
-      quantity: parsedQty, pricePerPiece: parsedPrice, totalPiecesPerBox: parsedTotal,
-      mrpPerBox, discountPercentage: parsedDiscount, finalPricePerBox: discountedPricePerBox,
+      quantity: parsedQty, 
+      pricePerPiece: parsedPrice, 
+      totalPiecesPerBox: parsedTotal,
+      mrpPerBox, 
+      discountPercentage: parsedDiscount, 
+      finalPricePerBox: discountedPricePerBox,
       images: finalImagesForDB,
       colorImageMap: Object.fromEntries(finalColorImageMap)
     });
@@ -105,11 +111,8 @@ exports.createProduct = async (req, res) => {
     const qrData = product._id.toString();
     const qrBuffer = await QRCode.toBuffer(qrData);
 
-    // --- START: THE FIX ---
-    // The same fix applies here for the QR code URL.
     const qrUploadResult = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
-    product.qrCodeUrl = qrUploadResult.url; // Assign the STRING, not the object
-    // --- END: THE FIX ---
+    product.qrCodeUrl = qrUploadResult.url;
 
     await product.save();
 
@@ -129,7 +132,6 @@ exports.createProduct = async (req, res) => {
     });
   }
 };
-
 
 
 // In your productController.js
