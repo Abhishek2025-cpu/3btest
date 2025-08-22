@@ -8,7 +8,8 @@ const {
   updateReturnRequestStatus,
 } = require('../controllar/returnController');
 
-const upload = require('../middleware/upload');
+const { uploadReturnRequestImages } = require('../middleware/uploadMiddleware'); // use the correct file name
+
 // const { isAuthenticated, isAdmin } = require('../middleware/auth'); // Protect your routes!
 
 // === Customer Routes ===
@@ -16,10 +17,8 @@ const upload = require('../middleware/upload');
 router.post(
   '/request',
   // isAuthenticated,
-  upload.fields([
-    { name: 'boxImages', maxCount: 5 },
-    { name: 'damagedPieceImages', maxCount: 5 },
-  ]),
+  // MODIFICATION: Use the clean, specific middleware directly
+  uploadReturnRequestImages,
   createReturnRequest
 );
 router.get('/my-requests/:userId', /* isAuthenticated, */ getUserReturnRequests);

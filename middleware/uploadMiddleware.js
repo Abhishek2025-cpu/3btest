@@ -5,7 +5,6 @@ const path = require('path');
 
 const storage = multer.memoryStorage(); // store in memory for streaming to GCS
 
-// This is your existing generic multer configuration. It's the "base" for our specific middlewares.
 const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 }, // 200MB limit
@@ -18,19 +17,25 @@ const upload = multer({
   },
 });
 
-// --- NEW SPECIFIC MIDDLEWARES ---
+// --- Specific Middlewares ---
 
-// This middleware is configured to look specifically for a form field named 'verificationDocument'
 const uploadVerificationDoc = upload.single('verificationDocument');
-
-// This middleware is configured to look specifically for a form field named 'profilePicture'
 const uploadProfilePic = upload.single('profilePicture');
+
+// === NEW MIDDLEWARE FOR RETURN REQUESTS ===
+// This middleware is configured to look for the 'boxImages' and 'damagedPieceImages' fields.
+const uploadReturnRequestImages = upload.fields([
+  { name: 'boxImages', maxCount: 5 },
+  { name: 'damagedPieceImages', maxCount: 5 },
+]);
+// === END NEW MIDDLEWARE ===
 
 
 // We now export an object containing all the middlewares.
-// This is the most flexible approach.
 module.exports = {
-  upload, // The original generic instance, in case it's used elsewhere
-  uploadVerificationDoc, // The new middleware for registration
-  uploadProfilePic,      // The new middleware for profile updates
+  upload, 
+  uploadVerificationDoc,
+  uploadProfilePic,
+  // === ADD THE NEW MIDDLEWARE TO EXPORTS ===
+  uploadReturnRequestImages, 
 };
