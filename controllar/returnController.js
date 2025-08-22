@@ -4,7 +4,7 @@ const ReturnRequest = require('../models/ReturnRequest');
 const Order = require('../models/Order');
 
 // MODIFICATION: Import your GCS uploader utility
-const { uploadBufferToGCS } = require('../utils/gcsUploader'); 
+const { uploadBufferToGCS } = require('../utils/gcloud'); 
 
 // MODIFICATION: This is the new, real implementation using your GCS function
 async function uploadFilesToCloud(files, folder) {
