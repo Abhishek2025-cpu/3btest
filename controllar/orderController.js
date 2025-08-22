@@ -186,121 +186,13 @@ if (!gst || !gst.gstin) {
     });
   }
 };
-// ...existing code...
 
-
-// exports.placeOrder = async (req, res) => {
-//   try {
-//     const { userId, shippingAddressId, items } = req.body;
-
-//     // 1. Get User and selected shipping address
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-//     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
-//     if (!shippingAddress) {
-//       return res.status(404).json({ success: false, message: 'Shipping address not found' });
-//     }
-
-//     // 2. Process items and deduct stock
-//     let totalPrice = 0;
-//     const products = await Promise.all(
-//       items.map(async item => {
-//         const product = await Product.findById(item.productId);
-//         if (!product) throw new Error('Product not found');
-
-//         if (product.quantity < item.quantity) {
-//           throw new Error(`Insufficient stock for product: ${product.name}`);
-//         }
-
-//         // Deduct quantity and update availability
-//         product.quantity -= item.quantity;
-//         if (product.quantity <= 0) {
-//           product.quantity = 0;
-//           product.available = false;
-//         }
-//         await product.save();
-
-//         // Select correct image
-//         let image = null;
-//         const colorKey = item.color?.trim();
-//         if (colorKey && product.colorImageMap && product.colorImageMap[colorKey]) {
-//           image = product.colorImageMap[colorKey];
-//         } else if (product.images && product.images.length) {
-//           image = product.images[0];
-//         }
-
-//         const productSubtotal = item.price * item.quantity;
-//         totalPrice += productSubtotal;
-
-//         return {
-//           productId: product._id,
-//           productName: product.name,
-//           quantity: item.quantity,
-//           color: item.color || 'Not specified',
-//           priceAtPurchase: item.price,
-//           subtotal: productSubtotal,
-//           image,
-//           orderId: generateOrderId()
-//         };
-//       })
-//     );
-
-//     // 3. Create new order
-//     const newOrder = new Order({
-//       userId,
-//       products,
-//       totalPrice,
-//       shippingDetails: {
-//         name: shippingAddress.name,
-//         phone: shippingAddress.phone,
-//         addressType: shippingAddress.addressType,
-//         detailedAddress: shippingAddress.detailedAddress
-//       },
-//       orderId: generateOrderId(),
-//       currentStatus: "Pending",
-//       tracking: [{
-//         status: "Pending",
-//         updatedAt: new Date()
-//       }]
-//     });
-
-//     await newOrder.save();
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Order placed successfully",
-//       order: newOrder,
-//       totalPrice,
-//       productBreakdown: products.map(p => ({
-//         productId: p.productId,
-//         name: p.productName,
-//         quantity: p.quantity,
-//         color: p.color,
-//         priceAtPurchase: p.priceAtPurchase,
-//         subtotal: p.subtotal
-//       }))
-//     });
-
-//   } catch (error) {
-//     console.error('Error placing order:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: error.message,
-//       error: 'Server error placing order.'
-//     });
-//   }
-// };
-
-
-
-//get products
 exports.getOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
-      .populate('products.productId');
+      .populate('products.productId'); // This populates the full product document
 
     // Preload all companies once to avoid querying DB repeatedly
     const companies = await Company.find();
@@ -345,6 +237,7 @@ exports.getOrders = async (req, res) => {
             materialName: item.materialName || null,
             modelNo: item.modelNo || null,
             totalPrice: item.totalPrice || (item.priceAtPurchase * item.quantity),
+            totalPiecesPerBox: null, // MODIFICATION: Added for consistency
             // Company details
             company: companyDetails
               ? {
@@ -372,7 +265,9 @@ exports.getOrders = async (req, res) => {
             priceAtPurchase: item.priceAtPurchase,
             image: image || null,
             orderId: item.orderId,
-            currentStatus: item.currentStatus
+            currentStatus: item.currentStatus,
+            // MODIFICATION: Added totalPiecesPerBox from the populated product
+            totalPiecesPerBox: product.totalPiecesPerBox || null 
           };
         }
       });
@@ -396,75 +291,6 @@ exports.getOrders = async (req, res) => {
 };
 
 
-// exports.getOrders = async (req, res) => {
-//   try {
-//     const orders = await Order.find()
-//       .sort({ createdAt: -1 })
-//       .populate('userId', 'name email number')
-//       .populate('products.productId');
-
-//     const formattedOrders = orders.map(order => {
-//       const populatedOrder = order.toObject();
-
-//       // Add totalAmount calculation
-//       populatedOrder.totalAmount = order.products.reduce(
-//         (sum, item) => sum + (item.priceAtPurchase * item.quantity),
-//         0
-//       );
-
-//       // Add product details and ensure image
-//       populatedOrder.user = populatedOrder.userId;
-//       delete populatedOrder.userId;
-
-//       populatedOrder.products = populatedOrder.products.map(item => {
-//         const product = item.productId || {};
-//         const colorImageMap = product.colorImageMap || {};
-//         const images = product.images || [];
-
-//         // Try to fetch color-specific image
-//         let image = colorImageMap[item.color];
-
-//         // If not found, fallback to first product image
-//         if (!image && images.length > 0) {
-//           image = images[0];
-//         }
-
-//         return {
-//           productId: product._id,
-//           productName: product.name,
-//           quantity: item.quantity,
-//           color: item.color,
-//           priceAtPurchase: item.priceAtPurchase,
-//           image: image || {}, // ensure it’s not undefined
-//           orderId: item.orderId,
-//           currentStatus: item.currentStatus
-//         };
-//       });
-
-//       return populatedOrder;
-//     });
-
-//     res.status(200).json({
-//       success: true,
-//       count: formattedOrders.length,
-//       orders: formattedOrders
-//     });
-//   } catch (error) {
-//     console.error('Error fetching orders:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Server error fetching orders.',
-//       error: error.message
-//     });
-//   }
-// };
-
-
-
-
-
-
-// controllers/orderController.js
 
 exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
@@ -473,7 +299,8 @@ exports.getOrdersByUserId = async (req, res) => {
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
-      .populate('products.productId', 'name price dimensions discount');
+      // MODIFICATION: Added 'totalPiecesPerBox' to the list of fields to populate
+      .populate('products.productId', 'name price dimensions discount totalPiecesPerBox'); 
 
     if (!orders || orders.length === 0) {
       return res.status(404).json({
@@ -489,7 +316,8 @@ exports.getOrdersByUserId = async (req, res) => {
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
 
-      // Optional: Sanitize or format data here as needed
+      // Since we populated the field above, it will now be included in the orderObj
+      // under products.productId.totalPiecesPerBox. No extra mapping is needed here.
 
       return {
         ...orderObj,
@@ -511,7 +339,6 @@ exports.getOrdersByUserId = async (req, res) => {
     });
   }
 };
-
 
 
 // PATCH /api/orders/update-status/:orderId
