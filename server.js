@@ -35,6 +35,7 @@ const shippingAddressRoutes = require('./routes/shippingAddressRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const adminRoutes = require('./routes/admin');
 const translationRoutes = require('./routes/translationRoutes');
+const returnRoutes = require('./routes/returnRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -64,6 +65,7 @@ app.use('/api/gst', gstRoutes);
 app.use('/api/language', translationRoutes);
 app.use('/api/sub-admin', subAdminRoutes);
 app.use('/api/transfers', stockTransferRoutes);
+app.use('/api/returns', returnRoutes);
 
 
 
