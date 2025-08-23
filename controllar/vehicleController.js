@@ -1,5 +1,4 @@
-import Vehicle from "../models/Vehicle.js";
-
+const Vehicle = require("../models/vehicleModel");
 // Add new vehicle
 exports.addVehicle = async (req, res) => {
   try {
