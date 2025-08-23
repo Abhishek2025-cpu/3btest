@@ -39,39 +39,52 @@ exports.createReturnRequest = async (req, res) => {
     }
 
     // 2. Find the original order to validate against
+    console.log(`--- DEBUG: Finding order with ID: ${orderId} ---`);
     const order = await Order.findById(orderId);
+
     if (!order) {
+      console.log('--- DEBUG: Order not found in database. ---');
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
+
+    // --- ADDED FOR DEBUGGING ---
+    console.log('--- DEBUG: Found Order. The products in THIS order are: ---');
+    console.log(JSON.stringify(order.products, null, 2));
+    // --- END DEBUGGING ---
+
 
     // 3. Check if the order belongs to the user
     if (order.userId.toString() !== userId) {
       return res.status(403).json({ success: false, message: 'This order does not belong to the user.' });
     }
     
-    const parsedProducts = JSON.parse(products); // Products will be a JSON string in form-data
+    const parsedProducts = JSON.parse(products);
 
     // 4. Validate products and quantities in the return request
     for (const item of parsedProducts) {
-        // --- MODIFICATION START ---
-        // Get the identifier from the incoming request. It could be in either key.
         const requestIdentifier = item.productId || item._id;
-
-        // Find the product in the order by checking if the requestIdentifier matches
-        // EITHER the database product's main productId OR its subdocument _id.
+        
+        // --- ADDED FOR DEBUGGING ---
+        console.log(`--- DEBUG: Trying to find a product in the order that matches this identifier from the request: ${requestIdentifier} ---`);
+        // --- END DEBUGGING ---
+        
         const productInOrder = order.products.find(p => 
             (p.productId && p.productId.toString() === requestIdentifier) || 
             (p._id && p._id.toString() === requestIdentifier)
         );
 
         if (!productInOrder) {
-            // Use the identifier we found for a more accurate error message.
+            console.log(`--- DEBUG: FAILED to find a match for identifier: ${requestIdentifier}. Aborting. ---`);
+            // This error message is slightly improved from the last version.
             const identifierForError = requestIdentifier || 'N/A';
             return res.status(400).json({ 
                 success: false, 
-                message: `Product with identifier ${identifierForError} not found in this order.` 
+                message: `Product with identifier ${identifierForError} not found in this specific order.` 
             });
         }
+
+        // We found it!
+        console.log(`--- DEBUG: SUCCESS! Found a matching product in the order for identifier: ${requestIdentifier} ---`);
 
         if (item.quantityToReturn > productInOrder.quantity) {
             const identifierForError = requestIdentifier || 'N/A';
@@ -80,10 +93,9 @@ exports.createReturnRequest = async (req, res) => {
                 message: `Cannot return more items than were purchased for product ${identifierForError}.`
             });
         }
-        // --- MODIFICATION END ---
     }
 
-    // 5. Handle File Uploads using the real function
+    // 5. Handle File Uploads
     const boxImages = await uploadFilesToCloud(req.files.boxImages, 'return-requests/box-images');
     const damagedPieceImages = await uploadFilesToCloud(req.files.damagedPieceImages, 'return-requests/damaged-pieces');
 
