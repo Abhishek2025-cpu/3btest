@@ -299,7 +299,6 @@ exports.getOrdersByUserId = async (req, res) => {
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
-      // MODIFICATION: Added 'totalPiecesPerBox' to the list of fields to populate
       .populate('products.productId', 'name price dimensions discount totalPiecesPerBox'); 
 
     if (!orders || orders.length === 0) {
@@ -310,14 +309,33 @@ exports.getOrdersByUserId = async (req, res) => {
     }
 
     const formattedOrders = orders.map(order => {
+      // Convert Mongoose document to a plain JavaScript object to allow modification
       const orderObj = order.toObject();
 
-      const totalAmount = order.products.reduce((sum, item) => {
+      // --- MODIFICATION START ---
+      // This new block will ensure every product has a productId object.
+      if (orderObj.products && orderObj.products.length > 0) {
+        orderObj.products.forEach(product => {
+          // The populate operation results in `null` if the original ID was null.
+          if (product.productId === null) {
+            // Create a productId object that mimics a populated object.
+            // This provides a consistent structure for the frontend.
+            product.productId = {
+              _id: product._id, // Use the subdocument's unique _id as the main identifier
+              name: product.productName, // Use other data available in the subdocument
+              price: product.priceAtPurchase,
+              // You can add other fields here if they exist in the subdocument
+              // and your frontend needs them. e.g., modelNo: product.modelNo
+            };
+          }
+        });
+      }
+      // --- MODIFICATION END ---
+
+      const totalAmount = orderObj.products.reduce((sum, item) => {
+        // Use priceAtPurchase for historical accuracy
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
-
-      // Since we populated the field above, it will now be included in the orderObj
-      // under products.productId.totalPiecesPerBox. No extra mapping is needed here.
 
       return {
         ...orderObj,
