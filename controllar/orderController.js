@@ -296,10 +296,12 @@ exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
 
   try {
+    // Step 1: Fetch the orders and populate where possible.
+    // If a productId is null in the DB, Mongoose will correctly set it to null in the result.
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
-      .populate('products.productId', 'name price dimensions discount totalPiecesPerBox'); 
+      .populate('products.productId', 'name price dimensions discount totalPiecesPerBox');
 
     if (!orders || orders.length === 0) {
       return res.status(404).json({
@@ -308,37 +310,41 @@ exports.getOrdersByUserId = async (req, res) => {
       });
     }
 
+    // Step 2: Transform the orders to ensure every product has a consistent structure.
     const formattedOrders = orders.map(order => {
-      // Convert Mongoose document to a plain JavaScript object to allow modification
-      const orderObj = order.toObject();
+      const orderObj = order.toObject(); // Convert to a plain JS object
 
-      // --- MODIFICATION START ---
-      // This new block will ensure every product has a productId object.
-      if (orderObj.products && orderObj.products.length > 0) {
-        orderObj.products.forEach(product => {
-          // The populate operation results in `null` if the original ID was null.
-          if (product.productId === null) {
-            // Create a productId object that mimics a populated object.
-            // This provides a consistent structure for the frontend.
-            product.productId = {
-              _id: product._id, // Use the subdocument's unique _id as the main identifier
-              name: product.productName, // Use other data available in the subdocument
+      // --- MODIFICATION START (New, more reliable approach) ---
+      // We will create a new 'products' array using .map() to guarantee the transformation.
+      const transformedProducts = orderObj.products.map(product => {
+        // If populate resulted in productId being null...
+        if (product.productId === null) {
+          // Return a copy of the product, but overwrite the 'productId' field
+          // with a new object constructed from the subdocument's own data.
+          return {
+            ...product, // Keep all original fields (image, quantity, etc.)
+            productId: {
+              _id: product._id, // **This is the critical fix**
+              name: product.productName,
               price: product.priceAtPurchase,
-              // You can add other fields here if they exist in the subdocument
-              // and your frontend needs them. e.g., modelNo: product.modelNo
-            };
-          }
-        });
-      }
+              // You can add any other fields here that your frontend might expect
+              // e.g., modelNo: product.modelNo
+            }
+          };
+        }
+        // If productId was populated successfully, just return the product as is.
+        return product;
+      });
       // --- MODIFICATION END ---
 
-      const totalAmount = orderObj.products.reduce((sum, item) => {
-        // Use priceAtPurchase for historical accuracy
+      const totalAmount = transformedProducts.reduce((sum, item) => {
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
-
+      
+      // Return a new order object with the transformed products list.
       return {
         ...orderObj,
+        products: transformedProducts, // Use the newly created products array
         totalAmount,
       };
     });
