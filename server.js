@@ -36,7 +36,7 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 const adminRoutes = require('./routes/admin');
 const translationRoutes = require('./routes/translationRoutes');
 const returnRoutes = require('./routes/returnRoutes');
-import vehicleRoutes from "./routes/vehicleRoutes.js";
+const vehicleRoutes = require('./routes/vehicleRoutes');
 
 const orderRoutes = require('./routes/orderRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
