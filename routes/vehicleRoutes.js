@@ -1,5 +1,5 @@
 const express = require("express");
-import { addVehicle, getVehicles, deleteVehicle } from "../controllar/vehicleController";
+const { addVehicle, getVehicles, deleteVehicle } = require("../controllar/vehicleController");
 
 const router = express.Router();
 
