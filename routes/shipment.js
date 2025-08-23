@@ -9,7 +9,7 @@ const {
   getShipmentById,
   getShipmentsByHelper,
   deleteShipment
-} = require('../controllers/shipment.controller');
+} = require('../controllar/shipment.controller');
 
 // POST a new shipment
 router.post('/create', addShipment);
