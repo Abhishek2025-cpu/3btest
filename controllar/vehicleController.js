@@ -1,7 +1,7 @@
 import Vehicle from "../models/Vehicle.js";
 
 // Add new vehicle
-export const addVehicle = async (req, res) => {
+exports.addVehicle = async (req, res) => {
   try {
     const { name, vehicleNumber } = req.body;
 
@@ -22,7 +22,7 @@ export const addVehicle = async (req, res) => {
 };
 
 // Get all vehicles
-export const getVehicles = async (req, res) => {
+exports.getVehicles = async (req, res) => {
   try {
     const vehicles = await Vehicle.find();
     res.status(200).json(vehicles);
@@ -32,7 +32,7 @@ export const getVehicles = async (req, res) => {
 };
 
 // Delete vehicle by ID
-export const deleteVehicle = async (req, res) => {
+exports.deleteVehicle = async (req, res) => {
   try {
     const { id } = req.params;
     const vehicle = await Vehicle.findByIdAndDelete(id);
