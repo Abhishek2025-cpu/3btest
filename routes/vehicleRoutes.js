@@ -1,4 +1,4 @@
-import express from "express";
+const express = require("express");
 import { addVehicle, getVehicles, deleteVehicle } from "../controllar/vehicleController";
 
 const router = express.Router();
