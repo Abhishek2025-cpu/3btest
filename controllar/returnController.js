@@ -53,7 +53,10 @@ exports.createReturnRequest = async (req, res) => {
 
     // 4. Validate products and quantities in the return request
     for (const item of parsedProducts) {
-        const productInOrder = order.products.find(p => p.productId && p.productId.toString() === item.productId);
+       const productInOrder = order.products.find(p => 
+    (p.productId && p.productId.toString() === item.productId) || 
+    (p._id && p._id.toString() === item._id)
+);
         if (!productInOrder) {
             return res.status(400).json({ success: false, message: `Product with ID ${item.productId} not found in this order.` });
         }
