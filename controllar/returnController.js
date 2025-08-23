@@ -53,20 +53,37 @@ exports.createReturnRequest = async (req, res) => {
 
     // 4. Validate products and quantities in the return request
     for (const item of parsedProducts) {
-       const productInOrder = order.products.find(p => 
-    (p.productId && p.productId.toString() === item.productId) || 
-    (p._id && p._id.toString() === item._id)
-);
+        // --- MODIFICATION START ---
+        // Get the identifier from the incoming request. It could be in either key.
+        const requestIdentifier = item.productId || item._id;
+
+        // Find the product in the order by checking if the requestIdentifier matches
+        // EITHER the database product's main productId OR its subdocument _id.
+        const productInOrder = order.products.find(p => 
+            (p.productId && p.productId.toString() === requestIdentifier) || 
+            (p._id && p._id.toString() === requestIdentifier)
+        );
+
         if (!productInOrder) {
-            return res.status(400).json({ success: false, message: `Product with ID ${item.productId} not found in this order.` });
+            // Use the identifier we found for a more accurate error message.
+            const identifierForError = requestIdentifier || 'N/A';
+            return res.status(400).json({ 
+                success: false, 
+                message: `Product with identifier ${identifierForError} not found in this order.` 
+            });
         }
+
         if (item.quantityToReturn > productInOrder.quantity) {
-            return res.status(400).json({ success: false, message: `Cannot return more items than were purchased for product ${item.productId}.`});
+            const identifierForError = requestIdentifier || 'N/A';
+            return res.status(400).json({ 
+                success: false, 
+                message: `Cannot return more items than were purchased for product ${identifierForError}.`
+            });
         }
+        // --- MODIFICATION END ---
     }
 
-    // 5. MODIFICATION: Handle File Uploads using the real function
-    // We pass a folder name to keep GCS organized
+    // 5. Handle File Uploads using the real function
     const boxImages = await uploadFilesToCloud(req.files.boxImages, 'return-requests/box-images');
     const damagedPieceImages = await uploadFilesToCloud(req.files.damagedPieceImages, 'return-requests/damaged-pieces');
 
@@ -77,8 +94,8 @@ exports.createReturnRequest = async (req, res) => {
       products: parsedProducts,
       description,
       boxSerialNumbers: boxSerialNumbers ? JSON.parse(boxSerialNumbers) : [],
-      boxImages, // This will now contain the array of { id, url } objects from GCS
-      damagedPieceImages, // This will also contain the array of { id, url } objects
+      boxImages,
+      damagedPieceImages,
     });
 
     res.status(201).json({
