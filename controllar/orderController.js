@@ -297,7 +297,7 @@ exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // Step 1: Fetch the user's orders, sorted and populated as before.
+    // Step 1: Fetch the user's orders, sorted and populated.
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
@@ -310,16 +310,10 @@ exports.getOrdersByUserId = async (req, res) => {
       });
     }
 
-    // --- MODIFICATION START: Fetch and process return requests ---
-
-    // Step 2: Get all order IDs to fetch their associated return requests in one query.
-    // This is much more efficient than querying inside a loop.
+    // Step 2: Fetch and process return requests (from previous modification)
     const orderIds = orders.map(order => order._id);
     const returnRequests = await ReturnRequest.find({ orderId: { $in: orderIds } });
 
-    // Step 3: Create a lookup map for quick access to return statuses.
-    // The structure will be: { orderId: { productId: 'status' } }
-    // e.g., { '64f5...': { '64e8...': 'Approved', '64e9...': 'Completed' } }
     const returnStatusLookup = {};
     returnRequests.forEach(request => {
       const orderIdStr = request.orderId.toString();
@@ -328,20 +322,16 @@ exports.getOrdersByUserId = async (req, res) => {
       }
       request.products.forEach(product => {
         const productIdStr = product.productId.toString();
-        // The status from the parent ReturnRequest applies to this product
         returnStatusLookup[orderIdStr][productIdStr] = request.status;
       });
     });
 
-    // --- MODIFICATION END ---
-
-
-    // Step 4: Transform the orders, now with return status logic.
+    // Step 3: Transform the orders, incorporating all logic.
     const formattedOrders = orders.map(order => {
-      const orderObj = order.toObject(); // Convert to a plain JS object
+      const orderObj = order.toObject();
       const orderIdStr = orderObj._id.toString();
 
-      // First, handle potentially deleted products (original logic)
+      // Handle potentially deleted products
       const productsWithPopulatedData = orderObj.products.map(product => {
         if (product.productId === null) {
           return {
@@ -356,40 +346,50 @@ exports.getOrdersByUserId = async (req, res) => {
         return product;
       });
 
-      // --- MODIFICATION START: Inject return_status and filter ---
-
-      // Second, add the 'return_status' to each product.
+      // Inject return_status and filter out completed returns
       const productsWithStatus = productsWithPopulatedData.map(product => {
         const productIdStr = product.productId._id.toString();
-
-        // Find the status from our lookup map. Use optional chaining `?.` for safety.
         const status = returnStatusLookup[orderIdStr]?.[productIdStr] || 'Not Returned';
-
-        return {
-          ...product,
-          return_status: status // Add the new field
-        };
+        return { ...product, return_status: status };
       });
 
-      // Third, filter out any product where the return request has been 'Completed'.
       const finalProducts = productsWithStatus.filter(
         product => product.return_status !== 'Completed'
       );
-
-      // --- MODIFICATION END ---
       
       const totalAmount = finalProducts.reduce((sum, item) => {
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
       
+      // --- ENHANCEMENT START: Add delivery timestamp if applicable ---
+
+      let deliveredAt = null; // Default to null
+      
+      // Check if the current status is 'Delivered'
+      if (orderObj.currentStatus === 'Delivered' && Array.isArray(orderObj.statusHistory)) {
+        // Find the most recent 'Delivered' entry in the history.
+        // We search backwards (.slice().reverse()) to find the latest one first.
+        const deliveryEvent = orderObj.statusHistory
+          .slice()
+          .reverse()
+          .find(history => history.status === 'Delivered');
+          
+        if (deliveryEvent) {
+          deliveredAt = deliveryEvent.timestamp;
+        }
+      }
+
+      // --- ENHANCEMENT END ---
+
       return {
         ...orderObj,
-        products: finalProducts, // Use the new, filtered list of products
+        products: finalProducts,
         totalAmount,
+        deliveredAt, // Add the new field to the response
       };
     });
 
-    // Final Step: Filter out any orders that might now have zero products after filtering.
+    // Filter out any orders that now have zero products
     const finalOrders = formattedOrders.filter(order => order.products.length > 0);
 
     return res.status(200).json({
