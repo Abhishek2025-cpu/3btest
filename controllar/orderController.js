@@ -297,7 +297,6 @@ exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // Step 1: Fetch the user's orders, sorted and populated.
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
@@ -310,7 +309,6 @@ exports.getOrdersByUserId = async (req, res) => {
       });
     }
 
-    // Step 2: Fetch and process return requests (from previous modification)
     const orderIds = orders.map(order => order._id);
     const returnRequests = await ReturnRequest.find({ orderId: { $in: orderIds } });
 
@@ -326,27 +324,20 @@ exports.getOrdersByUserId = async (req, res) => {
       });
     });
 
-    // Step 3: Transform the orders, incorporating all logic.
     const formattedOrders = orders.map(order => {
       const orderObj = order.toObject();
       const orderIdStr = orderObj._id.toString();
 
-      // Handle potentially deleted products
       const productsWithPopulatedData = orderObj.products.map(product => {
         if (product.productId === null) {
           return {
             ...product,
-            productId: {
-              _id: product._id,
-              name: product.productName,
-              price: product.priceAtPurchase,
-            }
+            productId: { _id: product._id, name: product.productName, price: product.priceAtPurchase }
           };
         }
         return product;
       });
 
-      // Inject return_status and filter out completed returns
       const productsWithStatus = productsWithPopulatedData.map(product => {
         const productIdStr = product.productId._id.toString();
         const status = returnStatusLookup[orderIdStr]?.[productIdStr] || 'Not Returned';
@@ -361,35 +352,34 @@ exports.getOrdersByUserId = async (req, res) => {
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
       
-      // --- ENHANCEMENT START: Add delivery timestamp if applicable ---
-
-      let deliveredAt = null; // Default to null
+      // --- ROBUSTNESS FIX WITH FALLBACK LOGIC ---
+      let deliveredAt = null;
       
-      // Check if the current status is 'Delivered'
-      if (orderObj.currentStatus === 'Delivered' && Array.isArray(orderObj.statusHistory)) {
-        // Find the most recent 'Delivered' entry in the history.
-        // We search backwards (.slice().reverse()) to find the latest one first.
-        const deliveryEvent = orderObj.statusHistory
+      if (orderObj.currentStatus === 'Delivered') {
+        // First, try to find the specific event in history (for new orders)
+        const deliveryEvent = (orderObj.statusHistory || [])
           .slice()
           .reverse()
           .find(history => history.status === 'Delivered');
           
         if (deliveryEvent) {
+          // If found, use its precise timestamp
           deliveredAt = deliveryEvent.timestamp;
+        } else {
+          // FALLBACK: If not found (for old orders), use the order's last update time.
+          deliveredAt = orderObj.updatedAt;
         }
       }
-
-      // --- ENHANCEMENT END ---
+      // --- END FIX ---
 
       return {
         ...orderObj,
         products: finalProducts,
         totalAmount,
-        deliveredAt, // Add the new field to the response
+        deliveredAt,
       };
     });
 
-    // Filter out any orders that now have zero products
     const finalOrders = formattedOrders.filter(order => order.products.length > 0);
 
     return res.status(200).json({
@@ -411,6 +401,7 @@ exports.getOrdersByUserId = async (req, res) => {
 
 // PATCH /api/orders/update-status/:orderId
 // PATCH /api/orders/status/:id
+// PATCH /api/orders/status/:id
 exports.updateOrderStatusById = async (req, res) => {
   const { id } = req.params;
   const { newStatus } = req.body;
@@ -431,16 +422,25 @@ exports.updateOrderStatusById = async (req, res) => {
       });
     }
 
-    // Update only the top-level order status
+    // Update the top-level order status
     order.currentStatus = newStatus;
 
-    // Also update currentStatus for each product (if required)
+    // --- FIX START: Record the change in statusHistory ---
+    // This is the crucial line you were missing.
+    order.statusHistory.push({
+      status: newStatus,
+      notes: `Status changed to ${newStatus}` // Optional but good practice
+    });
+    // --- FIX END ---
+
+    // Also update currentStatus for each product (this is fine)
     if (order.products && order.products.length > 0) {
       order.products.forEach(product => {
         product.currentStatus = newStatus;
       });
     }
 
+    // The .save() method will now save the new currentStatus AND the updated statusHistory array
     await order.save();
 
     return res.status(200).json({
