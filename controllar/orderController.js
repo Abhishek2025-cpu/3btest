@@ -5,6 +5,7 @@ const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const GstDetails = require('../models/GstDetails'); 
 const Company = require('../models/company'); 
+const ReturnRequest  = require('../models/ReturnRequest');
 
 
 const generateOrderId = () => {
@@ -296,8 +297,7 @@ exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // Step 1: Fetch the orders and populate where possible.
-    // If a productId is null in the DB, Mongoose will correctly set it to null in the result.
+    // Step 1: Fetch the user's orders, sorted and populated as before.
     const orders = await Order.find({ userId })
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
@@ -310,50 +310,94 @@ exports.getOrdersByUserId = async (req, res) => {
       });
     }
 
-    // Step 2: Transform the orders to ensure every product has a consistent structure.
+    // --- MODIFICATION START: Fetch and process return requests ---
+
+    // Step 2: Get all order IDs to fetch their associated return requests in one query.
+    // This is much more efficient than querying inside a loop.
+    const orderIds = orders.map(order => order._id);
+    const returnRequests = await ReturnRequest.find({ orderId: { $in: orderIds } });
+
+    // Step 3: Create a lookup map for quick access to return statuses.
+    // The structure will be: { orderId: { productId: 'status' } }
+    // e.g., { '64f5...': { '64e8...': 'Approved', '64e9...': 'Completed' } }
+    const returnStatusLookup = {};
+    returnRequests.forEach(request => {
+      const orderIdStr = request.orderId.toString();
+      if (!returnStatusLookup[orderIdStr]) {
+        returnStatusLookup[orderIdStr] = {};
+      }
+      request.products.forEach(product => {
+        const productIdStr = product.productId.toString();
+        // The status from the parent ReturnRequest applies to this product
+        returnStatusLookup[orderIdStr][productIdStr] = request.status;
+      });
+    });
+
+    // --- MODIFICATION END ---
+
+
+    // Step 4: Transform the orders, now with return status logic.
     const formattedOrders = orders.map(order => {
       const orderObj = order.toObject(); // Convert to a plain JS object
+      const orderIdStr = orderObj._id.toString();
 
-      // --- MODIFICATION START (New, more reliable approach) ---
-      // We will create a new 'products' array using .map() to guarantee the transformation.
-      const transformedProducts = orderObj.products.map(product => {
-        // If populate resulted in productId being null...
+      // First, handle potentially deleted products (original logic)
+      const productsWithPopulatedData = orderObj.products.map(product => {
         if (product.productId === null) {
-          // Return a copy of the product, but overwrite the 'productId' field
-          // with a new object constructed from the subdocument's own data.
           return {
-            ...product, // Keep all original fields (image, quantity, etc.)
+            ...product,
             productId: {
-              _id: product._id, // **This is the critical fix**
+              _id: product._id,
               name: product.productName,
               price: product.priceAtPurchase,
-              // You can add any other fields here that your frontend might expect
-              // e.g., modelNo: product.modelNo
             }
           };
         }
-        // If productId was populated successfully, just return the product as is.
         return product;
       });
-      // --- MODIFICATION END ---
 
-      const totalAmount = transformedProducts.reduce((sum, item) => {
+      // --- MODIFICATION START: Inject return_status and filter ---
+
+      // Second, add the 'return_status' to each product.
+      const productsWithStatus = productsWithPopulatedData.map(product => {
+        const productIdStr = product.productId._id.toString();
+
+        // Find the status from our lookup map. Use optional chaining `?.` for safety.
+        const status = returnStatusLookup[orderIdStr]?.[productIdStr] || 'Not Returned';
+
+        return {
+          ...product,
+          return_status: status // Add the new field
+        };
+      });
+
+      // Third, filter out any product where the return request has been 'Completed'.
+      const finalProducts = productsWithStatus.filter(
+        product => product.return_status !== 'Completed'
+      );
+
+      // --- MODIFICATION END ---
+      
+      const totalAmount = finalProducts.reduce((sum, item) => {
         return sum + (item.priceAtPurchase * item.quantity);
       }, 0);
       
-      // Return a new order object with the transformed products list.
       return {
         ...orderObj,
-        products: transformedProducts, // Use the newly created products array
+        products: finalProducts, // Use the new, filtered list of products
         totalAmount,
       };
     });
 
+    // Final Step: Filter out any orders that might now have zero products after filtering.
+    const finalOrders = formattedOrders.filter(order => order.products.length > 0);
+
     return res.status(200).json({
       success: true,
-      count: formattedOrders.length,
-      orders: formattedOrders,
+      count: finalOrders.length,
+      orders: finalOrders,
     });
+
   } catch (error) {
     console.error('Error fetching user orders:', error);
     return res.status(500).json({
