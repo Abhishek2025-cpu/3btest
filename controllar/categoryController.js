@@ -8,6 +8,7 @@ const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud'); // 
 const CatFieldsToTranslate = [
   'name'         
 ];
+const ProductFieldsToTranslate = ['name', 'about'];
 
 async function generateCategoryId() {
   const lastCat = await Category.findOne().sort({ createdAt: -1 });
@@ -264,31 +265,44 @@ exports.getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find category by _id (ObjectId)
+    // 1. Validate the ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid category id' });
-    }
-    const category = await Category.findById(id);
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+      return res.status(400).json({ success: false, message: 'Invalid category id' });
     }
 
-    // Find all products with this category's _id
-    const products = await Product.find({ categoryId: category._id });
+    // 2. Fetch the category and its products using .lean() for efficiency
+    // .lean() returns plain JavaScript objects, which is ideal for translation
+    const categoryFromDB = await Category.findById(id).lean();
+    if (!categoryFromDB) {
+      return res.status(404).json({ success: false, message: 'Category not found' });
+    }
 
+    const productsFromDB = await Product.find({ categoryId: categoryFromDB._id }).lean();
+
+    // 3. Translate the fetched data
+    // The translateResponse service likely expects an array.
+    // We wrap the single category object in an array `[categoryFromDB]` and then destructure the result.
+    const [translatedCategory] = await translateResponse(req, [categoryFromDB], CatFieldsToTranslate);
+    
+    // The products are already in an array, so we can pass them directly.
+    const translatedProducts = await translateResponse(req, productsFromDB, ProductFieldsToTranslate);
+
+    // 4. Send the successful, translated response
     res.status(200).json({
-      category: {
-        _id: category._id,
-        categoryId: category.categoryId,
-        name: category.name,
-        position: category.position,
-        images: category.images,
-        inStock: category.inStock
-      },
-      products
+      success: true,
+      message: '✅ Category and products fetched successfully',
+      category: translatedCategory, // Send the full translated category object
+      products: translatedProducts // Send the array of translated product objects
     });
+
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch category', error: error.message });
+    // 5. Consistent error handling
+    console.error(`❌ Error fetching category by ID ${req.params.id}:`, error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch category',
+      error: error.message
+    });
   }
 };
 
