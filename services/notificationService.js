@@ -1,4 +1,4 @@
-const admin = require("../firebasee");
+const admin = require("../firebase");
 
 /**
  * Send push notification
