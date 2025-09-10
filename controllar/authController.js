@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { translateResponse } = require('../services/translation.service');
+const { sendNotification } = require('../services/notification.service');
 const userProfileFieldsToTranslate = [
   'name'
 ];
@@ -8,7 +9,7 @@ const userProfileFieldsToTranslate = [
 // controllers/userController.js
 
 exports.signup = async (req, res) => {
-  const { name, number, email } = req.body;
+  const { name, number, email, fcmToken } = req.body;
 
   if (!name || !number || !email) {
     return res.status(400).json({ message: 'All fields are required' });
@@ -34,10 +35,20 @@ exports.signup = async (req, res) => {
       number,
       email,
       role: 'client',
-      profileImage
+      profileImage,
+      fcmTokens: fcmToken ? [fcmToken] : [] // ✅ save FCM token if provided
     });
 
     await newUser.save();
+
+    // ✅ Trigger welcome notification
+    if (fcmToken) {
+      await sendNotification(
+        [fcmToken],
+        "Welcome 🎉",
+        `Dear ${name}, your account has been set up. Happy shopping!`
+      );
+    }
 
     res.status(201).json({ message: 'User registered successfully', user: newUser });
   } catch (error) {
