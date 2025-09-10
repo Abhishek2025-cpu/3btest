@@ -30,25 +30,30 @@ exports.signup = async (req, res) => {
       profileImage = `data:${mimeType};base64,${base64}`;
     }
 
-    const newUser = new User({
-      name,
-      number,
-      email,
-      role: 'client',
-      profileImage,
-      fcmTokens: fcmToken ? [fcmToken] : [] // ✅ save FCM token if provided
-    });
+ const newUser = new User({
+  name,
+  number,
+  email,
+  role: 'client',
+  profileImage
+});
 
-    await newUser.save();
+// ✅ If fcmToken provided, push into array
+if (fcmToken) {
+  newUser.fcmTokens.push(fcmToken);
+}
 
-    // ✅ Trigger welcome notification
-    if (fcmToken) {
-      await sendNotification(
-        [fcmToken],
-        "Welcome 🎉",
-        `Dear ${name}, your account has been set up. Happy shopping!`
-      );
-    }
+await newUser.save();
+
+// ✅ Trigger welcome notification
+if (fcmToken) {
+  await sendNotification(
+    [fcmToken],
+    "Welcome 🎉",
+    `Dear ${name}, your account has been set up. Happy shopping!`
+  );
+}
+
 
     res.status(201).json({ message: 'User registered successfully', user: newUser });
   } catch (error) {
