@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['client', 'admin', 'user'], default: 'client' },
   profileImage: { type: String, default: null },
     gstin: { type: String, default: null }, 
-      fcmToken: { type: String, default: null },  
+       fcmTokens: { type: [String], default: [] },
   shippingAddresses: {
     type: [shippingAddressSchema],
     validate: [arr => arr.length <= 5, '{PATH} exceeds the limit of 5']
