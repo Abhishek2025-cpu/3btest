@@ -14,13 +14,12 @@ exports.sendNotification = async (tokens, title, body, data = {}) => {
       return null;
     }
 
-    const message = {
+    const payload = {
       notification: { title, body },
-      data,
-      tokens
+      data
     };
 
-    const response = await admin.messaging().sendMulticast(message);
+    const response = await admin.messaging().sendToDevice(tokens, payload);
     console.log("✅ Notification sent", response);
     return response;
   } catch (error) {
