@@ -1,11 +1,7 @@
-const admin = require("../firebase");
+const messaging = require("../firebase");
 
 /**
  * Send push notification
- * @param {Array<string>} tokens - Array of FCM tokens
- * @param {string} title - Notification title
- * @param {string} body - Notification body
- * @param {object} data - (optional) Additional payload
  */
 exports.sendNotification = async (tokens, title, body, data = {}) => {
   try {
@@ -19,7 +15,12 @@ exports.sendNotification = async (tokens, title, body, data = {}) => {
       data
     };
 
-    const response = await admin.messaging().sendToDevice(tokens, payload);
+    const response = await messaging.sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data
+    });
+
     console.log("✅ Notification sent", response);
     return response;
   } catch (error) {
