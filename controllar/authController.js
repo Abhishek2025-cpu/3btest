@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { translateResponse } = require('../services/translation.service');
-const { sendNotification } = require('../services/notification.service');
+const { sendNotification } = require('../services/notificationService');
 const userProfileFieldsToTranslate = [
   'name'
 ];
