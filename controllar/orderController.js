@@ -417,26 +417,34 @@ exports.updateOrderStatusById = async (req, res) => {
       });
     }
 
-    // Update the top-level order status
+    // 1. Update top-level status
     order.currentStatus = newStatus;
 
-    // --- FIX START: Record the change in statusHistory ---
-    // This is the crucial line you were missing.
+    // 2. Record in statusHistory
     order.statusHistory.push({
       status: newStatus,
-      notes: `Status changed to ${newStatus}` // Optional but good practice
+      notes: `Status changed to ${newStatus}`
     });
-    // --- FIX END ---
 
-    // Also update currentStatus for each product (this is fine)
+    // 3. Update each product's currentStatus
     if (order.products && order.products.length > 0) {
       order.products.forEach(product => {
         product.currentStatus = newStatus;
       });
     }
 
-    // The .save() method will now save the new currentStatus AND the updated statusHistory array
     await order.save();
+
+    // 4. 🔔 Trigger notification to user
+    const user = await User.findById(order.userId);
+    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+      await sendNotification(
+        user._id,
+        [user.fcmTokens[user.fcmTokens.length - 1]], // use latest token
+        `📦 Order Update: ${newStatus}`,
+        `Dear ${user.name}, your order ${order.orderId} status has been updated to "${newStatus}".`
+      );
+    }
 
     return res.status(200).json({
       success: true,
@@ -448,7 +456,8 @@ exports.updateOrderStatusById = async (req, res) => {
     console.error('Error updating order status:', error);
     return res.status(500).json({
       success: false,
-      message: 'Server error while updating order status'
+      message: 'Server error while updating order status',
+      error: error.message
     });
   }
 };
