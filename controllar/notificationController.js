@@ -20,3 +20,35 @@ exports.getUserNotifications = async (req, res) => {
     });
   }
 };
+
+
+exports.clearUserNotifications = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    const result = await Notification.updateMany(
+      { userId, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `✅ ${result.modifiedCount} notifications marked as read`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    return res.status(500).json({
+      success: false,
+      message: '❌ Failed to clear notifications',
+      error: error.message
+    });
+  }
+};
