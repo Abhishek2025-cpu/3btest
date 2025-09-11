@@ -174,31 +174,30 @@ exports.sendMessage = [
 
       // --- 1. Input Validation ---
       if (!senderId || !receiverId) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'senderId and receiverId are required.' });
+        return res.status(400).json({ success: false, message: 'senderId and receiverId are required.' });
       }
       if (!message && !file) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'A message or a file is required to send.' });
+        return res.status(400).json({ success: false, message: 'A message or a file is required to send.' });
       }
 
-      // --- 2. Determine sender/receiver models ---
+      // --- 2. Determine sender & receiver models ---
       let senderModel;
+      if (await User.findById(senderId)) {
+        senderModel = 'User';
+      } else if (await Admin.findById(senderId)) {
+        senderModel = 'Admin';
+      } else {
+        return res.status(404).json({ success: false, message: `Sender with ID ${senderId} not found.` });
+      }
+
       let receiverModel;
-
-      const senderUser = await User.findById(senderId);
-      const senderAdmin = !senderUser ? await Admin.findById(senderId) : null;
-      if (senderUser) senderModel = 'User';
-      else if (senderAdmin) senderModel = 'Admin';
-      else return res.status(404).json({ success: false, message: `Sender not found.` });
-
-      const receiverUser = await User.findById(receiverId);
-      const receiverAdmin = !receiverUser ? await Admin.findById(receiverId) : null;
-      if (receiverUser) receiverModel = 'User';
-      else if (receiverAdmin) receiverModel = 'Admin';
-      else return res.status(404).json({ success: false, message: `Receiver not found.` });
+      if (await User.findById(receiverId)) {
+        receiverModel = 'User';
+      } else if (await Admin.findById(receiverId)) {
+        receiverModel = 'Admin';
+      } else {
+        return res.status(404).json({ success: false, message: `Receiver with ID ${receiverId} not found.` });
+      }
 
       // --- 3. Handle File Upload ---
       let fileUrl = null;
@@ -210,7 +209,7 @@ exports.sendMessage = [
         fileUrl = uploadResult.url;
       }
 
-      // --- 4. Save Chat Document ---
+      // --- 4. Create Chat Document ---
       const chat = await Chat.create({
         senderId,
         senderModel,
@@ -220,18 +219,17 @@ exports.sendMessage = [
         mediaUrl: fileUrl
       });
 
-      // --- 5. Trigger Push Notification ---
-      let receiver = receiverUser || receiverAdmin;
+      // --- 5. Fetch Receiver to Send Notification ---
+      const receiver = await User.findById(receiverId); // ✅ only Users get notifications
+      const sender = await User.findById(senderId); // get sender name
+      const senderName = sender ? sender.name : "Someone";
+
       if (receiver && receiver.fcmTokens && receiver.fcmTokens.length > 0) {
-        const senderName = senderUser
-          ? senderUser.name
-          : senderAdmin
-          ? senderAdmin.name
-          : 'Someone';
+        console.log("📨 Sending chat notification to:", receiver._id);
 
         await sendNotification(
           receiver._id,
-          receiver.fcmTokens, // all tokens
+          receiver.fcmTokens,
           '📩 New Message Received',
           `${senderName}: ${message ? message.substring(0, 50) : 'Sent a file'}`,
           { chatId: chat._id.toString() }
