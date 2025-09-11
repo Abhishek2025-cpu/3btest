@@ -48,6 +48,7 @@ await newUser.save();
 // ✅ Trigger welcome notification
 if (fcmToken) {
   await sendNotification(
+      newUser._id,   
     [fcmToken],
     "Welcome 🎉",
     `Dear ${name}, your account has been set up. Happy shopping!`
