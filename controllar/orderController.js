@@ -16,7 +16,7 @@ const generateOrderId = () => {
 };
 
 
-const { sendNotification } = require('../services/notificationService');
+
 
 exports.placeOrder = async (req, res) => {
   try {
