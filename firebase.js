@@ -9,4 +9,4 @@ const app = initializeApp({
 
 const messaging = getMessaging(app);
 
-module.exports = { app, messaging }; // 🔑 Export both
+module.exports = { app, messaging }; // ✅ export both

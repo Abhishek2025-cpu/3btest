@@ -1,4 +1,4 @@
-const admin = require("../firebase");  // this gives you the initialized admin
+const { messaging } = require("../firebase"); // ✅ destructure messaging
 const Notification = require("../models/Notification");
 
 exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
@@ -13,13 +13,12 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       notification: { title, body },
       data,
       android: { priority: "high" },
-      apns: { headers: { "apns-priority": "10" } }
+      apns: { headers: { "apns-priority": "10" } },
     };
 
-    // ✅ Correct call
-    const response = await admin.messaging().sendMulticast(message);
+    // ✅ Correct usage
+    const response = await messaging.sendMulticast(message);
 
-    // Save notification in DB
     await Notification.create({ userId, title, body, data });
 
     console.log("✅ Notification sent & saved", response);
@@ -29,3 +28,4 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     throw error;
   }
 };
+
