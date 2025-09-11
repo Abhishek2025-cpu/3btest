@@ -160,11 +160,11 @@ const Admin = require('../models/Admin');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const multer = require('multer');
 const storage = multer.memoryStorage();
+const { sendNotification } = require('../services/notificationService');
 const upload = multer({ storage });
 
 
-// In exports.sendMessage
-// In exports.sendMessage
+// -------------------- SEND MESSAGE --------------------
 exports.sendMessage = [
   upload.single('file'),
   async (req, res) => {
@@ -174,58 +174,69 @@ exports.sendMessage = [
 
       // --- 1. Input Validation ---
       if (!senderId || !receiverId) {
-        return res.status(400).json({ success: false, message: 'senderId and receiverId are required.' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'senderId and receiverId are required.' });
       }
       if (!message && !file) {
-        return res.status(400).json({ success: false, message: 'A message or a file is required to send.' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'A message or a file is required to send.' });
       }
 
-      // --- 2. FIX: Define senderModel and receiverModel ---
-      // We must query the database to determine if the sender/receiver is a 'User' or an 'Admin'.
+      // --- 2. Determine sender/receiver models ---
       let senderModel;
       let receiverModel;
 
-      // Determine sender's model
-      if (await User.findById(senderId)) {
-        senderModel = 'User';
-      } else if (await Admin.findById(senderId)) {
-        senderModel = 'Admin';
-      } else {
-        return res.status(404).json({ success: false, message: `Sender with ID ${senderId} not found.` });
-      }
+      const senderUser = await User.findById(senderId);
+      const senderAdmin = !senderUser ? await Admin.findById(senderId) : null;
+      if (senderUser) senderModel = 'User';
+      else if (senderAdmin) senderModel = 'Admin';
+      else return res.status(404).json({ success: false, message: `Sender not found.` });
 
-      // Determine receiver's model
-      if (await User.findById(receiverId)) {
-        receiverModel = 'User';
-      } else if (await Admin.findById(receiverId)) {
-        receiverModel = 'Admin';
-      } else {
-        return res.status(404).json({ success: false, message: `Receiver with ID ${receiverId} not found.` });
-      }
+      const receiverUser = await User.findById(receiverId);
+      const receiverAdmin = !receiverUser ? await Admin.findById(receiverId) : null;
+      if (receiverUser) receiverModel = 'User';
+      else if (receiverAdmin) receiverModel = 'Admin';
+      else return res.status(404).json({ success: false, message: `Receiver not found.` });
 
       // --- 3. Handle File Upload ---
       let fileUrl = null;
       if (file) {
         const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-        
         if (!uploadResult || !uploadResult.url) {
-            throw new Error('File upload failed to return a URL.');
+          throw new Error('File upload failed to return a URL.');
         }
-        
-        // FIX: Only store the URL string, not the whole object
         fileUrl = uploadResult.url;
       }
 
-      // --- 4. Create the Chat Document ---
-      // Now senderModel and receiverModel are correctly defined.
+      // --- 4. Save Chat Document ---
       const chat = await Chat.create({
         senderId,
-        senderModel, // Now defined
+        senderModel,
         receiverId,
-        receiverModel, // Now defined
+        receiverModel,
         message: message || null,
-        mediaUrl: fileUrl // Pass the URL string or null
+        mediaUrl: fileUrl
       });
+
+      // --- 5. Trigger Push Notification ---
+      let receiver = receiverUser || receiverAdmin;
+      if (receiver && receiver.fcmTokens && receiver.fcmTokens.length > 0) {
+        const senderName = senderUser
+          ? senderUser.name
+          : senderAdmin
+          ? senderAdmin.name
+          : 'Someone';
+
+        await sendNotification(
+          receiver._id,
+          receiver.fcmTokens, // all tokens
+          '📩 New Message Received',
+          `${senderName}: ${message ? message.substring(0, 50) : 'Sent a file'}`,
+          { chatId: chat._id.toString() }
+        );
+      }
 
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
@@ -235,9 +246,7 @@ exports.sendMessage = [
   }
 ];
 
-
-
-// GET: Get all chats for a specific user
+// -------------------- GET USER CHATS --------------------
 exports.getUserChats = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -245,7 +254,7 @@ exports.getUserChats = async (req, res) => {
       $or: [{ senderId: userId }, { receiverId: userId }]
     })
       .sort({ timestamp: 1 })
-      .populate('senderId', 'name')    // fetch name only
+      .populate('senderId', 'name')
       .populate('receiverId', 'name');
 
     res.json({ success: true, data: chats });
