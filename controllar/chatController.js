@@ -172,73 +172,56 @@ exports.sendMessage = [
       const { senderId, receiverId, message } = req.body;
       const file = req.file;
 
-      // --- 1. Input Validation ---
       if (!senderId || !receiverId) {
         return res.status(400).json({ success: false, message: 'senderId and receiverId are required.' });
       }
       if (!message && !file) {
-        return res.status(400).json({ success: false, message: 'A message or a file is required to send.' });
+        return res.status(400).json({ success: false, message: 'A message or a file is required.' });
       }
 
-      // --- 2. Determine sender & receiver models ---
-      let senderModel;
-      if (await User.findById(senderId)) {
-        senderModel = 'User';
-      } else if (await Admin.findById(senderId)) {
-        senderModel = 'Admin';
-      } else {
-        return res.status(404).json({ success: false, message: `Sender with ID ${senderId} not found.` });
-      }
+      // Determine sender
+      let sender = await User.findById(senderId) || await Admin.findById(senderId);
+      if (!sender) return res.status(404).json({ success: false, message: 'Sender not found.' });
 
-      let receiverModel;
-      if (await User.findById(receiverId)) {
-        receiverModel = 'User';
-      } else if (await Admin.findById(receiverId)) {
-        receiverModel = 'Admin';
-      } else {
-        return res.status(404).json({ success: false, message: `Receiver with ID ${receiverId} not found.` });
-      }
+      // Determine receiver
+      let receiver = await User.findById(receiverId) || await Admin.findById(receiverId);
+      if (!receiver) return res.status(404).json({ success: false, message: 'Receiver not found.' });
 
-      // --- 3. Handle File Upload ---
+      // File upload
       let fileUrl = null;
       if (file) {
         const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-        if (!uploadResult || !uploadResult.url) {
-          throw new Error('File upload failed to return a URL.');
-        }
+        if (!uploadResult?.url) throw new Error('File upload failed.');
         fileUrl = uploadResult.url;
       }
 
-      // --- 4. Create Chat Document ---
+      // Save chat
       const chat = await Chat.create({
         senderId,
-        senderModel,
+        senderModel: sender instanceof User ? 'User' : 'Admin',
         receiverId,
-        receiverModel,
+        receiverModel: receiver instanceof User ? 'User' : 'Admin',
         message: message || null,
         mediaUrl: fileUrl
       });
 
-      // --- 5. Fetch Receiver to Send Notification ---
-      const receiver = await User.findById(receiverId); // ✅ only Users get notifications
-      const sender = await User.findById(senderId); // get sender name
-      const senderName = sender ? sender.name : "Someone";
-
-      if (receiver && receiver.fcmTokens && receiver.fcmTokens.length > 0) {
-        console.log("📨 Sending chat notification to:", receiver._id);
-
+      // ✅ Trigger notification
+      try {
+        const senderName = sender.name || 'Someone';
         await sendNotification(
           receiver._id,
-          receiver.fcmTokens,
+          receiver.fcmTokens || [],
           '📩 New Message Received',
           `${senderName}: ${message ? message.substring(0, 50) : 'Sent a file'}`,
           { chatId: chat._id.toString() }
         );
+      } catch (notifyErr) {
+        console.error("⚠️ Failed to send chat notification:", notifyErr.message);
       }
 
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
-      console.error('Unexpected error in sendMessage:', err);
+      console.error('❌ sendMessage Error:', err);
       res.status(500).json({ success: false, message: err.message });
     }
   }
