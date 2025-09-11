@@ -1,4 +1,5 @@
 const messaging = require("../firebase");
+const Notification = require("../models/Notification"); 
 
 /**
  * Send push notification
