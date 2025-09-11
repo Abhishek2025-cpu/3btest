@@ -20,7 +20,7 @@ const generateOrderId = () => {
 
 exports.placeOrder = async (req, res) => {
   try {
-    const { userId, shippingAddressId, items, fcmToken } = req.body;
+    const { userId, shippingAddressId, items } = req.body;
 
     // 1. Get User and selected shipping address
     const user = await User.findById(userId);
@@ -133,15 +133,18 @@ exports.placeOrder = async (req, res) => {
 
     await newOrder.save();
 
-    // 4. 🔔 Send notification (same as signup)
-    if (fcmToken) {
-      await sendNotification(
-        user._id,
-        [fcmToken], // ✅ direct token from payload
-        "🎉 Congratulations!",
-        `Dear ${user.name}, your product has been ordered. Please wait for the next status update.`,
-        { orderId: newOrder._id.toString() }
-      );
+    // 4. 🔔 Send notification to user
+   if (user.fcmTokens && user.fcmTokens.length > 0) {
+  await sendNotification(
+    user._id,
+    [user.fcmTokens[user.fcmTokens.length - 1]], // use last token like signup
+    "🎉 Congratulations!",
+    `Dear ${user.name}, your product has been ordered. Please wait for the next status update.`,
+    { orderId: newOrder._id.toString() }
+  );
+}
+ else {
+      console.log("⚠️ No FCM tokens for user, skipping push notification");
     }
 
     // 5. Success response
@@ -178,7 +181,6 @@ exports.placeOrder = async (req, res) => {
     });
   }
 };
-
 
 
 exports.getOrders = async (req, res) => {
