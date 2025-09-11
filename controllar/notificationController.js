@@ -33,15 +33,12 @@ exports.clearUserNotifications = async (req, res) => {
       });
     }
 
-    const result = await Notification.updateMany(
-      { userId, isRead: false },
-      { $set: { isRead: true } }
-    );
+    const result = await Notification.deleteMany({ userId });
 
     return res.status(200).json({
       success: true,
-      message: `✅ ${result.modifiedCount} notifications marked as read`,
-      modifiedCount: result.modifiedCount
+      message: `✅ ${result.deletedCount} notifications deleted`,
+      deletedCount: result.deletedCount
     });
   } catch (error) {
     console.error('Error clearing notifications:', error);
