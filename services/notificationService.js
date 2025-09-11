@@ -1,4 +1,4 @@
-const { messaging } = require("../firebase"); // ✅ destructure messaging
+const { messaging } = require("../firebase");
 const Notification = require("../models/Notification");
 
 exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
@@ -16,8 +16,8 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       apns: { headers: { "apns-priority": "10" } },
     };
 
-    // ✅ Correct usage
-    const response = await messaging.sendMulticast(message);
+    // ✅ Use sendEachForMulticast (newer SDKs)
+    const response = await messaging.sendEachForMulticast(message);
 
     await Notification.create({ userId, title, body, data });
 
@@ -28,4 +28,3 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     throw error;
   }
 };
-
