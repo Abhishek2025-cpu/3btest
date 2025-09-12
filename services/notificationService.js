@@ -1,53 +1,54 @@
-const { messaging } = require("../firebase");
-const Notification = require("../models/Notification");
+const { messaging } = require("../firebase");  // uses your initializer
+const Notification = require("../models/Notification"); // optional: save logs in DB
 
-exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
+/**
+ * Send push notification to one device token
+ *
+ * @param {string} userId - User ID (optional, if you want to save in DB)
+ * @param {string} targetToken - Device FCM token
+ * @param {string} title - Notification title
+ * @param {string} body - Notification body
+ * @param {string} image - (optional) Image URL for notification
+ */
+async function sendNotification(userId, targetToken, title, body, image = null) {
   try {
-    if (!tokens || tokens.length === 0) {
-      console.log("⚠️ No FCM tokens provided, skipping notification");
-      return null;
-    }
-
     const message = {
-      tokens, // array of tokens
+      token: targetToken,
       notification: {
         title,
         body,
-      },
-      data: {
-        ...data,
-        click_action: "FLUTTER_NOTIFICATION_CLICK", // needed for RN
+        image,
       },
       android: {
         priority: "high",
         notification: {
-          channelId: "default_channel", // must exist in AndroidManifest
+          channelId: "default_channel",
           sound: "default",
         },
       },
       apns: {
-        headers: {
-          "apns-priority": "10",
-        },
+        headers: { "apns-priority": "10" },
         payload: {
           aps: {
             sound: "default",
-            contentAvailable: true,
           },
         },
       },
     };
 
-    // ✅ Use sendEachForMulticast (latest SDK)
-    const response = await messaging.sendEachForMulticast(message);
+    const response = await messaging.send(message);
 
-    // Save notification in DB
-    await Notification.create({ userId, title, body, data });
+    // (Optional) Save notification in DB
+    if (userId) {
+      await Notification.create({ userId, title, body, image });
+    }
 
-    console.log("✅ Notification sent & saved", response);
-    return response;
-  } catch (error) {
-    console.error("❌ Error sending notification:", error);
-    throw error;
+    console.log("✅ Successfully sent message:", response);
+    return true;
+  } catch (err) {
+    console.error("❌ Error sending notification:", err.message);
+    return false;
   }
-};
+}
+
+module.exports = { sendNotification };
