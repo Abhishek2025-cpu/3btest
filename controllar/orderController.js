@@ -28,13 +28,13 @@ exports.placeOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const gst = await GstDetails.findOne({ userId });
-    if (!gst || !gst.gstin) {
-      return res.status(400).json({
-        success: false,
-        message: 'GSTIN not found. Please complete GST verification before placing an order.'
-      });
-    }
+    // const gst = await GstDetails.findOne({ userId });
+    // if (!gst || !gst.gstin) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'GSTIN not found. Please complete GST verification before placing an order.'
+    //   });
+    // }
 
     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
     if (!shippingAddress) {
@@ -124,7 +124,7 @@ exports.placeOrder = async (req, res) => {
       },
       orderId: generateOrderId(),
       currentStatus: "Pending",
-      gstin: gst.gstin,
+      // gstin: gst.gstin,
       tracking: [{
         status: "Pending",
         updatedAt: new Date()
@@ -160,15 +160,15 @@ exports.placeOrder = async (req, res) => {
         color: p.color,
         priceAtPurchase: p.priceAtPurchase,
         subtotal: p.subtotal,
-        gstDetails: {
-          gstin: gst.gstin,
-          legalName: gst.legalName || '',
-          tradeName: gst.tradeName || '',
-          address: gst.address || '',
-          state: gst.state || '',
-          district: gst.district || '',
-          pincode: gst.pincode || ''
-        }
+        // gstDetails: {
+        //   gstin: gst.gstin,
+        //   legalName: gst.legalName || '',
+        //   tradeName: gst.tradeName || '',
+        //   address: gst.address || '',
+        //   state: gst.state || '',
+        //   district: gst.district || '',
+        //   pincode: gst.pincode || ''
+        // }
       }))
     });
 
