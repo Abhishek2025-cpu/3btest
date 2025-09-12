@@ -112,24 +112,24 @@ exports.placeOrder = async (req, res) => {
     const roundedTotalPrice = Math.round(totalPrice);
 
     // 3. Save order
-    const newOrder = new Order({
-      userId,
-      products,
-      totalPrice: roundedTotalPrice,
-      shippingDetails: {
-        name: shippingAddress.name,
-        phone: shippingAddress.phone,
-        addressType: shippingAddress.addressType,
-        detailedAddress: shippingAddress.detailedAddress
-      },
-      orderId: generateOrderId(),
-      currentStatus: "Pending",
-      // gstin: gst.gstin,
-      tracking: [{
-        status: "Pending",
-        updatedAt: new Date()
-      }]
-    });
+  const newOrder = new Order({
+  userId,
+  products,
+  totalPrice: roundedTotalPrice,
+  shippingDetails: {
+    name: shippingAddress.name,
+    phone: shippingAddress.phone,
+    addressType: shippingAddress.addressType,
+    detailedAddress: shippingAddress.detailedAddress
+  },
+  orderId: generateOrderId(),
+  currentStatus: "Pending",
+  tracking: [{
+    status: "Pending",
+    updatedAt: new Date()
+  }]
+});
+
 
     await newOrder.save();
 
@@ -153,23 +153,15 @@ exports.placeOrder = async (req, res) => {
       message: "Order placed successfully",
       order: newOrder,
       totalPrice: roundedTotalPrice,
-      productBreakdown: products.map(p => ({
-        productId: p.productId,
-        name: p.productName,
-        quantity: p.quantity,
-        color: p.color,
-        priceAtPurchase: p.priceAtPurchase,
-        subtotal: p.subtotal,
-        // gstDetails: {
-        //   gstin: gst.gstin,
-        //   legalName: gst.legalName || '',
-        //   tradeName: gst.tradeName || '',
-        //   address: gst.address || '',
-        //   state: gst.state || '',
-        //   district: gst.district || '',
-        //   pincode: gst.pincode || ''
-        // }
-      }))
+     productBreakdown: products.map(p => ({
+  productId: p.productId,
+  name: p.productName,
+  quantity: p.quantity,
+  color: p.color,
+  priceAtPurchase: p.priceAtPurchase,
+  subtotal: p.subtotal
+}))
+
     });
 
   } catch (error) {
