@@ -9,33 +9,36 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     }
 
     const message = {
-      tokens,
+      tokens, // array of tokens
       notification: {
         title,
-        body
+        body,
       },
-      data, // optional key/value pairs
+      data: {
+        ...data,
+        click_action: "FLUTTER_NOTIFICATION_CLICK", // needed for RN
+      },
       android: {
         priority: "high",
         notification: {
+          channelId: "default_channel", // must exist in AndroidManifest
           sound: "default",
-          clickAction: "FLUTTER_NOTIFICATION_CLICK"
-        }
+        },
       },
       apns: {
         headers: {
-          "apns-priority": "10"
+          "apns-priority": "10",
         },
         payload: {
           aps: {
             sound: "default",
-            category: "NEW_MESSAGE_CATEGORY"
-          }
-        }
-      }
+            contentAvailable: true,
+          },
+        },
+      },
     };
 
-    // ✅ sendEachForMulticast will handle multiple tokens
+    // ✅ Use sendEachForMulticast (latest SDK)
     const response = await messaging.sendEachForMulticast(message);
 
     // Save notification in DB
