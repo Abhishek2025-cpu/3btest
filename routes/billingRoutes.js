@@ -6,7 +6,7 @@ const {
   getBillingById,
   updateBilling,
   deleteBilling,
-} = require("../controllers/billingController");
+} = require("../controllar/billingController");
 
 const router = express.Router();
 
