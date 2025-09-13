@@ -9,14 +9,26 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     }
 
     const message = {
-      tokens,
+      tokens, // ✅ supports multiple tokens
       notification: { title, body },
-      data,
-      android: { priority: "high" },
-      apns: { headers: { "apns-priority": "10" } },
+      data: Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, String(v)])
+      ), // 🔑 ensure all values are strings
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "default_channel",
+          sound: "default",
+        },
+      },
+      apns: {
+        headers: { "apns-priority": "10" },
+        payload: {
+          aps: { sound: "default" },
+        },
+      },
     };
 
-    // ✅ Use sendEachForMulticast (newer SDKs)
     const response = await messaging.sendEachForMulticast(message);
 
     await Notification.create({ userId, title, body, data });
