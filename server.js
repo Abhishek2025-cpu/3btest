@@ -79,7 +79,7 @@ app.use('/api/transport-partners', transportPartnerRoutes);
 app.use("/api/hsn", hsnRoutes);
 app.use('/api/fcm', fcmRoutes);
 app.use('/api', notificationRoutes);
-app.use('/api/psuh', pushRoutes);
+app.use('/api', pushRoutes);
 
 
 
