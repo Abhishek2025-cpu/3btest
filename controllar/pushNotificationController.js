@@ -1,46 +1,42 @@
-const { messaging } = require('../firebase');
+const { messaging } = require('../firebase'); // your initialized Firebase admin
 const Notification = require('../models/Notification');
 
-/**
- * Send push notification to a user
- * Request body: { userId, title, body, data, tokens }
- */
 exports.sendPushNotification = async (req, res) => {
   try {
-    const { userId, title, body, data = {}, tokens } = req.body;
+    const { userId, tokens, title, body, data = {} } = req.body;
 
     if (!tokens || !tokens.length) {
       return res.status(400).json({ success: false, message: 'No FCM tokens provided' });
     }
 
+    // Normalize tokens
     const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
 
-    // Construct message for background/killed
+    // FCM message payload
     const message = {
       tokens: tokenArray,
-      notification: { title, body },
+      notification: { title, body }, // mandatory for background/killed
+      data, // optional key/value pairs
       android: {
-        priority: "high",
+        priority: 'high',
         notification: {
-          channelId: "high_importance_channel",
-          sound: "default",
+          channelId: 'high_importance_channel', // must match React Native channel
+          sound: 'default',
         },
       },
       apns: {
-        headers: { "apns-priority": "10" },
+        headers: { 'apns-priority': '10' },
         payload: {
           aps: {
             alert: { title, body },
-            sound: "default",
-            "content-available": 1, // ensures iOS shows notification in background/killed
+            sound: 'default',
           },
         },
       },
-      data, // optional custom data for deep linking
     };
 
-    // Send multicast
-    const response = await messaging.sendMulticast(message);
+    // Send notifications
+    const response = await messaging.sendEachForMulticast(message);
 
     // Save in DB
     await Notification.create({ userId, title, body, data });
@@ -48,16 +44,13 @@ exports.sendPushNotification = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Push notification sent successfully',
-      response: {
-        successCount: response.successCount,
-        failureCount: response.failureCount,
-      },
+      response,
     });
   } catch (error) {
-    console.error("❌ Error sending push notification:", error);
+    console.error('❌ Error sending push notification:', error);
     return res.status(500).json({
       success: false,
-      message: 'Server error sending push notification',
+      message: 'Error sending push notification',
       error: error.message,
     });
   }
