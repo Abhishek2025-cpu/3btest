@@ -1,19 +1,19 @@
 const { messaging } = require("../firebase");
 const Notification = require("../models/Notification");
 
-exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
+exports.sendNotification = async (userId, token, title, body, data = {}) => {
   try {
-    if (!tokens || tokens.length === 0) {
-      console.log("⚠️ No FCM tokens provided, skipping notification");
+    if (!token) {
+      console.log("⚠️ No FCM token provided, skipping notification");
       return null;
     }
 
     const message = {
-      tokens, // ✅ supports multiple tokens
+      token, // ✅ single token
       notification: { title, body },
       data: Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, String(v)])
-      ), // 🔑 ensure all values are strings
+      ),
       android: {
         priority: "high",
         notification: {
@@ -23,13 +23,11 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       },
       apns: {
         headers: { "apns-priority": "10" },
-        payload: {
-          aps: { sound: "default" },
-        },
+        payload: { aps: { sound: "default" } },
       },
     };
 
-    const response = await messaging.sendEachForMulticast(message);
+    const response = await messaging.send(message);
 
     await Notification.create({ userId, title, body, data });
 

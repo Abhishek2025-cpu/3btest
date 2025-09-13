@@ -135,13 +135,14 @@ exports.placeOrder = async (req, res) => {
 
     // 4. 🔔 Send notification to user
    if (user.fcmTokens && user.fcmTokens.length > 0) {
-  await sendNotification(
-    user._id,
-    [user.fcmTokens[user.fcmTokens.length - 1]], // use last token like signup
-    "🎉 Congratulations!",
-    `Dear ${user.name}, your product has been ordered. Please wait for the next status update.`,
-    { orderId: newOrder._id.toString() }
-  );
+ await sendNotification(
+  user._id,
+  user.fcmTokens[user.fcmTokens.length - 1], // single token, not array
+  "🎉 Congratulations!",
+  `Dear ${user.name}, your product has been ordered. Please wait for the next status update.`,
+  { orderId: newOrder._id.toString() }
+);
+
 }
  else {
       console.log("⚠️ No FCM tokens for user, skipping push notification");
