@@ -54,6 +54,7 @@ const hsnRoutes = require("./routes/hsn");
 const fcmRoutes = require('./routes/fcmRoutes'); 
 const notificationRoutes = require('./routes/notificationRoutes');
 const pushRoutes = require('./routes/pushRoutes');
+const BillingRoutes = require('./routes/billingRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
@@ -78,8 +79,8 @@ app.use('/api/shipments', ShipmentRoutes);
 app.use('/api/transport-partners', transportPartnerRoutes);
 app.use("/api/hsn", hsnRoutes);
 app.use('/api/fcm', fcmRoutes);
-app.use('/api', notificationRoutes);
 app.use('/api', pushRoutes);
+app.use('/api/billings', BillingRoutes);
 
 
 
