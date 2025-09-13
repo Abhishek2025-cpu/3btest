@@ -13,25 +13,38 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
 
     const message = {
       tokens: tokenArray,
-      notification: { title, body },
-      data,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        ...data,
+        click_action: "FLUTTER_NOTIFICATION_CLICK", // ensures Android shows banner in background
+      },
       android: {
         priority: "high",
         notification: {
-          channelId: "high_importance_channel",
+          channelId: "high_importance_channel", // must match RN channel
           sound: "default",
         },
       },
       apns: {
         headers: { "apns-priority": "10" },
         payload: {
-          aps: { sound: "default" },
+          aps: {
+            alert: {
+              title,
+              body,
+            },
+            sound: "default",
+          },
         },
       },
     };
 
     const response = await messaging.sendEachForMulticast(message);
 
+    // Save in DB
     await Notification.create({ userId, title, body, data });
 
     console.log(
