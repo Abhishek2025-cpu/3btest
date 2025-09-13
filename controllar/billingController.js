@@ -1,10 +1,28 @@
 // controllers/billingController.js
 const Billing = require("../models/Billing");
+const Order = require("../models/Order");
+const User = require("../models/User");
 
 // Create Billing
 const createBilling = async (req, res) => {
   try {
-    const billing = new Billing(req.body);
+    const { orderId, ...billingData } = req.body;
+
+    // 1. Find Order
+    const order = await Order.findOne({ orderId }).populate("userId", "-address -password -__v");
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    // 2. Get user details (excluding address)
+    const user = order.userId;
+    const buyerDetails = `Name: ${user.name}\nEmail: ${user.email}\nPhone: ${user.phone}`;
+
+    // 3. Create Billing
+    const billing = new Billing({
+      orderId: order._id,
+      buyerDetails,
+      ...billingData,
+    });
+
     await billing.save();
     res.status(201).json({ message: "Billing created successfully", billing });
   } catch (err) {

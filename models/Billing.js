@@ -3,8 +3,10 @@ const mongoose = require("mongoose");
 
 const BillingSchema = new mongoose.Schema(
   {
-    sellerDetails: { type: String, required: true }, // long text
-    buyerDetails: { type: String, required: true }, // long text
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order", required: true },
+
+    sellerDetails: { type: String, required: true },
+    buyerDetails: { type: String, required: true }, // will be auto-filled from user
 
     invoiceNumber: { type: String, required: true, unique: true },
     billDate: { type: Date, required: true },
@@ -27,7 +29,8 @@ const BillingSchema = new mongoose.Schema(
         rate: { type: Number, required: true },
         rateType: {
           type: String,
-      
+          enum: ["per_unit", "kg", "litre", "custom"],
+          default: "per_unit",
         },
         subtotal: { type: Number },
         cgst: { type: Number },
@@ -37,7 +40,7 @@ const BillingSchema = new mongoose.Schema(
     ],
 
     grandTotal: { type: Number, required: true },
-    companyBankDetails: { type: String, required: true }, // long text
+    companyBankDetails: { type: String, required: true },
   },
   { timestamps: true }
 );
