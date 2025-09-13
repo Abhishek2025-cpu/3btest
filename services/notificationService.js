@@ -1,6 +1,3 @@
-const { messaging } = require("../firebase");
-const Notification = require("../models/Notification");
-
 exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
   try {
     if (!tokens || tokens.length === 0) {
@@ -9,20 +6,40 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     }
 
     const message = {
-      tokens, // ✅ use tokens array
-      notification: { title, body },
-      data,
-      android: { priority: "high" },
-      apns: { headers: { "apns-priority": "10" } },
+      tokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK", // important for background
+        ...data,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          channelId: "high_importance_channel", // create this channel on client
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            contentAvailable: true,
+          },
+        },
+        headers: {
+          "apns-priority": "10",
+        },
+      },
     };
 
-    // ✅ Correct multicast call
     const response = await messaging.sendEachForMulticast(message);
 
-    // Save notification in DB
     await Notification.create({ userId, title, body, data });
 
-    console.log("✅ Notification sent & saved", response.successCount, "success,", response.failureCount, "failed");
+    console.log("✅ Notification sent & saved", response);
     return response;
   } catch (error) {
     console.error("❌ Error sending notification:", error);
