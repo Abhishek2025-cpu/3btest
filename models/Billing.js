@@ -29,8 +29,7 @@ const BillingSchema = new mongoose.Schema(
         rate: { type: Number, required: true },
         rateType: {
           type: String,
-          enum: ["per_unit", "kg", "litre", "custom"],
-          default: "per_unit",
+       
         },
         subtotal: { type: Number },
         cgst: { type: Number },
