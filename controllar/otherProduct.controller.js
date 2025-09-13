@@ -8,8 +8,10 @@ const mongoose = require('mongoose');
 const { translateResponse } = require('../services/translation.service');
 
 const ProductFieldsToTranslate = [
-  'name',
-  'about',   // add more fields if needed
+  'productName',
+  'details',
+  'materials.materialName',
+  'companies.name'
 ];
 
 // Helper function to process and upload a single file
@@ -183,35 +185,39 @@ exports.getProductsByCategoryId = async (req, res) => {
   try {
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid Category ID format.' 
+        message: 'Invalid Category ID format.'
       });
     }
 
     // Check if the category exists
     const categoryExists = await OtherCategory.exists({ _id: categoryId });
     if (!categoryExists) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: `Category with ID ${categoryId} not found.` 
+        message: `Category with ID ${categoryId} not found.`
       });
     }
 
-    // Find products (lean for performance)
+    // Fetch products
     const productsFromDB = await OtherProduct.find({ category: categoryId })
       .populate({ path: 'companies', select: 'name logo' })
       .lean();
 
     if (!productsFromDB || productsFromDB.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: `No products found for Category ID ${categoryId}.` 
+        message: `No products found for Category ID ${categoryId}.`
       });
     }
 
-    // Translate product fields
-    const translatedProducts = await translateResponse(req, productsFromDB, ProductFieldsToTranslate);
+    // 🔥 Translate nested fields too
+    const translatedProducts = await translateResponse(
+      req,
+      productsFromDB,
+      ProductFieldsToTranslate
+    );
 
     return res.status(200).json({
       success: true,
@@ -222,10 +228,10 @@ exports.getProductsByCategoryId = async (req, res) => {
   } catch (error) {
     console.error("❌ --- ERROR in getProductsByCategoryId --- ❌");
     console.error(error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: '❌ Failed to fetch products for the category',
-      error: error.message 
+      error: error.message
     });
   }
 };
