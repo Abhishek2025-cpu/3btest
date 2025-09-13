@@ -3,14 +3,9 @@ const Notification = require('../models/Notification');
 
 exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
   try {
-    // Ensure tokens is an array
     const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
-    if (!tokenArray.length) {
-      console.log("⚠️ No FCM tokens provided, skipping notification");
-      return null;
-    }
+    if (!tokenArray.length) return null;
 
-    // ✅ Payload for both foreground and background/killed notifications
     const message = {
       tokens: tokenArray,
       notification: {
@@ -20,9 +15,8 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       android: {
         priority: "high",
         notification: {
-          channelId: "high_importance_channel", // must match RN channel
+          channelId: "high_importance_channel", // must match RN channel created via Notifications.setNotificationChannelAsync
           sound: "default",
-          clickAction: "FLUTTER_NOTIFICATION_CLICK", // works for Android background
         },
       },
       apns: {
@@ -36,10 +30,9 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
           ...data,
         },
       },
-      data, // optional custom data
+      data, // optional custom data for navigation or deep linking
     };
 
-    // 🔥 Modern method for sending to multiple tokens
     const response = await messaging.sendMulticast(message);
 
     // Save notification in DB
