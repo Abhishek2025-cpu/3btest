@@ -397,7 +397,7 @@ exports.updateOrderStatusById = async (req, res) => {
   if (!newStatus) {
     return res.status(400).json({
       success: false,
-      message: 'New status is required'
+      message: "New status is required",
     });
   }
 
@@ -406,51 +406,60 @@ exports.updateOrderStatusById = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Order not found'
+        message: "Order not found",
       });
     }
 
     // 1. Update top-level status
     order.currentStatus = newStatus;
 
-    // 2. Record in statusHistory
+    // 2. Record in statusHistory (make sure array exists)
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
     order.statusHistory.push({
       status: newStatus,
-      notes: `Status changed to ${newStatus}`
+      notes: `Status changed to ${newStatus}`,
+      updatedAt: new Date(),
     });
 
     // 3. Update each product's currentStatus
     if (order.products && order.products.length > 0) {
-      order.products.forEach(product => {
+      order.products.forEach((product) => {
         product.currentStatus = newStatus;
       });
     }
 
     await order.save();
 
-    // 4. 🔔 Trigger notification to user
-    const user = await User.findById(order.userId);
-    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-      await sendNotification(
-        user._id,
-        [user.fcmTokens[user.fcmTokens.length - 1]], // use latest token
-        `📦 Order Update: ${newStatus}`,
-        `Dear ${user.name}, your order ${order.orderId} status has been updated to "${newStatus}".`
-      );
+    // 4. 🔔 Trigger notification safely
+    try {
+      const user = await User.findById(order.userId);
+      if (user && Array.isArray(user.fcmTokens) && user.fcmTokens.length > 0) {
+        await sendNotification(
+          user._id,
+          [user.fcmTokens[user.fcmTokens.length - 1]], // latest token
+          `📦 Order Update: ${newStatus}`,
+          `Dear ${user.name}, your order ${order.orderId} status has been updated to "${newStatus}".`
+        );
+      } else {
+        console.log("⚠️ No FCM tokens for user, skipping notification");
+      }
+    } catch (notifyErr) {
+      console.error("⚠️ Failed to send notification:", notifyErr.message);
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Order status updated successfully',
-      currentStatus: order.currentStatus
+      message: "Order status updated successfully",
+      currentStatus: order.currentStatus,
     });
-
   } catch (error) {
-    console.error('Error updating order status:', error);
+    console.error("❌ Error updating order status:", error);
     return res.status(500).json({
       success: false,
-      message: 'Server error while updating order status',
-      error: error.message
+      message: "Server error while updating order status",
+      error: error.message,
     });
   }
 };
