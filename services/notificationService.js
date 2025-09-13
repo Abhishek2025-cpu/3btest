@@ -1,3 +1,6 @@
+const { messaging } = require("../firebase");
+const Notification = require("../models/Notification");
+
 exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
   try {
     // Normalize to array
