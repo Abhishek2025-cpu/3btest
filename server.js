@@ -89,6 +89,10 @@ app.use('/api', pushRoutes);
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.url} - Body:`, req.body);
+  next();
+});
 
 // Start server
 const PORT = process.env.PORT || 8080;
