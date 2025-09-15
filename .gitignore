@@ -3,6 +3,7 @@
 gcs-key.json
 google-credentials.json
 firebase-service-account.json
+servicekey.json
 node_modules/
 
 
