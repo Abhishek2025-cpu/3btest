@@ -2,7 +2,7 @@ const { initializeApp, cert } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 const path = require("path");
 
-const serviceAccount = require(path.join(__dirname, "servicekey.json"));
+const serviceAccount = require(path.join(__dirname, "bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json"));
 
 const app = initializeApp({
   credential: cert(serviceAccount),
