@@ -73,7 +73,7 @@ exports.clearUserNotifications = async (req, res) => {
 };
 
 // POST /notifications/send
-exports.sendPushNotification =  async (req, res) => {
+exports.sendPushNotification = async (req, res) => {
   try {
     const { fcmToken, userId, message } = req.body;
 
@@ -81,51 +81,47 @@ exports.sendPushNotification =  async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields: fcmToken, userId, message.title, or message.body' });
     }
 
-    // Optional: Validate userId exists
+    // Validate userId exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Construct the message object for Firebase Admin SDK's send method
-    // Note: The structure is slightly different for the `send` method
+    // Construct the Firebase message
     const firebaseMessage = {
       notification: {
         title: message.title,
         body: message.body,
       },
-      data: message.data || {}, // Optional data for the client
-      token: fcmToken, // Specify the target token here
+      data: message.data || {},
+      token: fcmToken,
     };
 
-    // Use the `send` method which replaces `sendToDevice`
-    // It returns a promise that resolves with a MessagingDevicesResponse object
-    const response = await admin.messaging().send(firebaseMessage);
+    // Send notification via FCM
+    const messageId = await admin.messaging().send(firebaseMessage);
 
-    // Check the response for success/failure
-    if (response.success) {
-      console.log('Successfully sent message:', response.messageId);
-      // Save notification details to your database
-      const newNotification = new Notification({
-        userId,
-        fcmToken,
-        message: {
-          title: message.title,
-          body: message.body,
-          data: message.data
-        }
-      });
-      await newNotification.save();
-      res.status(200).json({ message: 'Notification sent successfully and saved to DB', messageId: response.messageId });
-    } else {
-      console.error('Error sending message:', response.error);
-      return res.status(500).json({ message: 'Failed to send push notification via FCM', firebaseError: response.error.message });
-    }
+    // Save notification to DB
+    const newNotification = new Notification({
+      userId,
+      fcmToken,
+      message: {
+        title: message.title,
+        body: message.body,
+        data: message.data
+      }
+    });
+    await newNotification.save();
 
+    res.status(200).json({
+      message: '✅ Notification sent successfully and saved to DB',
+      messageId
+    });
   } catch (error) {
     console.error('Error in sendPushNotification:', error);
-    // You might want to distinguish between FCM errors and other errors here
-    res.status(500).json({ message: 'Failed to send push notification', error: error.message });
+    res.status(500).json({
+      message: '❌ Failed to send push notification',
+      error: error.message
+    });
   }
 };
 
