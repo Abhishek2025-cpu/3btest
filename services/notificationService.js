@@ -11,8 +11,8 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       return null;
     }
 
+    // Build the message (no tokens here)
     const message = {
-      tokens: tokenArray,
       notification: { title, body },
       data,
       android: {
@@ -30,17 +30,23 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
       },
     };
 
-    const response = await messaging.sendEachForMulticast(message);
+    // ✅ Correct usage with tokens passed separately
+    const response = await messaging.sendEachForMulticast({
+      tokens: tokenArray,
+      ...message,
+    });
 
+    // Save notification in DB
     await Notification.create({ userId, title, body, data });
 
     console.log(
-      "✅ Notification sent & saved",
+      "✅ Notification sent & saved:",
       response.successCount,
       "success,",
       response.failureCount,
       "failed"
     );
+
     return response;
   } catch (error) {
     console.error("❌ Error sending notification:", error);
