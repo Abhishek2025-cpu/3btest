@@ -11,7 +11,7 @@ const User = require('../models/User');
 // }
 
 
-const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json'); // <-- ADJUST THIS PATH if needed
+const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-d751881313.json'); // <-- ADJUST THIS PATH if needed
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
