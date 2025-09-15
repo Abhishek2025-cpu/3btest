@@ -3,12 +3,25 @@ const admin = require('firebase-admin');
 const User = require('../models/User');
 
 // ✅ Safe Firebase initialization
-const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json');
+// const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json');
+// if (!admin.apps.length) {
+//   admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount)
+//   });
+// }
+
+
+const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json'); // <-- ADJUST THIS PATH if needed
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
 }
+
+// Now, let's inspect admin.messaging()
+const messagingService = admin.messaging();
+console.log('Result of admin.messaging():', messagingService); // Should be an object
+console.log('Does messagingService have sendToDevice method?', typeof messagingService.sendToDevice); // Should be 'function'
 
 // GET /notifications/:userId
 exports.getUserNotifications = async (req, res) => {
@@ -60,7 +73,7 @@ exports.clearUserNotifications = async (req, res) => {
 };
 
 // POST /notifications/send
-exports.sendPushNotification = async (req, res) => {
+exports.sendPushNotification =  async (req, res) => {
   try {
     const { fcmToken, userId, message } = req.body;
 
@@ -68,42 +81,51 @@ exports.sendPushNotification = async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields: fcmToken, userId, message.title, or message.body' });
     }
 
-    // Validate userId exists
+    // Optional: Validate userId exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const payload = {
+    // Construct the message object for Firebase Admin SDK's send method
+    // Note: The structure is slightly different for the `send` method
+    const firebaseMessage = {
       notification: {
         title: message.title,
         body: message.body,
       },
-      data: message.data || {} // Optional additional data (_id, etc.)
+      data: message.data || {}, // Optional data for the client
+      token: fcmToken, // Specify the target token here
     };
 
-    const options = {
-      priority: 'high',
-      timeToLive: 60 * 60 * 24 // 1 day
-    };
+    // Use the `send` method which replaces `sendToDevice`
+    // It returns a promise that resolves with a MessagingDevicesResponse object
+    const response = await admin.messaging().send(firebaseMessage);
 
-    await admin.messaging().sendToDevice(fcmToken, payload, options);
+    // Check the response for success/failure
+    if (response.success) {
+      console.log('Successfully sent message:', response.messageId);
+      // Save notification details to your database
+      const newNotification = new Notification({
+        userId,
+        fcmToken,
+        message: {
+          title: message.title,
+          body: message.body,
+          data: message.data
+        }
+      });
+      await newNotification.save();
+      res.status(200).json({ message: 'Notification sent successfully and saved to DB', messageId: response.messageId });
+    } else {
+      console.error('Error sending message:', response.error);
+      return res.status(500).json({ message: 'Failed to send push notification via FCM', firebaseError: response.error.message });
+    }
 
-    // Save notification to DB
-    const newNotification = new Notification({
-      userId,
-      fcmToken,
-      message: {
-        title: message.title,
-        body: message.body,
-        data: message.data
-      }
-    });
-    await newNotification.save();
-
-    res.status(200).json({ message: 'Notification sent successfully and saved to DB' });
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error('Error in sendPushNotification:', error);
+    // You might want to distinguish between FCM errors and other errors here
     res.status(500).json({ message: 'Failed to send push notification', error: error.message });
   }
 };
+
