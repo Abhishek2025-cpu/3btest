@@ -53,3 +53,4 @@ exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
     throw error;
   }
 };
+
