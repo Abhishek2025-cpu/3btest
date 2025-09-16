@@ -18,13 +18,14 @@ if (!serviceAccountPath) {
   throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT_BOOKS env var");
 }
 
-const serviceAccount = require(path.resolve(serviceAccountPath));
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_BOOKS);
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
   });
 }
+
 
 // Messaging service
 const messagingService = admin.messaging();
