@@ -1,13 +1,36 @@
-const { initializeApp, cert } = require("firebase-admin/app");
+// const { initializeApp, cert } = require("firebase-admin/app");
+// const { getMessaging } = require("firebase-admin/messaging");
+// const path = require("path");
+
+// const serviceAccount = require(path.join(__dirname, "bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json"));
+
+// const app = initializeApp({
+//   credential: cert(serviceAccount),
+// });
+
+// const messaging = getMessaging(app);
+
+// module.exports = { app, messaging };
+
+
+
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
-const path = require("path");
+const serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json");
 
-const serviceAccount = require(path.join(__dirname, "bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json"));
+// ✅ Safe initialization
+let app;
+if (!getApps().length) {
+  app = initializeApp({
+    credential: cert(serviceAccount),
+  });
+} else {
+  app = getApps()[0];
+}
 
-const app = initializeApp({
-  credential: cert(serviceAccount),
-});
-
+// Export initialized messaging service
 const messaging = getMessaging(app);
 
 module.exports = { app, messaging };
+
+
