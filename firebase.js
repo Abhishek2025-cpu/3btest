@@ -16,7 +16,7 @@
 
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
-const serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-035dca421e.json");
+const serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-95fdab3f70.json");
 
 // ✅ Safe initialization
 let app;
