@@ -134,18 +134,23 @@ exports.placeOrder = async (req, res) => {
     await newOrder.save();
 
     // 4. 🔔 Send notification to user
-    if (user.fcmTokens && user.fcmTokens.length > 0) {
-    await sendNotification({
-  userId: user._id,
-  fcmToken: user.fcmTokens[user.fcmTokens.length - 1],
-  message: {
-    title: "🎉 Congratulations!",
-    body: `Dear ${user.name}, your order has been placed successfully.`
-  },
-  data: { orderId: newOrder._id.toString() }
-});
+   // After saving the order
+if (user.fcmTokens && user.fcmTokens.length > 0) {
+  const latestFcmToken = user.fcmTokens[user.fcmTokens.length - 1];
 
+  await sendPushNotification({
+    body: {
+      fcmToken: latestFcmToken,
+      userId: user._id,
+      message: {
+        title: "🎉 Congratulations!",
+        body: `Dear ${user.name}, your order has been placed successfully.`,
+        data: { orderId: newOrder._id.toString() }
+      }
     }
+  });
+}
+
 
     // 5. Success response
     res.status(201).json({
