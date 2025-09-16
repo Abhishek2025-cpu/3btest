@@ -10,18 +10,27 @@ const User = require('../models/User');
 //   });
 // }
 
+const path = require('path');
 
-const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-d751881313.json'); // <-- ADJUST THIS PATH if needed
+
+const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_BOOKS;
+if (!serviceAccountPath) {
+  throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT_BOOKS env var");
+}
+
+const serviceAccount = require(path.resolve(serviceAccountPath));
+
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
 }
 
-// Now, let's inspect admin.messaging()
+// Messaging service
 const messagingService = admin.messaging();
-console.log('Result of admin.messaging():', messagingService); // Should be an object
-console.log('Does messagingService have sendToDevice method?', typeof messagingService.sendToDevice); // Should be 'function'
+console.log('Result of admin.messaging():', messagingService);
+console.log('Does messagingService have sendToDevice method?', typeof messagingService.sendToDevice);
+// Should be 'function'
 
 // GET /notifications/:userId
 exports.getUserNotifications = async (req, res) => {
