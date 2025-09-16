@@ -100,15 +100,13 @@ exports.sendPushNotification = async (req, res) => {
     // Send notification via FCM
     const messageId = await admin.messaging().send(firebaseMessage);
 
-    // Save notification to DB
+    // Save notification to DB (fixed for schema)
     const newNotification = new Notification({
       userId,
-      fcmToken,
-      message: {
-        title: message.title,
-        body: message.body,
-        data: message.data
-      }
+      fcmTokens: [fcmToken],
+      title: message.title,
+      body: message.body,
+      data: message.data || {}
     });
     await newNotification.save();
 
@@ -124,4 +122,5 @@ exports.sendPushNotification = async (req, res) => {
     });
   }
 };
+
 
