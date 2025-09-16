@@ -16,7 +16,15 @@
 
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
-const serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-95fdab3f70.json");
+
+let serviceAccount;
+
+// ✅ Use env var on Render, fallback to JSON locally
+if (process.env.FIREBASE_CONFIG) {
+  serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+} else {
+  serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-95fdab3f70.json");
+}
 
 // ✅ Safe initialization
 let app;
@@ -28,7 +36,7 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 
-// Export initialized messaging service
+// ✅ Export initialized messaging service
 const messaging = getMessaging(app);
 
 module.exports = { app, messaging };
