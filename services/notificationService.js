@@ -74,24 +74,23 @@ const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
     const message = {
       notification: { title, body },
       data,
-      tokens: fcmTokens, // multicast
     };
 
-    // ✅ Works in v11+
-    const response = await messaging.sendEachForMulticast(message);
+    // ✅ sendEachForMulticast requires { tokens, ...message }
+    const response = await messaging.sendEachForMulticast({
+      tokens: fcmTokens,
+      ...message,
+    });
     console.log("✅ Notification sent:", response);
 
     // Save to DB
- // Save notification to DB
-const newNotification = new Notification({
-  userId,
-  fcmTokens, // ✅ now stores array
-  title,
-  body,
-  data,
-});
-await newNotification.save();
-
+    const newNotification = new Notification({
+      userId,
+      fcmTokens, // stores array
+      title,
+      body,
+      data,
+    });
     await newNotification.save();
 
     return response;

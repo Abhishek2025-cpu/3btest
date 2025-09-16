@@ -13,7 +13,6 @@
 // module.exports = { app, messaging };
 
 
-
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 
@@ -36,9 +35,10 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 
-// ✅ Export initialized messaging service
+// ✅ Export Firebase services you need
 const messaging = getMessaging(app);
 
 module.exports = { app, messaging };
+
 
 
