@@ -61,7 +61,7 @@
 
 
 // services/notificationService.js
-const { messaging } = require("../firebase");
+const { messaging } = require("../firebase");  // ✅ use shared firebase.js
 const Notification = require("../models/Notification");
 
 const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
@@ -76,17 +76,15 @@ const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
       data,
     };
 
-    // ✅ sendEachForMulticast requires { tokens, ...message }
     const response = await messaging.sendEachForMulticast({
       tokens: fcmTokens,
       ...message,
     });
     console.log("✅ Notification sent:", response);
 
-    // Save to DB
     const newNotification = new Notification({
       userId,
-      fcmTokens, // stores array
+      fcmTokens,
       title,
       body,
       data,
