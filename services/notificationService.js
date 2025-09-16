@@ -61,7 +61,7 @@
 
 
 // services/notificationService.js
-const { messaging } = require("../firebase");  // ✅ use shared firebase.js
+const { messaging } = require("../firebase");   // ✅ use the shared firebase.js
 const Notification = require("../models/Notification");
 
 const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
@@ -80,6 +80,7 @@ const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
       tokens: fcmTokens,
       ...message,
     });
+
     console.log("✅ Notification sent:", response);
 
     const newNotification = new Notification({
@@ -99,6 +100,7 @@ const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
 };
 
 module.exports = { sendNotification };
+
 
 
 
