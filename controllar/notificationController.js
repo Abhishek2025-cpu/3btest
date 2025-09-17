@@ -1,15 +1,16 @@
 const Notification = require("../models/Notification");
 const admin = require('firebase-admin');
 const User = require('../models/User');
+const path = require("path");
 
 // ✅ Safe Firebase initialization
 
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_BOOKS);
+const serviceAccountPath = path.join(__dirname, "../bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json");
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert(require(serviceAccountPath)),
   });
 }
 

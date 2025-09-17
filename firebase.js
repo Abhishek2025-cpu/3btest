@@ -22,7 +22,7 @@ let serviceAccount;
 if (process.env.FIREBASE_CONFIG) {
   serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 } else {
-  serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-aa08d32b5b.json");
+  serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json");
 }
 
 // ✅ Safe initialization
