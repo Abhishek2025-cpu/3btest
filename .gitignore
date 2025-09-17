@@ -7,8 +7,6 @@ firebase-service-account.json
 servicekey.json
 node_modules/
 env
-/env
-.env
 
 
 bprofiles-54714-firebase-adminsdk-fbsvc-d751881313.json

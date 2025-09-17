@@ -3,10 +3,13 @@ const admin = require('firebase-admin');
 const User = require('../models/User');
 
 // ✅ Safe Firebase initialization
-const serviceAccount = require('../bprofiles-54714-firebase-adminsdk-fbsvc-6101e1870e.json');
+
+
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_BOOKS);
+
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
   });
 }
 
