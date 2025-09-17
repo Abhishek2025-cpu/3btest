@@ -77,13 +77,16 @@ exports.sendPushNotification = async (req, res) => {
     const { fcmToken, userId, message } = req.body;
 
     if (!fcmToken || !userId || !message || !message.title || !message.body) {
-      return res.status(400).json({ message: 'Missing required fields: fcmToken, userId, message.title, or message.body' });
+      return res.status(400).json({
+        message:
+          "Missing required fields: fcmToken, userId, message.title, or message.body",
+      });
     }
 
     // Validate userId exists
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Construct the Firebase message
@@ -96,30 +99,42 @@ exports.sendPushNotification = async (req, res) => {
       token: fcmToken,
     };
 
-    // Send notification via FCM
-    const messageId = await admin.messaging().send(firebaseMessage);
+    let messageId;
 
-    // Save notification to DB (fixed for schema)
+    try {
+      // Send notification via FCM
+      messageId = await admin.messaging().send(firebaseMessage);
+      console.log("✅ Notification sent:", messageId);
+    } catch (err) {
+      console.error("❌ FCM send error:", JSON.stringify(err, null, 2));
+      return res.status(500).json({
+        message: "❌ Failed to send push notification",
+        error: err.message,
+      });
+    }
+
+    // Save notification to DB only if successfully sent
     const newNotification = new Notification({
       userId,
       fcmTokens: [fcmToken],
       title: message.title,
       body: message.body,
-      data: message.data || {}
+      data: message.data || {},
     });
     await newNotification.save();
 
     res.status(200).json({
-      message: '✅ Notification sent successfully and saved to DB',
-      messageId
+      message: "✅ Notification sent successfully and saved to DB",
+      messageId,
     });
   } catch (error) {
-    console.error('Error in sendPushNotification:', error);
+    console.error("Error in sendPushNotification:", error);
     res.status(500).json({
-      message: '❌ Failed to send push notification',
-      error: error.message
+      message: "❌ Failed to send push notification",
+      error: error.message,
     });
   }
 };
+
 
 
