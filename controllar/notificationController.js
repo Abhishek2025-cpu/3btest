@@ -1,4 +1,5 @@
 const Notification = require("../models/Notification");
+const admin = require('firebase-admin');
 const User = require('../models/User');
 const cloudinary = require("../utils/cloudinary");
 const { initFirebase } = require("../firebase");
@@ -107,20 +108,73 @@ exports.sendAdminPushNotification = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields: title or body" });
     }
 
-    // ✅ If an image is uploaded, push it to Cloudinary
+    // Upload image to Cloudinary if provided
     if (req.file) {
-      const uploaded = await cloudinary.uploader.upload_stream(
-        { folder: 'admin-notifications' },
-        (error, result) => {
-          if (error) throw error;
-          return result;
-        }
-      ).end(req.file.buffer);
-
+      const uploaded = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'admin-notifications' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
       imageUrl = uploaded.secure_url;
     }
 
-    // ...rest of your code to send FCM notifications
+    // Collect all FCM tokens from users
+    const users = await User.find({ fcmTokens: { $exists: true, $ne: [] } });
+    const tokens = users
+      .map(u => u.fcmTokens)
+      .flat()
+      .filter(Boolean);
+
+    if (!tokens.length) {
+      return res.status(404).json({ message: "No FCM tokens found" });
+    }
+
+    // Build Firebase multicast message
+    const firebaseMessage = {
+      notification: {
+        title,
+        body,
+        image: imageUrl || undefined,
+      },
+      data: {
+        type: "admin_broadcast",
+        campaign: "latestDeals",
+      },
+      tokens,
+    };
+
+    // Send notifications
+    const response = await admin.messaging().sendEachForMulticast(firebaseMessage);
+
+    // Log failed tokens
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        console.error(`❌ Failed for token[${idx}]: ${tokens[idx]}`, resp.error);
+      }
+    });
+
+    // Save broadcast record in DB
+    const newNotification = new Notification({
+      userId: null,
+      fcmTokens: tokens,
+      title,
+      body,
+      image: imageUrl || null,
+      data: { type: "admin_broadcast", campaign: "latestDeals" },
+    });
+    await newNotification.save();
+
+    res.status(200).json({
+      message: "📢 Admin push notification sent successfully",
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      imageUrl,
+    });
   } catch (error) {
     console.error("❌ Error in sendAdminPushNotification:", error);
     res.status(500).json({
