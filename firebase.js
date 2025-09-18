@@ -12,33 +12,37 @@
 
 // module.exports = { app, messaging };
 
-
+// firebase.js
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 
-let serviceAccount;
+let app, messaging;
 
-// ✅ Use env var on Render, fallback to JSON locally
-if (process.env.FIREBASE_CONFIG) {
-  serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
-} else {
-  serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json");
+function initFirebase() {
+  if (messaging) return { app, messaging };
+
+  let serviceAccount;
+
+  if (process.env.FIREBASE_CONFIG) {
+    // On Render → set FIREBASE_CONFIG env var to full JSON string
+    serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+  } else {
+    // Local fallback → use JSON file
+    serviceAccount = require("./bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json");
+  }
+
+  if (!getApps().length) {
+    app = initializeApp({
+      credential: cert(serviceAccount),
+    });
+  }
+
+  messaging = getMessaging();
+  return { app, messaging };
 }
 
-// ✅ Safe initialization
-let app;
-if (!getApps().length) {
-  app = initializeApp({
-    credential: cert(serviceAccount),
-  });
-} else {
-  app = getApps()[0];
-}
+module.exports = { initFirebase };
 
-// ✅ Export Firebase services you need
-const messaging = getMessaging(app);
-
-module.exports = { app, messaging };
 
 
 
