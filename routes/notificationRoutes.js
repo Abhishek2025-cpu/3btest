@@ -9,7 +9,7 @@ router.get("/notifications/:userId", getUserNotifications);
 router.delete("/notifications/clear/:userId", clearUserNotifications);
 // router.post('/send-push', sendPushNotification);
 router.post('/notifications/send', sendPushNotification);
-router.post("/admin/send", upload.single("image"), sendAdminPushNotification);
+router.post("/notifications/admin/send", upload.single("image"), sendAdminPushNotification);
 
 
 module.exports = router;
