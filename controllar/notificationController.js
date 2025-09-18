@@ -2,6 +2,7 @@ const Notification = require("../models/Notification");
 const admin = require('firebase-admin');
 const User = require('../models/User');
 const path = require("path");
+const { uploadBufferToGCS } = require("../utils/gcloud");
 
 // ✅ Safe Firebase initialization
 
@@ -147,3 +148,85 @@ exports.sendPushNotification = async (req, res) => {
 
 
 
+exports.sendAdminPushNotification = async (req, res) => {
+  try {
+    const { title, body } = req.body;
+    let imageUrl = null;
+
+    if (!title || !body) {
+      return res.status(400).json({
+        message: "Missing required fields: title or body",
+      });
+    }
+
+    // ✅ If image uploaded, push to GCS
+    if (req.file) {
+      const uploaded = await uploadBufferToGCS(
+        req.file.buffer,
+        req.file.originalname,
+        "admin-notifications", // folder in GCS
+        req.file.mimetype
+      );
+      imageUrl = uploaded.url;
+    }
+
+    // 1️⃣ Collect all user tokens
+    const users = await User.find({ fcmToken: { $exists: true, $ne: null } });
+    const tokens = users
+      .map((u) => (Array.isArray(u.fcmToken) ? u.fcmToken : [u.fcmToken]))
+      .flat()
+      .filter(Boolean);
+
+    if (!tokens.length) {
+      return res.status(404).json({ message: "No FCM tokens found" });
+    }
+
+    // 2️⃣ Build Firebase message
+    const firebaseMessage = {
+      notification: {
+        title,
+        body,
+        image: imageUrl || undefined, // attach uploaded image
+      },
+      data: {
+        type: "admin_broadcast",
+        campaign: "latestDeals",
+      },
+      tokens,
+    };
+
+    // 3️⃣ Send notifications
+    const response = await admin.messaging().sendEachForMulticast(firebaseMessage);
+
+    // 4️⃣ Log failures for debugging
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        console.error(`❌ Failed for token[${idx}]: ${tokens[idx]}`, resp.error);
+      }
+    });
+
+    // 5️⃣ Save broadcast record in DB
+    const newNotification = new Notification({
+      userId: null,
+      fcmTokens: tokens,
+      title,
+      body,
+      image: imageUrl || null,
+      data: { type: "admin_broadcast", campaign: "latestDeals" },
+    });
+    await newNotification.save();
+
+    res.status(200).json({
+      message: "📢 Admin push notification attempt finished",
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      imageUrl,
+    });
+  } catch (error) {
+    console.error("❌ Error in sendAdminPushNotification:", error);
+    res.status(500).json({
+      message: "❌ Failed to send admin push notification",
+      error: error.message,
+    });
+  }
+};
