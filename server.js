@@ -69,7 +69,7 @@ app.use('/api/admin',adminRoutes);
 app.use('/api/other-categories', otherCategoryRoutes);
 app.use('/api/other-products', otherProductRoutes);
 app.use('/api/company', companyRoutes);
-app.use('/api/gst', gstRoutes);    
+app.use('/api', gstRoutes);    
 app.use('/api/language', translationRoutes);
 app.use('/api/sub-admin', subAdminRoutes);
 app.use('/api/transfers', stockTransferRoutes);
