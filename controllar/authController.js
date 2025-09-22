@@ -8,6 +8,102 @@ const userProfileFieldsToTranslate = [
 // POST /signup
 // controllers/userController.js
 
+
+const axios = require('axios');
+
+
+const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
+
+// STEP 1: Send OTP at login
+exports.loginSendOtp = async (req, res) => {
+  const { email, number } = req.body;
+
+  if (!email && !number) {
+    return res.status(400).json({ status: false, message: 'Please provide email or number' });
+  }
+
+  try {
+    const user = await User.findOne(email ? { email } : { number });
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'User not found with provided email/number' });
+    }
+
+    if (!user.number) {
+      return res.status(400).json({ status: false, message: 'User does not have a phone number registered' });
+    }
+
+    const otpRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${user.number}/AUTOGEN`
+    );
+
+    if (otpRes.data.Status === 'Success') {
+      return res.status(200).json({
+        status: true,
+        message: 'OTP sent via SMS for login',
+        sessionId: otpRes.data.Details,
+        userId: user._id
+      });
+    } else {
+      return res.status(400).json({ status: false, message: 'Failed to send OTP', details: otpRes.data });
+    }
+  } catch (error) {
+    console.error('Login OTP Error:', error.response?.data || error.message);
+    return res.status(500).json({
+      status: false,
+      message: 'Error sending login OTP',
+      error: error.response?.data || error.message
+    });
+  }
+};
+
+
+// STEP 2: Verify OTP at login
+exports.loginVerifyOtp = async (req, res) => {
+  const { sessionId, otp, userId } = req.body;
+
+  if (!sessionId || !otp || !userId) {
+    return res.status(400).json({
+      status: false,
+      message: 'sessionId, otp, and userId are required'
+    });
+  }
+
+  try {
+    const verifyRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
+    );
+
+    if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid OTP',
+        details: verifyRes.data
+      });
+    }
+
+    // OTP matched → login success
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: 'Login successful',
+      user
+    });
+
+  } catch (error) {
+    console.error('Login OTP VERIFY ERROR:', error.message);
+    return res.status(500).json({
+      status: false,
+      message: 'Error during login OTP verification',
+      error: error.response?.data || error.message
+    });
+  }
+};
+
+
 exports.signup = async (req, res) => {
   const { name, number, email, fcmToken } = req.body;
 
