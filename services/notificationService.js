@@ -61,9 +61,9 @@
 
 
 // services/notificationService.js
-const { messaging } = require("../firebase");   // ✅ use the shared firebase.js
+const { initFirebase } = require("../firebase");
+const { messaging } = initFirebase();
 const Notification = require("../models/Notification");
-
 const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
   try {
     if (!fcmTokens || fcmTokens.length === 0) {

@@ -6,7 +6,17 @@ const OtherProduct = require('../models/otherProduct');
 const GstDetails = require('../models/GstDetails'); 
 const Company = require('../models/company'); 
 const ReturnRequest  = require('../models/ReturnRequest');
-const { sendNotification } = require('../services/notificationService');
+
+
+const { initFirebase } = require("../firebase");
+
+
+
+
+const { sendNotification } = require("../services/notificationService");
+
+
+const { messaging } = initFirebase(); // initialize Firebase safely
 
 
 const generateOrderId = () => {
@@ -22,29 +32,18 @@ exports.placeOrder = async (req, res) => {
   try {
     const { userId, shippingAddressId, items } = req.body;
 
-    // 1. Get User and selected shipping address
+    // 1️⃣ Get user and shipping address
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // const gst = await GstDetails.findOne({ userId });
-    // if (!gst || !gst.gstin) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'GSTIN not found. Please complete GST verification before placing an order.'
-    //   });
-    // }
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
-    if (!shippingAddress) {
-      return res.status(404).json({ success: false, message: 'Shipping address not found' });
-    }
+    if (!shippingAddress)
+      return res.status(404).json({ success: false, message: "Shipping address not found" });
 
-    // 2. Process items, calculate total
+    // 2️⃣ Process items and calculate total
     let totalPrice = 0;
     const products = await Promise.all(
-      items.map(async item => {
+      items.map(async (item) => {
         let product = await Product.findById(item.productId);
         let isOtherProduct = false;
         if (!product) {
@@ -54,9 +53,9 @@ exports.placeOrder = async (req, res) => {
         if (!product) throw new Error(`Product not found with ID: ${item.productId}`);
 
         // Deduct stock
-        if (typeof product.quantity === 'number') {
+        if (typeof product.quantity === "number") {
           if (product.quantity < item.quantity) {
-            throw new Error(`Insufficient stock for product: ${product.name || product.productname}`);
+            throw new Error(`Insufficient stock for product: ${product.name || product.productName}`);
           }
           product.quantity -= item.quantity;
           if (product.quantity <= 0) {
@@ -66,37 +65,31 @@ exports.placeOrder = async (req, res) => {
           await product.save();
         }
 
+        // Determine image
         let image = null;
         if (!isOtherProduct) {
           const colorKey = item.color?.trim();
-          if (colorKey && product.colorImageMap?.[colorKey]) {
-            image = product.colorImageMap[colorKey];
-          } else if (product.images?.length) {
-            image = product.images[0];
-          }
+          if (colorKey && product.colorImageMap?.[colorKey]) image = product.colorImageMap[colorKey];
+          else if (product.images?.length) image = product.images[0];
         } else {
-          if (product.images?.length) {
-            image = product.images[0];
-          } else if (product.image) {
-            image = product.image;
-          }
+          image = product.images?.[0] || product.image || null;
         }
 
         const priceForCalculation = item.price || item.priceAtPurchase;
-        if (typeof priceForCalculation !== 'number') {
-          throw new Error(`Price is missing or invalid for product: ${item.productName || item.productId}`);
+        if (typeof priceForCalculation !== "number") {
+          throw new Error(`Price missing for product: ${item.productName || item.productId}`);
         }
 
-        const productSubtotal = priceForCalculation * item.quantity;
-        totalPrice += productSubtotal;
+        const subtotal = priceForCalculation * item.quantity;
+        totalPrice += subtotal;
 
         return {
           productId: product._id,
-          productName: product.productName || product.name || 'Unknown Product',
+          productName: product.productName || product.name || "Unknown Product",
           quantity: item.quantity,
-          color: item.color || 'Not specified',
+          color: item.color || "Not specified",
           priceAtPurchase: priceForCalculation,
-          subtotal: productSubtotal,
+          subtotal,
           image,
           orderId: generateOrderId(),
           company: item.company || null,
@@ -104,75 +97,70 @@ exports.placeOrder = async (req, res) => {
           modelNo: item.modelNo || null,
           selectedSize: item.selectedSize || null,
           discount: item.discount || 0,
-          totalPrice: item.totalPrice || productSubtotal
+          totalPrice: item.totalPrice || subtotal,
         };
       })
     );
 
     const roundedTotalPrice = Math.round(totalPrice);
 
-    // 3. Save order
-  const newOrder = new Order({
-  userId,
-  products,
-  totalPrice: roundedTotalPrice,
-  shippingDetails: {
-    name: shippingAddress.name,
-    phone: shippingAddress.phone,
-    addressType: shippingAddress.addressType,
-    detailedAddress: shippingAddress.detailedAddress
-  },
-  orderId: generateOrderId(),
-  currentStatus: "Pending",
-  tracking: [{
-    status: "Pending",
-    updatedAt: new Date()
-  }]
-});
-
-
+    // 3️⃣ Save order
+    const newOrder = new Order({
+      userId,
+      products,
+      totalPrice: roundedTotalPrice,
+      shippingDetails: {
+        name: shippingAddress.name,
+        phone: shippingAddress.phone,
+        addressType: shippingAddress.addressType,
+        detailedAddress: shippingAddress.detailedAddress,
+      },
+      orderId: generateOrderId(),
+      currentStatus: "Pending",
+      tracking: [{ status: "Pending", updatedAt: new Date() }],
+    });
     await newOrder.save();
 
-    // 4. 🔔 Send notification to user
-   // After saving the order
-if (user.fcmTokens && user.fcmTokens.length > 0) {
-  const latestFcmToken = user.fcmTokens[user.fcmTokens.length - 1];
+    // 4️⃣ Send notification safely
+    try {
+      const validTokens = user.fcmTokens?.filter((t) => !!t);
+      if (validTokens?.length > 0) {
+      await sendNotification(
+  user._id,
+  validTokens,
+  "🎉 Order Placed!",
+  `Dear ${user.name}, your order has been placed successfully.`,
+  { orderId: newOrder._id.toString() }
+);
+        console.log("✅ Order placement notification sent");
+      } else {
+        console.log("⚠️ User has no valid FCM tokens:", user._id);
+      }
+    } catch (notifError) {
+      console.error("❌ Error sending notification (ignored):", notifError.message);
+    }
 
-  await sendNotification(
-    user._id,
-    [latestFcmToken],
-    "🎉 Congratulations!",
-    `Dear ${user.name}, your order has been placed successfully.`,
-    { orderId: newOrder._id.toString() }
-  );
-}
-
-
-
-
-    // 5. Success response
+    // 5️⃣ Return success
     res.status(201).json({
       success: true,
       message: "Order placed successfully",
       order: newOrder,
       totalPrice: roundedTotalPrice,
-     productBreakdown: products.map(p => ({
-  productId: p.productId,
-  name: p.productName,
-  quantity: p.quantity,
-  color: p.color,
-  priceAtPurchase: p.priceAtPurchase,
-  subtotal: p.subtotal
-}))
-
+      productBreakdown: products.map((p) => ({
+        productId: p.productId,
+        name: p.productName,
+        quantity: p.quantity,
+        color: p.color,
+        priceAtPurchase: p.priceAtPurchase,
+        subtotal: p.subtotal,
+      })),
     });
-
   } catch (error) {
-    console.error('Error placing order:', error);
+    console.error("❌ Error placing order:", error);
     res.status(500).json({
       success: false,
       message: error.message,
-      error: 'Server error placing order.'
+      error: "Server error placing order.",
     });
   }
 };
