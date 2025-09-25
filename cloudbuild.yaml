@@ -1,7 +1,7 @@
 steps:
   # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/3bprofiles', '.']
+    args: ['build', '-t', 'gcr.io/b-profiles-461910/3bprofiles', '.']
 
   # Step 2: Push image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
@@ -17,7 +17,9 @@ steps:
         '--region', 'asia-south1',
         '--platform', 'managed',
         '--allow-unauthenticated',
-        '--port', '8080'
+        '--port', '8080',
+        '--clear-command',    # ensure Dockerfile CMD is used
+        '--clear-args'        # remove any old overrides
       ]
 
 options:
