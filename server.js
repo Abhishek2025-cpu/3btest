@@ -88,7 +88,6 @@ app.use('/api/billings', BillingRoutes);
 
 
 
-
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
 app.use((req, res, next) => {
@@ -96,7 +95,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Start server
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    console.log("✅ Database connected");
+  } catch (err) {
+    console.error("❌ DB connection failed:", err.message);
+    // Don’t exit — still start server so Cloud Run can bind
+  }
+
+  const PORT = process.env.PORT || 8080;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+startServer();
 
