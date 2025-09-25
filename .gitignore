@@ -8,5 +8,6 @@ servicekey.json
 node_modules/
 env
 bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json
+firebase-messaging-sw.js
 
 
