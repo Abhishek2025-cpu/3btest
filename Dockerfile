@@ -9,7 +9,8 @@ COPY package*.json ./
 RUN npm install
 
 # Copy Firebase service account
-COPY bprofiles-54714-bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
+COPY COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
+
 
 
 # Copy the app source
