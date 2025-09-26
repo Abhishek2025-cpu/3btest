@@ -167,14 +167,20 @@ exports.updateCategory = async (req, res) => {
           .jpeg({ quality: 70 })
           .toBuffer();
 
-        return await uploadBufferToGCS(compressedBuffer, file.originalname, 'categories', 'image/jpeg');
+        const uploaded = await uploadBufferToGCS(compressedBuffer, file.originalname, 'categories', 'image/jpeg');
+
+        // Normalize immediately
+        return {
+          id: uploaded.id,
+          url: uploaded.url
+        };
       });
 
       const newImages = await Promise.all(uploadPromises);
       existingCategory.images.push(...newImages);
     }
 
-    // 3. Normalize existing images (fix old malformed data)
+    // 3. Normalize old malformed images (optional, just in case)
     existingCategory.images = existingCategory.images.map(img => {
       if (typeof img.url === "object" && img.url.url) {
         return { id: img.url.id, url: img.url.url };
@@ -198,6 +204,7 @@ exports.updateCategory = async (req, res) => {
     res.status(500).json({ message: '❌ Category update failed', error: error.message });
   }
 };
+
 
 
 
