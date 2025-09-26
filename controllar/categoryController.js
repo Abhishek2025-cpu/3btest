@@ -141,28 +141,25 @@ exports.getCategories = async (req, res) => {
 exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, position, removeIds } = req.body; // <-- removeIds will come as JSON string
+    const { name, position, removeIds } = req.body;
 
     const existingCategory = await Category.findById(id);
     if (!existingCategory) {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // 1. Handle image removals (by IDs, not by uploading again)
+    // 1. Remove images by ID
     if (removeIds) {
       const removeIdsArr = JSON.parse(removeIds);
-
-      // Delete from GCS
       const deletionPromises = removeIdsArr.map(imageId => deleteFileFromGCS(imageId));
       await Promise.all(deletionPromises);
 
-      // Remove from DB
       existingCategory.images = existingCategory.images.filter(
         img => !removeIdsArr.includes(img.id)
       );
     }
 
-    // 2. Handle new image uploads (from `images`)
+    // 2. Upload new images
     if (req.files && req.files.length > 0) {
       const uploadPromises = req.files.map(async (file) => {
         const compressedBuffer = await sharp(file.buffer)
@@ -170,20 +167,26 @@ exports.updateCategory = async (req, res) => {
           .jpeg({ quality: 70 })
           .toBuffer();
 
-        const fileName = `compressed-${Date.now()}-${file.originalname}`;
-        const url = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
-        return { url, id: `categories/${fileName}` };
+        return await uploadBufferToGCS(compressedBuffer, file.originalname, 'categories', 'image/jpeg');
       });
 
       const newImages = await Promise.all(uploadPromises);
       existingCategory.images.push(...newImages);
     }
 
-    // 3. Update other fields
+    // 3. Normalize existing images (fix old malformed data)
+    existingCategory.images = existingCategory.images.map(img => {
+      if (typeof img.url === "object" && img.url.url) {
+        return { id: img.url.id, url: img.url.url };
+      }
+      return img;
+    });
+
+    // 4. Update other fields
     if (name) existingCategory.name = name;
     if (position !== undefined) existingCategory.position = Number(position);
 
-    // 4. Save
+    // 5. Save
     const updatedCategory = await existingCategory.save();
 
     res.status(200).json({
@@ -195,6 +198,8 @@ exports.updateCategory = async (req, res) => {
     res.status(500).json({ message: '❌ Category update failed', error: error.message });
   }
 };
+
+
 
 
 

@@ -9,7 +9,7 @@ COPY package*.json ./
 RUN npm install
 
 
-COPY  bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
+bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
 
 
 

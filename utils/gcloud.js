@@ -163,6 +163,45 @@
 
 
 // utils/gcloud.js
+// const { Storage } = require("@google-cloud/storage");
+
+// let storage;
+
+// if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+//   const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+//   storage = new Storage({ credentials });
+// } else {
+//   // fallback for local dev
+//   storage = new Storage({
+//     keyFilename: require("path").join(__dirname, "../bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json"),
+//   });
+// }
+
+// const bucket = storage.bucket("3bprofiles-products");
+
+// async function uploadBufferToGCS(buffer, filename, folder, mimetype) {
+//   return new Promise((resolve, reject) => {
+//     const file = bucket.file(`${folder}/${Date.now()}-${filename}`);
+//     const stream = file.createWriteStream({
+//       resumable: false,
+//       contentType: mimetype,
+//     });
+
+//     stream.on("error", reject);
+//     stream.on("finish", async () => {
+//       await file.makePublic();
+//       resolve({
+//         url: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
+//       });
+//     });
+
+//     stream.end(buffer);
+//   });
+// }
+
+// module.exports = { uploadBufferToGCS };
+
+
 const { Storage } = require("@google-cloud/storage");
 
 let storage;
@@ -171,7 +210,6 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
   const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
   storage = new Storage({ credentials });
 } else {
-  // fallback for local dev
   storage = new Storage({
     keyFilename: require("path").join(__dirname, "../bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json"),
   });
@@ -179,7 +217,7 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
 
 const bucket = storage.bucket("3bprofiles-products");
 
-async function uploadBufferToGCS(buffer, filename, folder, mimetype) {
+async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   return new Promise((resolve, reject) => {
     const file = bucket.file(`${folder}/${Date.now()}-${filename}`);
     const stream = file.createWriteStream({
@@ -188,10 +226,11 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype) {
     });
 
     stream.on("error", reject);
-    stream.on("finish", async () => {
-      await file.makePublic();
+    stream.on("finish", () => {
+      // No makePublic() because UBLA is enabled
       resolve({
         url: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
+        id: `${folder}/${Date.now()}-${filename}`,
       });
     });
 
@@ -200,3 +239,4 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype) {
 }
 
 module.exports = { uploadBufferToGCS };
+
