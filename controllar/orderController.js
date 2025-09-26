@@ -430,7 +430,7 @@ exports.updateOrderStatusById = async (req, res) => {
           user._id,
           [user.fcmTokens[user.fcmTokens.length - 1]], // latest token
           `📦 Order Update: ${newStatus}`,
-          `Dear ${user.name}, your order ${order.orderId} status has been updated to "${newStatus}".`
+          `Dear ${user.name}, your order ${order.orderId} is "${newStatus}".`
         );
       } else {
         console.log("⚠️ No FCM tokens for user, skipping notification");
