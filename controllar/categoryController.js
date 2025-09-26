@@ -148,7 +148,7 @@ exports.updateCategory = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // 1. Remove images by ID
+    // 1️⃣ Remove images by ID
     if (removeIds) {
       const removeIdsArr = JSON.parse(removeIds);
       const deletionPromises = removeIdsArr.map(imageId => deleteFileFromGCS(imageId));
@@ -159,40 +159,42 @@ exports.updateCategory = async (req, res) => {
       );
     }
 
-    // 2. Upload new images
+    // 2️⃣ Normalize old malformed images before adding new ones
+    existingCategory.images = existingCategory.images.map(img => {
+      if (typeof img.url === 'object' && img.url.url) {
+        return { id: img.url.id, url: img.url.url };
+      }
+      return img;
+    });
+
+    // 3️⃣ Upload new images
     if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map(async (file) => {
+      const uploadPromises = req.files.map(async file => {
         const compressedBuffer = await sharp(file.buffer)
           .resize({ width: 1000 })
           .jpeg({ quality: 70 })
           .toBuffer();
 
-        const uploaded = await uploadBufferToGCS(compressedBuffer, file.originalname, 'categories', 'image/jpeg');
+        const uploaded = await uploadBufferToGCS(
+          compressedBuffer,
+          file.originalname,
+          'categories',
+          'image/jpeg'
+        );
 
-        // Normalize immediately
-        return {
-          id: uploaded.id,
-          url: uploaded.url
-        };
+        // Return object in correct format
+        return { id: uploaded.id, url: uploaded.url };
       });
 
       const newImages = await Promise.all(uploadPromises);
       existingCategory.images.push(...newImages);
     }
 
-    // 3. Normalize old malformed images (optional, just in case)
-    existingCategory.images = existingCategory.images.map(img => {
-      if (typeof img.url === "object" && img.url.url) {
-        return { id: img.url.id, url: img.url.url };
-      }
-      return img;
-    });
-
-    // 4. Update other fields
+    // 4️⃣ Update other fields
     if (name) existingCategory.name = name;
     if (position !== undefined) existingCategory.position = Number(position);
 
-    // 5. Save
+    // 5️⃣ Save category
     const updatedCategory = await existingCategory.save();
 
     res.status(200).json({
@@ -201,7 +203,10 @@ exports.updateCategory = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: '❌ Category update failed', error: error.message });
+    res.status(500).json({
+      message: '❌ Category update failed',
+      error: error.message
+    });
   }
 };
 
