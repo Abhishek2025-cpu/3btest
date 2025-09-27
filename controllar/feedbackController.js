@@ -52,18 +52,17 @@ exports.createFeedback = async (req, res) => {
 
 exports.getPublicFeedbacks = async (req, res) => {
   try {
+    // Fetch only public and enabled feedbacks
     const feedbacksFromDB = await Feedback.find({
       isPrivate: false,
-      $or: [
-        { isEnabled: true },
-        { isEnabled: { $exists: false } }
-      ]
+      isEnabled: true // ✅ only include enabled feedbacks
     })
       .populate('user', 'name profileImage')
       .sort({ createdAt: -1 })
-      .select('message rating isPrivate isEnabled createdAt updatedAt user') // 👈 include isEnabled
+      .select('message rating isPrivate isEnabled createdAt updatedAt user') // include isEnabled
       .lean();
 
+    // Translate fields if needed
     const translatedFeedbacks = await translateResponse(req, feedbacksFromDB, feedbackFieldsToTranslate);
 
     res.status(200).json({
@@ -81,6 +80,7 @@ exports.getPublicFeedbacks = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getAllFeedbacksForAdmin = async (req, res) => {
@@ -104,68 +104,48 @@ exports.getAllFeedbacksForAdmin = async (req, res) => {
 exports.updateFeedbackStatus = async (req, res) => {
   try {
     const { feedbackId } = req.params;
-    const { isEnabled } = req.body;
+    let { isEnabled } = req.body;
 
-    // Validate input: isEnabled must be a boolean
-    if (typeof isEnabled !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'Invalid input: isEnabled must be true or false.' });
+    // Convert string "true"/"false" to boolean
+    if (typeof isEnabled === 'string') {
+      if (isEnabled.toLowerCase() === 'true') isEnabled = true;
+      else if (isEnabled.toLowerCase() === 'false') isEnabled = false;
     }
 
-    const feedback = await Feedback.findById(feedbackId);
+    // Validate input
+    if (typeof isEnabled !== 'boolean') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid input: isEnabled must be true or false.' 
+      });
+    }
 
+    // Trim ID and find feedback
+    const feedback = await Feedback.findById(feedbackId.trim());
     if (!feedback) {
       return res.status(404).json({ success: false, message: 'Feedback not found' });
     }
 
-    // Update the status and save
+    // Update and save
     feedback.isEnabled = isEnabled;
     await feedback.save();
 
-    const statusMessage = isEnabled ? 'enabled' : 'disabled';
-
     res.status(200).json({ 
-        success: true, 
-        message: `✅ Feedback has been successfully ${statusMessage}`, 
-        feedback 
+      success: true, 
+      message: `✅ Feedback has been successfully ${isEnabled ? 'enabled' : 'disabled'}`, 
+      feedback 
     });
+
   } catch (error) {
     console.error('Update feedback status error:', error);
-    res.status(500).json({ success: false, message: '❌ Failed to update feedback status', error: error.message });
-  }
-};
-
-
-// controllers/feedbackController.js
-
-exports.updateFeedbackStatus = async (req, res) => {
-  try {
-    const { feedbackId } = req.params;
-    const { isEnabled } = req.body;
-
-    const feedback = await Feedback.findByIdAndUpdate(
-      feedbackId,
-      { isEnabled },
-      { new: true }
-    ).populate('user', 'name profileImage');
-
-    if (!feedback) {
-      return res.status(404).json({ success: false, message: '❌ Feedback not found' });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: '✅ Feedback status updated successfully',
-      feedback
-    });
-  } catch (error) {
-    console.error('❌ Error updating feedback status:', error);
-    res.status(500).json({
-      success: false,
-      message: '❌ Failed to update feedback status',
-      error: error.message
+    res.status(500).json({ 
+      success: false, 
+      message: '❌ Failed to update feedback status', 
+      error: error.message 
     });
   }
 };
+
 
 
 
