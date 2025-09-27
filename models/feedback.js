@@ -19,6 +19,11 @@ const feedbackSchema = new mongoose.Schema({
     min: 1,
     max: 5,
     default: null
+  },
+
+    isEnabled: {  
+    type: Boolean,
+    default: true
   }
 }, { timestamps: true });
 

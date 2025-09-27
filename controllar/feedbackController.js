@@ -52,30 +52,27 @@ exports.createFeedback = async (req, res) => {
 
 exports.getPublicFeedbacks = async (req, res) => {
   try {
-    // Step 1: Fetch public feedbacks from the DB. Use .lean() for performance.
     const feedbacksFromDB = await Feedback.find({
       isPrivate: false,
       $or: [
-        { isEnabled: true },             // This field is not in your schema, but I will leave your custom logic here.
-        { isEnabled: { $exists: false } } // You might have added this field separately.
+        { isEnabled: true },
+        { isEnabled: { $exists: false } }
       ]
     })
-      .populate('user', 'name profileImage') // Populates the 'user' field as defined in the schema
+      .populate('user', 'name profileImage')
       .sort({ createdAt: -1 })
-      .lean(); // Add .lean() for faster processing
+      .select('message rating isPrivate isEnabled createdAt updatedAt user') // 👈 include isEnabled
+      .lean();
 
-    // Step 2: Pass the raw feedback data to the translation service
     const translatedFeedbacks = await translateResponse(req, feedbacksFromDB, feedbackFieldsToTranslate);
 
-    // Step 3: Send the consistent, successful response with the translated data
     res.status(200).json({
       success: true,
       message: '✅ Public feedbacks fetched successfully',
-      feedbacks: translatedFeedbacks // Use the translated result
+      feedbacks: translatedFeedbacks
     });
     
   } catch (error) {
-    // Step 4: Use consistent error handling
     console.error('❌ Error fetching public feedbacks:', error);
     res.status(500).json({
       success: false,
@@ -84,6 +81,7 @@ exports.getPublicFeedbacks = async (req, res) => {
     });
   }
 };
+
 
 exports.getAllFeedbacksForAdmin = async (req, res) => {
   try {
@@ -193,7 +191,8 @@ exports.getFeedbackByUser = async (req, res) => {
 
     const feedbacks = await Feedback.find({ user: userId })
       .populate('user', 'name profileImage')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .select('message rating isPrivate isEnabled createdAt updatedAt user'); 
 
     res.status(200).json({
       success: true,
@@ -204,3 +203,4 @@ exports.getFeedbackByUser = async (req, res) => {
     res.status(500).json({ success: false, message: '❌ Failed to get feedbacks', error: error.message });
   }
 };
+
