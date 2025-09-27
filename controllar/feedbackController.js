@@ -85,21 +85,29 @@ exports.getPublicFeedbacks = async (req, res) => {
 
 exports.getAllFeedbacksForAdmin = async (req, res) => {
   try {
-    // We use an empty object {} in find() to get ALL documents
-    const feedbacks = await Feedback.find({})
+    // Fetch all feedbacks, no filters
+    const feedbacksFromDB = await Feedback.find({})
       .populate('user', 'name profileImage')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .select('message rating isPrivate isEnabled createdAt updatedAt user') // include all fields
+      .lean();
 
     res.status(200).json({
       success: true,
-      message: '✅ All user feedbacks fetched successfully for admin',
-      feedbacks
+      message: '✅ All feedbacks fetched successfully',
+      feedbacks: feedbacksFromDB
     });
+    
   } catch (error) {
-    console.error('Admin get all feedbacks error:', error);
-    res.status(500).json({ success: false, message: '❌ Failed to fetch all feedbacks', error: error.message });
+    console.error('❌ Error fetching all feedbacks for admin:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to fetch feedbacks',
+      error: error.message
+    });
   }
 };
+
 
 exports.updateFeedbackStatus = async (req, res) => {
   try {
