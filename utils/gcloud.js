@@ -201,7 +201,6 @@
 
 // module.exports = { uploadBufferToGCS };
 
-
 const { Storage } = require("@google-cloud/storage");
 
 let storage;
@@ -211,15 +210,25 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
   storage = new Storage({ credentials });
 } else {
   storage = new Storage({
-    keyFilename: require("path").join(__dirname, "../bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json"),
+    keyFilename: require("path").join(
+      __dirname,
+      "../bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json"
+    ),
   });
 }
 
-const bucket = storage.bucket("3bprofiles-products");
+// 👇 THIS was missing
+const BUCKET_NAME = "3bprofiles-products";
+const bucket = storage.bucket(BUCKET_NAME);
+
+
 
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   return new Promise((resolve, reject) => {
-    const file = bucket.file(`${folder}/${Date.now()}-${filename}`);
+    const uniqueName = `${Date.now()}-${filename}`;
+    const filePath = `${folder}/${uniqueName}`;
+    const file = bucket.file(filePath);
+
     const stream = file.createWriteStream({
       resumable: false,
       contentType: mimetype,
@@ -227,10 +236,9 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
 
     stream.on("error", reject);
     stream.on("finish", () => {
-      // No makePublic() because UBLA is enabled
       resolve({
-        url: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
-        id: `${folder}/${Date.now()}-${filename}`,
+        url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+        id: filePath, // always matches file.name
       });
     });
 
@@ -238,5 +246,25 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
   });
 }
 
-module.exports = { uploadBufferToGCS };
+
+async function deleteFileFromGCS(fileName) {
+  try {
+    await bucket.file(fileName).delete();
+    console.log(`✅ Successfully deleted ${fileName} from GCS bucket.`);
+  } catch (error) {
+    if (error.code === 404) {
+      console.warn(`⚠️ File not found in GCS, skipping deletion: ${fileName}`);
+      return;
+    }
+    console.error(`❌ Error deleting file ${fileName} from GCS:`, error);
+    throw new Error(`Failed to delete file from cloud storage.`);
+  }
+}
+
+// 👇 Export both properly
+module.exports = {
+  uploadBufferToGCS,
+  deleteFileFromGCS,
+};
+
 

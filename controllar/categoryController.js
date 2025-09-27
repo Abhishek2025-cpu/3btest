@@ -3,7 +3,7 @@ const sharp = require('sharp');
 const mongoose = require('mongoose');
 const Product = require('../models/ProductUpload');
 const { translateResponse } = require('../services/translation.service');
-const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud'); // ✅ Fixed named import
+const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud'); 
 
 const CatFieldsToTranslate = [
   'name'         
