@@ -137,31 +137,36 @@ exports.updateFeedbackStatus = async (req, res) => {
 
 // controllers/feedbackController.js
 
-exports.updateFeedback = async (req, res) => {
+exports.updateFeedbackStatus = async (req, res) => {
   try {
     const { feedbackId } = req.params;
-    const cleanId = feedbackId.trim(); // 🧼 Remove newline or whitespace
+    const { isEnabled } = req.body;
 
-    const { message, isPrivate, rating } = req.body;
+    const feedback = await Feedback.findByIdAndUpdate(
+      feedbackId,
+      { isEnabled },
+      { new: true }
+    ).populate('user', 'name profileImage');
 
-    const feedback = await Feedback.findById(cleanId); // Use cleanId
     if (!feedback) {
-      return res.status(404).json({ success: false, message: 'Feedback not found' });
+      return res.status(404).json({ success: false, message: '❌ Feedback not found' });
     }
 
-    if (message) feedback.message = message;
-    if (typeof isPrivate === 'boolean') feedback.isPrivate = isPrivate;
-    if (rating !== undefined) {
-      feedback.rating = Math.max(1, Math.min(5, Number(rating)));
-    }
-
-    await feedback.save();
-
-    res.status(200).json({ success: true, message: '✅ Feedback updated successfully', feedback });
+    res.status(200).json({
+      success: true,
+      message: '✅ Feedback status updated successfully',
+      feedback
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: '❌ Failed to update feedback', error: error.message });
+    console.error('❌ Error updating feedback status:', error);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to update feedback status',
+      error: error.message
+    });
   }
 };
+
 
 
 

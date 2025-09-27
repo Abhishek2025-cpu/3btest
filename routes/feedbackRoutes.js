@@ -7,7 +7,7 @@ router.get('/public', feedbackController.getPublicFeedbacks);
 router.get('/user/:userId', feedbackController.getFeedbackByUser);
 router.get('/getall/admin', feedbackController.getAllFeedbacksForAdmin);
 router.patch('/status/:feedbackId',feedbackController.updateFeedbackStatus);
-router.patch('/update-feedback/:feedbackId', feedbackController.updateFeedback);
+router.patch('/status/:feedbackId', feedbackController.updateFeedbackStatus);
 router.delete('/delete-feedback/:feedbackId', feedbackController.deleteFeedback);
 
 module.exports = router;
