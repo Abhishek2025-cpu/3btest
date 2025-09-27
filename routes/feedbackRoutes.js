@@ -3,8 +3,8 @@ const router = express.Router();
 const feedbackController = require('../controllar/feedbackController');
 
 router.post('/add-feedback', feedbackController.createFeedback);
-router.get('/get-feedbacks', feedbackController.getPublicFeedbacks);
-router.get('/get-feedback/user/:userId', feedbackController.getFeedbackByUser);
+router.get('/public', feedbackController.getPublicFeedbacks);
+router.get('/user/:userId', feedbackController.getFeedbackByUser);
 router.get('/getall/admin', feedbackController.getAllFeedbacksForAdmin);
 router.patch('/status/:feedbackId',feedbackController.updateFeedbackStatus);
 router.patch('/update-feedback/:feedbackId', feedbackController.updateFeedback);
