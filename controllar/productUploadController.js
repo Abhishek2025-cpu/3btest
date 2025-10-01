@@ -17,14 +17,14 @@ const productFieldsToTranslate = [
 ];
 
 
+
 exports.createProduct = async (req, res) => {
   try {
-    // CHANGE 1: Destructure the new 'description' field from the request body.
     const {
       categoryId,
       name,
       about,
-      description, // <-- ADDED
+      description,
       dimensions,
       quantity,
       pricePerPiece,
@@ -44,30 +44,54 @@ exports.createProduct = async (req, res) => {
     const productImages = req.files?.images || [];
     const colorImages = req.files?.colorImages || [];
 
+    // Log the number of files received by Multer
+    console.log(`Received ${productImages.length} product images and ${colorImages.length} color images.`);
+    if (productImages.length === 0 && colorImages.length === 0) {
+        // Handle case where no files are uploaded if necessary, though Multer would usually handle this if files are mandatory.
+        console.warn("No images or color images were uploaded.");
+    }
+
+
     const uniqueFilesToUpload = new Map();
     productImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
     colorImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
 
     const allUniqueFiles = Array.from(uniqueFilesToUpload.values());
 
-    const uploadPromises = allUniqueFiles.map(async (file) => {
-      const compressedBuffer = await sharp(file.buffer)
-        .resize({ width: 1000, withoutEnlargement: true })
-        .jpeg({ quality: 80 })
-        .toBuffer();
-      const filename = `product-${Date.now()}-${file.originalname}`;
-      
-      const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-      const urlString = uploadResult.url;
+    // Log the total unique files to be processed
+    console.log(`Processing ${allUniqueFiles.length} unique image files.`);
 
-      return {
-        id: crypto.randomUUID(),
-        url: urlString,
-        originalname: file.originalname
-      };
+    const uploadPromises = allUniqueFiles.map(async (file) => {
+      try {
+        const compressedBuffer = await sharp(file.buffer)
+          .resize({ width: 1000, withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        const filename = `product-${Date.now()}-${file.originalname}`;
+        
+        const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
+        const urlString = uploadResult.url;
+
+        return {
+          id: crypto.randomUUID(),
+          url: urlString,
+          originalname: file.originalname
+        };
+      } catch (fileError) {
+        console.error(`❌ Error processing or uploading file ${file.originalname}:`, fileError);
+        // Depending on your requirements, you might want to:
+        // 1. Re-throw to fail the entire Promise.all
+        // 2. Return a specific error object for this file and filter it out later
+        // For now, it will cause Promise.all to reject if any file fails.
+        throw fileError; 
+      }
     });
 
     const uploadedFilesData = await Promise.all(uploadPromises);
+    
+    // Log successful uploads
+    console.log(`Successfully uploaded ${uploadedFilesData.length} unique files to GCS.`);
+
     const urlMap = new Map();
     uploadedFilesData.forEach(data => {
       urlMap.set(data.originalname, { url: data.url, id: data.id });
@@ -76,7 +100,10 @@ exports.createProduct = async (req, res) => {
     const finalImagesForDB = productImages
       .map(file => {
         const data = urlMap.get(file.originalname);
-        if (!data) return null;
+        if (!data) {
+            console.warn(`File ${file.originalname} was in productImages but not found in uploadedFilesData. Skipping.`);
+            return null;
+        }
         return { id: data.id, url: data.url, originalname: file.originalname };
       })
       .filter(Boolean);
@@ -86,6 +113,8 @@ exports.createProduct = async (req, res) => {
       const data = urlMap.get(file.originalname);
       if (data) {
         finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
+      } else {
+        console.warn(`File ${file.originalname} was in colorImages but not found in uploadedFilesData. Skipping.`);
       }
     });
 
@@ -96,7 +125,7 @@ exports.createProduct = async (req, res) => {
       categoryId, 
       name, 
       about,
-      description, // <-- CHANGE 2: Add the description field here.
+      description,
       dimensions: dimensions ? dimensions.split(',').map(d => d.trim()) : [],
       quantity: parsedQty, 
       pricePerPiece: parsedPrice, 
@@ -126,6 +155,11 @@ exports.createProduct = async (req, res) => {
         error: err.message, details: err.errors
       });
     }
+    // Check for specific Multer errors if any, though Multer's own error handling might intercept earlier.
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ success: false, message: 'Too many files uploaded or unexpected file field.', error: err.message });
+    }
+    // Generic server error for other unexpected issues
     return res.status(500).json({
       success: false, message: '❌ An internal server error occurred.',
       error: err.message
