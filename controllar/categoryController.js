@@ -37,13 +37,20 @@ exports.createCategory = async (req, res) => {
           .toBuffer();
 
         const fileName = `cat-${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
-        
-        // Destructure the id and url from the returned object
         const { id, url } = await uploadBufferToGCS(compressedBuffer, fileName, 'categories');
 
-        return { id, url }; // Return the complete object
+        return { id, url };
       })
     );
+
+    // If a position is provided, shift existing categories
+    if (position !== undefined && position !== null) {
+      // Increment positions of existing categories >= new position
+      await Category.updateMany(
+        { position: { $gte: Number(position) } },
+        { $inc: { position: 1 } }
+      );
+    }
 
     const category = new Category({
       categoryId,
@@ -67,6 +74,7 @@ exports.createCategory = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -148,6 +156,8 @@ exports.updateCategory = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
+    const oldPosition = existingCategory.position;
+
     // 1️⃣ Remove images by ID
     if (removeIds) {
       const removeIdsArr = JSON.parse(removeIds);
@@ -182,7 +192,6 @@ exports.updateCategory = async (req, res) => {
           'image/jpeg'
         );
 
-        // Return object in correct format
         return { id: uploaded.id, url: uploaded.url };
       });
 
@@ -192,7 +201,28 @@ exports.updateCategory = async (req, res) => {
 
     // 4️⃣ Update other fields
     if (name) existingCategory.name = name;
-    if (position !== undefined) existingCategory.position = Number(position);
+
+    if (position !== undefined && position !== null) {
+      const newPosition = Number(position);
+
+      if (oldPosition !== newPosition) {
+        if (newPosition < oldPosition) {
+          // Shift categories between newPosition and oldPosition - 1 up by 1
+          await Category.updateMany(
+            { position: { $gte: newPosition, $lt: oldPosition }, _id: { $ne: id } },
+            { $inc: { position: 1 } }
+          );
+        } else {
+          // Shift categories between oldPosition + 1 and newPosition down by 1
+          await Category.updateMany(
+            { position: { $gt: oldPosition, $lte: newPosition }, _id: { $ne: id } },
+            { $inc: { position: -1 } }
+          );
+        }
+
+        existingCategory.position = newPosition;
+      }
+    }
 
     // 5️⃣ Save category
     const updatedCategory = await existingCategory.save();
@@ -203,6 +233,7 @@ exports.updateCategory = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("❌ Error updating category:", error);
     res.status(500).json({
       message: '❌ Category update failed',
       error: error.message
@@ -216,21 +247,35 @@ exports.updateCategory = async (req, res) => {
 
 
 
+
 // Delete Category by categoryId
 exports.deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;  // using _id from URL param
 
-    // Find by _id and delete
-    const deleted = await Category.findByIdAndDelete(id);
+    // Find the category first to get its position
+    const categoryToDelete = await Category.findById(id);
 
-    if (!deleted) {
+    if (!categoryToDelete) {
       return res.status(404).json({ message: 'Category not found' });
     }
 
+    const deletedPosition = categoryToDelete.position;
+
+    // Delete the category
+    await Category.findByIdAndDelete(id);
+
+    // Shift back positions of categories that had higher positions
+    if (deletedPosition !== undefined && deletedPosition !== null) {
+      await Category.updateMany(
+        { position: { $gt: deletedPosition } },
+        { $inc: { position: -1 } }
+      );
+    }
+
     // Also delete images from Cloudinary if needed
-    if (deleted.images && deleted.images.length > 0) {
-      for (const img of deleted.images) {
+    if (categoryToDelete.images && categoryToDelete.images.length > 0) {
+      for (const img of categoryToDelete.images) {
         if (img.public_id) {
           await cloudinary.uploader.destroy(img.public_id);
         }
@@ -239,6 +284,7 @@ exports.deleteCategory = async (req, res) => {
 
     res.status(200).json({ message: '✅ Category deleted successfully' });
   } catch (error) {
+    console.error("❌ Error deleting category:", error);
     res.status(500).json({ message: '❌ Category deletion failed', error: error.message });
   }
 };
