@@ -267,13 +267,15 @@ exports.getItemByItemNo = async (req, res) => {
 
 exports.deleteItem = async (req, res) => {
   try {
-    const item = await Item.findByIdAndDelete(req.params.id);
+    const item = await MainItem.findByIdAndDelete(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
     res.status(200).json({ message: 'Item deleted successfully' });
   } catch (error) {
+    console.error('Delete item error:', error);
     res.status(500).json({ error: 'Failed to delete item' });
   }
 };
+
 
 exports.updateStockStatus = async (req, res) => {
   try {
