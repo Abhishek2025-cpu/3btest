@@ -51,6 +51,7 @@ exports.createFeedback = async (req, res) => {
 // In feedbackController.js
 
 exports.getPublicFeedbacks = async (req, res) => {
+    console.log('Public feedback API hit on', new Date());
   try {
     // Fetch only public and enabled feedbacks
     const feedbacksFromDB = await Feedback.find({
