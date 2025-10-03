@@ -146,6 +146,111 @@ exports.getCategories = async (req, res) => {
 
 
 
+// exports.updateCategory = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { name, position, removeIds } = req.body;
+
+//     const existingCategory = await Category.findById(id);
+//     if (!existingCategory) {
+//       return res.status(404).json({ message: 'Category not found' });
+//     }
+
+//     const oldPosition = existingCategory.position;
+
+//     // 1️⃣ Remove images by ID
+//     if (removeIds) {
+//       const removeIdsArr = JSON.parse(removeIds);
+//       const deletionPromises = removeIdsArr.map(imageId => deleteFileFromGCS(imageId));
+//       await Promise.all(deletionPromises);
+
+//       existingCategory.images = existingCategory.images.filter(
+//         img => !removeIdsArr.includes(img.id)
+//       );
+//     }
+
+//     // 2️⃣ Normalize old malformed images before adding new ones
+// // 2️⃣ Normalize old malformed images before adding new ones
+// existingCategory.images = existingCategory.images.map(img => {
+//   if (img && typeof img.url === 'object') {
+//     // Case: { url: { id: "...", url: "..." } }
+//     return { id: img.url.id || '', url: img.url.url || '' };
+//   }
+
+//   if (!img.id && typeof img.url === 'string') {
+//     // Case: { url: "https://..." } → no "id"
+//     return { id: '', url: img.url };
+//   }
+
+//   return img; // Already valid { id, url }
+// });
+
+
+//     // 3️⃣ Upload new images
+//     if (req.files && req.files.length > 0) {
+//       const uploadPromises = req.files.map(async file => {
+//         const compressedBuffer = await sharp(file.buffer)
+//           .resize({ width: 1000 })
+//           .jpeg({ quality: 70 })
+//           .toBuffer();
+
+//         const uploaded = await uploadBufferToGCS(
+//           compressedBuffer,
+//           file.originalname,
+//           'categories',
+//           'image/jpeg'
+//         );
+
+//         return { id: uploaded.id, url: uploaded.url };
+//       });
+
+//       const newImages = await Promise.all(uploadPromises);
+//       existingCategory.images.push(...newImages);
+//     }
+
+//     // 4️⃣ Update other fields
+//     if (name) existingCategory.name = name;
+
+//     if (position !== undefined && position !== null) {
+//       const newPosition = Number(position);
+
+//       if (oldPosition !== newPosition) {
+//         if (newPosition < oldPosition) {
+//           // Shift categories between newPosition and oldPosition - 1 up by 1
+//           await Category.updateMany(
+//             { position: { $gte: newPosition, $lt: oldPosition }, _id: { $ne: id } },
+//             { $inc: { position: 1 } }
+//           );
+//         } else {
+//           // Shift categories between oldPosition + 1 and newPosition down by 1
+//           await Category.updateMany(
+//             { position: { $gt: oldPosition, $lte: newPosition }, _id: { $ne: id } },
+//             { $inc: { position: -1 } }
+//           );
+//         }
+
+//         existingCategory.position = newPosition;
+//       }
+//     }
+
+//     // 5️⃣ Save category
+//     const updatedCategory = await existingCategory.save();
+
+//     res.status(200).json({
+//       message: '✅ Category updated successfully',
+//       category: updatedCategory
+//     });
+
+//   } catch (error) {
+//     console.error("❌ Error updating category:", error);
+//     res.status(500).json({
+//       message: '❌ Category update failed',
+//       error: error.message
+//     });
+//   }
+// };
+
+
 exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -160,7 +265,7 @@ exports.updateCategory = async (req, res) => {
 
     // 1️⃣ Remove images by ID
     if (removeIds) {
-      const removeIdsArr = JSON.parse(removeIds);
+      const removeIdsArr = Array.isArray(removeIds) ? removeIds : JSON.parse(removeIds);
       const deletionPromises = removeIdsArr.map(imageId => deleteFileFromGCS(imageId));
       await Promise.all(deletionPromises);
 
@@ -169,24 +274,39 @@ exports.updateCategory = async (req, res) => {
       );
     }
 
-    // 2️⃣ Normalize old malformed images before adding new ones
-// 2️⃣ Normalize old malformed images before adding new ones
-existingCategory.images = existingCategory.images.map(img => {
-  if (img && typeof img.url === 'object') {
-    // Case: { url: { id: "...", url: "..." } }
-    return { id: img.url.id || '', url: img.url.url || '' };
-  }
+    // 2️⃣ Normalize existing images (fix old malformed records)
+    existingCategory.images = existingCategory.images.map(img => {
+      if (img && img.url && typeof img.url === 'object') {
+        // Case: { url: { id, url } } → flatten
+        return { id: img.url.id || '', url: img.url.url || '' };
+      }
+      if (!img.id && typeof img.url === 'string') {
+        // Case: only url string exists
+        return { id: '', url: img.url };
+      }
+      return img; // Already correct
+    });
 
-  if (!img.id && typeof img.url === 'string') {
-    // Case: { url: "https://..." } → no "id"
-    return { id: '', url: img.url };
-  }
+    // 3️⃣ Parse incoming images payload (robust for all environments)
+    let parsedImages = [];
+    if (req.body.images) {
+      if (typeof req.body.images === 'string') {
+        parsedImages = JSON.parse(req.body.images); // JSON string from form-data
+      } else if (Array.isArray(req.body.images)) {
+        parsedImages = req.body.images; // already array (Cloud Run)
+      } else if (typeof req.body.images === 'object') {
+        parsedImages = [req.body.images]; // single object
+      }
+    }
 
-  return img; // Already valid { id, url }
-});
+    parsedImages = parsedImages.map(img => ({
+      id: img.id || (img.url?.id || ''),
+      url: img.url?.url || img.url || ''
+    }));
 
+    existingCategory.images.push(...parsedImages);
 
-    // 3️⃣ Upload new images
+    // 4️⃣ Upload new files if any
     if (req.files && req.files.length > 0) {
       const uploadPromises = req.files.map(async file => {
         const compressedBuffer = await sharp(file.buffer)
@@ -208,7 +328,7 @@ existingCategory.images = existingCategory.images.map(img => {
       existingCategory.images.push(...newImages);
     }
 
-    // 4️⃣ Update other fields
+    // 5️⃣ Update other fields
     if (name) existingCategory.name = name;
 
     if (position !== undefined && position !== null) {
@@ -216,13 +336,11 @@ existingCategory.images = existingCategory.images.map(img => {
 
       if (oldPosition !== newPosition) {
         if (newPosition < oldPosition) {
-          // Shift categories between newPosition and oldPosition - 1 up by 1
           await Category.updateMany(
             { position: { $gte: newPosition, $lt: oldPosition }, _id: { $ne: id } },
             { $inc: { position: 1 } }
           );
         } else {
-          // Shift categories between oldPosition + 1 and newPosition down by 1
           await Category.updateMany(
             { position: { $gt: oldPosition, $lte: newPosition }, _id: { $ne: id } },
             { $inc: { position: -1 } }
@@ -233,7 +351,7 @@ existingCategory.images = existingCategory.images.map(img => {
       }
     }
 
-    // 5️⃣ Save category
+    // 6️⃣ Save category
     const updatedCategory = await existingCategory.save();
 
     res.status(200).json({
@@ -249,7 +367,6 @@ existingCategory.images = existingCategory.images.map(img => {
     });
   }
 };
-
 
 
 
