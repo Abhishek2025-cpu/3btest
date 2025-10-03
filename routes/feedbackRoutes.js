@@ -3,7 +3,7 @@ const router = express.Router();
 const feedbackController = require('../controllar/feedbackController');
 
 router.post('/add-feedback', feedbackController.createFeedback);
-router.get('/public', feedbackController.getPublicFeedbacks);
+router.get('/feedback/public', feedbackController.getPublicFeedbacks);
 router.get('/user/:userId', feedbackController.getFeedbackByUser);
 router.get('/getall/admin', feedbackController.getAllFeedbacksForAdmin);
 
