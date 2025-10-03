@@ -17,7 +17,7 @@ bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
 COPY . .
 
 # Expose the port that Cloud Run expects
-EXPOSE 7000
+EXPOSE 8080
 
 # Start the server
 CMD [ "node", "server.js" ]

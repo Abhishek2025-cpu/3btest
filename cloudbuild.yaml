@@ -17,7 +17,7 @@ steps:
         '--region', 'asia-south1',
         '--platform', 'managed',
         '--allow-unauthenticated',
-        '--port', '7000',
+        '--port', '8080',
         '--clear-command',    # ensure Dockerfile CMD is used
         '--clear-args'        # remove any old overrides
       ]
