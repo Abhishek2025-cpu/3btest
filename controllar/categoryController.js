@@ -170,12 +170,21 @@ exports.updateCategory = async (req, res) => {
     }
 
     // 2️⃣ Normalize old malformed images before adding new ones
-    existingCategory.images = existingCategory.images.map(img => {
-      if (typeof img.url === 'object' && img.url.url) {
-        return { id: img.url.id, url: img.url.url };
-      }
-      return img;
-    });
+// 2️⃣ Normalize old malformed images before adding new ones
+existingCategory.images = existingCategory.images.map(img => {
+  if (img && typeof img.url === 'object') {
+    // Case: { url: { id: "...", url: "..." } }
+    return { id: img.url.id || '', url: img.url.url || '' };
+  }
+
+  if (!img.id && typeof img.url === 'string') {
+    // Case: { url: "https://..." } → no "id"
+    return { id: '', url: img.url };
+  }
+
+  return img; // Already valid { id, url }
+});
+
 
     // 3️⃣ Upload new images
     if (req.files && req.files.length > 0) {
