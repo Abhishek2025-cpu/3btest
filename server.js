@@ -96,19 +96,14 @@ app.use((req, res, next) => {
 });
 
 
-const startServer = async () => {
-  try {
-    await connectDB();
-    console.log("✅ Database connected");
-  } catch (err) {
-    console.error("❌ DB connection failed:", err.message);
-    // Don’t exit — still start server so Cloud Run can bind
-  }
-
-  const PORT = process.env.PORT || 8080;
+// Start server immediately
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 
-};
+// Connect to DB asynchronously
+connectDB()
+  .then(() => console.log("✅ Database connected"))
+  .catch(err => console.error("❌ DB connection failed:", err.message));
 
-startServer();
+
 

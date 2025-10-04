@@ -1,6 +1,4 @@
 # .gitignore file at the root
-
-
 gcs-key.json
 google-credentials.json
 firebase-service-account.json
