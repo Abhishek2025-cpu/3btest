@@ -90,20 +90,26 @@ app.use('/api/billings', BillingRoutes);
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
+
+// Optional request logging middleware
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.url} - Body:`, req.body);
   next();
 });
 
-
 // Start server immediately
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
 
-// Connect to DB asynchronously
-connectDB()
-  .then(() => console.log("✅ Database connected"))
-  .catch(err => console.error("❌ DB connection failed:", err.message));
+  // Connect to DB asynchronously after server starts
+  connectDB()
+    .then(() => console.log("✅ Database connected"))
+    .catch(err => console.error("❌ DB connection failed:", err.message));
+});
+
+// Example: Access translation API key safely
+console.log("TRANSLATION_API_KEY:", process.env.TRANSLATION_API_KEY);
 
 
 
