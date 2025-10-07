@@ -1,5 +1,110 @@
-const Employee = require('../models/Employee');
+
 const { uploadBufferToGCS } = require('../utils/gcloud');
+
+
+
+const Employee = require('../models/Employee');
+const axios = require('axios');
+
+const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
+
+// STEP 1: Send OTP for employee login
+exports.employeeLoginSendOtp = async (req, res) => {
+  const { mobile } = req.body;
+
+  if (!mobile) {
+    return res.status(400).json({
+      status: false,
+      message: 'Mobile number is required',
+    });
+  }
+
+  try {
+    const employee = await Employee.findOne({ mobile });
+    if (!employee) {
+      return res.status(404).json({
+        status: false,
+        message: 'Employee not found with provided mobile',
+      });
+    }
+
+    const otpRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
+    );
+
+    if (otpRes.data.Status === 'Success') {
+      return res.status(200).json({
+        status: true,
+        message: 'OTP sent via SMS for employee login',
+        sessionId: otpRes.data.Details,
+        employeeId: employee._id,
+      });
+    } else {
+      return res.status(400).json({
+        status: false,
+        message: 'Failed to send OTP',
+        details: otpRes.data,
+      });
+    }
+  } catch (error) {
+    console.error('Employee Login OTP Error:', error.response?.data || error.message);
+    return res.status(500).json({
+      status: false,
+      message: 'Error sending employee login OTP',
+      error: error.response?.data || error.message,
+    });
+  }
+};
+
+// STEP 2: Verify OTP for employee login
+exports.employeeLoginVerifyOtp = async (req, res) => {
+  const { sessionId, otp, mobile } = req.body;
+
+  if (!sessionId || !otp || !mobile) {
+    return res.status(400).json({
+      status: false,
+      message: 'sessionId, otp, and mobile are required',
+    });
+  }
+
+  try {
+    const verifyRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
+    );
+
+    if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid OTP',
+        details: verifyRes.data,
+      });
+    }
+
+    // Find employee by mobile instead of employeeId
+    const employee = await Employee.findOne({ mobile });
+    if (!employee) {
+      return res.status(404).json({
+        status: false,
+        message: 'Employee not found',
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: 'Employee login successful',
+      employee,
+    });
+  } catch (error) {
+    console.error('Employee Login OTP VERIFY ERROR:', error.message);
+    return res.status(500).json({
+      status: false,
+      message: 'Error during employee login OTP verification',
+      error: error.response?.data || error.message,
+    });
+  }
+};
+
+
 
 /**
  * Generates a robust Employee ID (EID).
@@ -271,55 +376,55 @@ exports.deleteEmployee = async (req, res) => {
  * Login an employee using mobile number and password.
  * @route POST /api/employees/login
  */
-exports.loginEmployee = async (req, res) => {
-  try {
-    const { mobile, password } = req.body;
+// exports.loginEmployee = async (req, res) => {
+//   try {
+//     const { mobile, password } = req.body;
 
-    // 1. Validate input
-    if (!mobile || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Mobile number and password are required.',
-      });
-    }
+//     // 1. Validate input
+//     if (!mobile || !password) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Mobile number and password are required.',
+//       });
+//     }
 
-    // 2. Find employee by mobile number
-    const employee = await Employee.findOne({ mobile });
+//     // 2. Find employee by mobile number
+//     const employee = await Employee.findOne({ mobile });
 
-    // 3. Check if employee exists and if the password is correct
-    // NOTE: In a real-world application, passwords should be hashed using a library
-    // like bcrypt. This is a simple string comparison based on your current setup.
-    if (!employee || employee.password !== password) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid mobile number or password.',
-      });
-    }
+//     // 3. Check if employee exists and if the password is correct
+//     // NOTE: In a real-world application, passwords should be hashed using a library
+//     // like bcrypt. This is a simple string comparison based on your current setup.
+//     if (!employee || employee.password !== password) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid mobile number or password.',
+//       });
+//     }
 
-    // 4. Check if the employee's account is active (based on your `updateEmployeeStatus` logic)
-    if (employee.status === false) { // Explicitly check for false
-      return res.status(403).json({ // 403 Forbidden is more appropriate here
-        success: false,
-        message: 'Your account is inactive. Please contact the administrator.',
-      });
-    }
+//     // 4. Check if the employee's account is active (based on your `updateEmployeeStatus` logic)
+//     if (employee.status === false) { // Explicitly check for false
+//       return res.status(403).json({ // 403 Forbidden is more appropriate here
+//         success: false,
+//         message: 'Your account is inactive. Please contact the administrator.',
+//       });
+//     }
 
-    // 5. Successful login: Return employee details
-    // It's good practice to not send the password back in the response.
-    const employeeData = employee.toObject();
-    delete employeeData.password;
+//     // 5. Successful login: Return employee details
+//     // It's good practice to not send the password back in the response.
+//     const employeeData = employee.toObject();
+//     delete employeeData.password;
 
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      employee: employeeData, // This object contains all details, including the role
-    });
+//     res.status(200).json({
+//       success: true,
+//       message: 'Login successful',
+//       employee: employeeData, // This object contains all details, including the role
+//     });
 
-  } catch (error) {
-    console.error('Login Employee Error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'An internal server error occurred during login.',
-    });
-  }
-};
+//   } catch (error) {
+//     console.error('Login Employee Error:', error.message, error.stack);
+//     res.status(500).json({
+//       success: false,
+//       message: 'An internal server error occurred during login.',
+//     });
+//   }
+// };

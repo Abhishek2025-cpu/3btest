@@ -39,6 +39,7 @@ exports.register = async (req, res) => {
 };
 
 // ✅ Admin Login (Plain password check)
+
 exports.login = async (req, res) => {
   try {
     const { number, password } = req.body;
@@ -47,26 +48,26 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Number and password are required' });
     }
 
-    // 1. Try to find in Admin first
     let user = await Admin.findOne({ number }).select('+password');
     let role = 'admin';
 
-    // 2. If not found in Admin, try SubAdmin (by phone instead of number)
     if (!user) {
+      // Try SubAdmin if not found in Admin
       user = await SubAdmin.findOne({ phone: number }).select('+password');
-      role = 'sub-admin';
+      role = 'subadmin';
     }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Compare password (bcrypt for SubAdmin, plain for Admin unless you hash admin too)
+    // Check password
     let isMatch = false;
     if (role === 'admin') {
-      // If you hashed Admin passwords, replace this with bcrypt.compare
+      // Admin passwords are plain text in your schema
       isMatch = user.password === password;
     } else {
+      // SubAdmin passwords are hashed
       isMatch = await bcrypt.compare(password, user.password);
     }
 
@@ -74,7 +75,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Clean user object
+    // Remove sensitive fields
     const userObject = user.toObject();
     delete userObject.password;
     delete userObject.otp;
@@ -82,7 +83,7 @@ exports.login = async (req, res) => {
 
     res.status(200).json({
       message: 'Login successful',
-      role,
+      role,          // returns 'admin' or 'subadmin'
       user: userObject,
     });
 
