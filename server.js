@@ -55,6 +55,8 @@ const fcmRoutes = require('./routes/fcmRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const pushRoutes = require('./routes/pushRoutes');
 const BillingRoutes = require('./routes/billingRoutes');
+const machineRoutes = require("./routes/machineRoutes");
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
@@ -82,6 +84,7 @@ app.use('/api/fcm', fcmRoutes);
 app.use('/api', pushRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/billings', BillingRoutes);
+app.use("/api/machines", machineRoutes);
 
 
 
