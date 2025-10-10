@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { uploadProduct } = require("../middleware/upload");
-const { addMachine, getMachines,deleteMachine  } = require("../controllar/machineController");
+const { addMachine, getMachines,deleteMachine, assignMachineToEmployees  } = require("../controllar/machineController");
+
+
 
 // Add new machine
 router.post("/add", uploadProduct.single("image"), addMachine);
@@ -10,4 +12,8 @@ router.post("/add", uploadProduct.single("image"), addMachine);
 router.get("/get", getMachines);
 router.delete("/delete/:id", deleteMachine);
 
+router.post("/assign-machine", assignMachineToEmployees);
+
+
 module.exports = router;
+

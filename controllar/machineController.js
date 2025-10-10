@@ -1,6 +1,12 @@
 const Machine = require("../models/Machine");
 const cloudinary = require("cloudinary").v2;
 
+const MachineAssignment = require('../models/MachineAssignment');
+
+const Employee = require('../models/Employee');
+
+
+
 // Add new machine
 exports.addMachine = async (req, res) => {
   try {
@@ -87,3 +93,58 @@ exports.deleteMachine = async (req, res) => {
     res.status(500).json({ success: false, message: "❌ Server error" });
   }
 };
+
+
+//Api for Machine Controller
+
+exports.assignMachineToEmployees = async (req, res) => {
+  try {
+    const { machineId, employeeIds } = req.body;
+
+    // Step 2a: Validate input
+    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+      return res.status(400).json({
+        statusCode:400,
+        success: false,
+        message: "Machine ID and array of Employee IDs are required"
+      });
+    }
+
+    // Step 2b: Check machine exists
+    const machine = await Machine.findById(machineId);
+    if (!machine) return res.status(404).json({ statusCode: 404, success: false, message: "Machine not found" });
+
+    // Step 2c: Check all employees exist
+    const employees = await Employee.find({ _id: { $in: employeeIds } });
+    if (employees.length !== employeeIds.length) {
+      return res.status(404).json({statusCode: 404, success: false, message: "Some employees not found" });
+    }
+
+    // Step 2d: Create assignment
+    let assignment = await MachineAssignment.create({
+      machine: machineId,
+      employees: employeeIds
+    });
+
+
+    // Step 2e: Populate machine and employee details
+   
+    const populatedAssignment = await MachineAssignment.findById(assignment._id)
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role' });
+
+    res.status(201).json({
+       statusCode: 201,
+      success: true,
+      message: 'Machine assigned successfully',
+      data: populatedAssignment
+    });
+
+  } catch (error) {
+    console.error("Assign Machine Error:", error);
+    res.status(500).json({
+       statusCode: 500, success: false, message: "Server error while assigning machine" });
+  }
+};
+
+
