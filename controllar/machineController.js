@@ -1,4 +1,5 @@
 const Machine = require("../models/Machine");
+const Employee = require("../models/Employee");
 const cloudinary = require("cloudinary").v2;
 
 // Add new machine
@@ -87,3 +88,8 @@ exports.deleteMachine = async (req, res) => {
     res.status(500).json({ success: false, message: "❌ Server error" });
   }
 };
+
+//assign machine to employyes
+
+
+
