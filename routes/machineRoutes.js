@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { uploadProduct } = require("../middleware/upload");
-const { addMachine, getMachines,deleteMachine, assignMachineToEmployees ,getAssignmentsByEmployee } = require("../controllar/machineController");
+const { addMachine, getMachines,deleteMachine, assignMachineToEmployees ,getAssignmentsByEmployee,getAllAssignmentsForAdmin } = require("../controllar/machineController");
 
 
 
@@ -16,7 +16,7 @@ router.post("/assign-machine", assignMachineToEmployees);
 
 router.get("/get-asign-machine/:employeeId", getAssignmentsByEmployee);
 
-
+router.get("/get-all-assigned-machines-admin" ,getAllAssignmentsForAdmin);
 
 module.exports = router;
 

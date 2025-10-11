@@ -191,3 +191,37 @@ if (!employeeId) {
     });
   }
 };
+
+
+
+
+// GET /api/admin/assignments
+exports.getAllAssignmentsForAdmin = async (req, res) => {
+  try {
+    const assignments = await MachineAssignment.find()
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role eid' })
+      .populate({
+        path: 'mainItem',
+        populate: [
+          { path: 'helper._id', model: 'Employee', select: 'name role eid' },
+          { path: 'operator._id', model: 'Employee', select: 'name role eid' }
+        ]
+      })
+      .sort({ createdAt: -1 }); // optional: latest first
+
+    res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: "All machine assignments fetched successfully",
+      data: assignments
+    });
+  } catch (error) {
+    console.error("Get All Assignments Error:", error);
+    res.status(500).json({
+      statusCode: 500,
+      success: false,
+      message: "Server error while fetching all assignments"
+    });
+  }
+};
