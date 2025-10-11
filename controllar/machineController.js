@@ -4,8 +4,8 @@ const cloudinary = require("cloudinary").v2;
 
 const MachineAssignment = require('../models/MachineAssignment');
 
-
-
+const MainItem = require('../models/item.model');
+ 
 
 
 // Add new machine
@@ -100,16 +100,17 @@ exports.deleteMachine = async (req, res) => {
 
 exports.assignMachineToEmployees = async (req, res) => {
   try {
-    const { machineId, employeeIds } = req.body;
+    const { machineId, employeeIds , mainItemId } = req.body;
 
     // Step 2a: Validate input
-    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+    if ( !machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0 || !mainItemId) {
       return res.status(400).json({
         statusCode:400,
         success: false,
-        message: "Machine ID and array of Employee IDs are required"
+        message: "Machine ID, Main Item ID, and array of Employee IDs are required"
       });
     }
+
 
     // Step 2b: Check machine exists
     const machine = await Machine.findById(machineId);
@@ -121,10 +122,22 @@ exports.assignMachineToEmployees = async (req, res) => {
       return res.status(404).json({statusCode: 404, success: false, message: "Some employees not found" });
     }
 
+
+// ---Create main item exists--
+
+const mainItem = await MainItem.findById(mainItemId);
+
+if(!mainItem) return res.status(404).json({
+  statusCode:404, success:false, 
+  message:"Main Item not Found"
+});
+
+
     // Step 2d: Create assignment
     let assignment = await MachineAssignment.create({
       machine: machineId,
-      employees: employeeIds
+      employees: employeeIds,
+       mainItem: mainItemId
     });
 
 
@@ -132,12 +145,13 @@ exports.assignMachineToEmployees = async (req, res) => {
    
     const populatedAssignment = await MachineAssignment.findById(assignment._id)
       .populate({ path: 'machine', select: 'name type' })
-      .populate({ path: 'employees', select: 'name role' });
+      .populate({ path: 'employees', select: 'name role' })
+      .populate({ path: 'mainItem' }); // populate all mainItem details
 
     res.status(201).json({
        statusCode: 201,
       success: true,
-      message: 'Machine assigned successfully',
+      message: 'Machine assigned successfully with main item details',
       data: populatedAssignment
     });
 
@@ -149,3 +163,31 @@ exports.assignMachineToEmployees = async (req, res) => {
 };
 
 
+// GET /api/assignments/employee/:employeeId
+exports.getAssignmentsByEmployee = async (req, res) => {
+  try {
+    const employeeId = req.params.employeeId || req.query.employeeId;
+if (!employeeId) {
+  return res.status(400).json({ statusCode: 400, success: false, message: "Employee ID is required" });
+}
+
+    const assignments = await MachineAssignment.find({ employees: employeeId })
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role' })
+      .populate({ path: 'mainItem' }); // <-- Populate full mainItem details
+
+    res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: `Fetched assignments for employee ${employeeId} including main item details`,
+      data: assignments
+    });
+  } catch (error) {
+    console.error("Get Employee Assignments Error:", error);
+    res.status(500).json({
+      statusCode: 500,
+      success: false,
+      message: 'Server error while fetching employee assignments'
+    });
+  }
+};
