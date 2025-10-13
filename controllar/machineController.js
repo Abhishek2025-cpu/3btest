@@ -225,3 +225,91 @@ exports.getAllAssignmentsForAdmin = async (req, res) => {
     });
   }
 };
+
+
+//create post api assign Machine
+
+const MachineAssignment = require('../models/MachineAssignment');
+const Machine = require('../models/Machine');
+const Employee = require('../models/Employee');
+const MainItem = require('../models/item.model');
+const cloudinary = require('cloudinary').v2;
+
+exports.assignMachineWithOperator = async (req, res) => {
+  try {
+    const { machineId, employeeIds, mainItemId, shift, operatorTable } = req.body;
+
+    // Validate input
+    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || !mainItemId || !shift) {
+      return res.status(400).json({
+        success: false,
+        message: "Machine ID, Main Item ID, Employee IDs array, and shift are required"
+      });
+    }
+
+    // Check machine
+    const machine = await Machine.findById(machineId);
+    if (!machine) return res.status(404).json({ success: false, message: "Machine not found" });
+
+    // Check employees
+    const employees = await Employee.find({ _id: { $in: employeeIds } });
+    if (employees.length !== employeeIds.length) {
+      return res.status(404).json({ success: false, message: "Some employees not found" });
+    }
+
+    // Check mainItem
+    const mainItem = await MainItem.findById(mainItemId);
+    if (!mainItem) return res.status(404).json({ success: false, message: "Main item not found" });
+
+    // If operatorTable contains images, upload them
+    let processedOperatorTable = [];
+    if (operatorTable && operatorTable.length > 0) {
+      for (const operator of operatorTable) {
+        let imageUrl = null;
+        if (operator.imageFile) {
+          const result = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: "operatorTable" },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+              }
+            );
+            stream.end(operator.imageFile.buffer);
+          });
+          imageUrl = result.secure_url;
+        }
+
+        processedOperatorTable.push({
+          ...operator,
+          image: imageUrl || operator.image || null
+        });
+      }
+    }
+
+    // Create assignment
+    const assignment = await MachineAssignment.create({
+      machine: machineId,
+      employees: employeeIds,
+      mainItem: mainItemId,
+      shift,
+      operatorTable: processedOperatorTable
+    });
+
+    // Populate for response
+    const populatedAssignment = await MachineAssignment.findById(assignment._id)
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role' })
+      .populate({ path: 'mainItem' });
+
+    res.status(201).json({
+      success: true,
+      message: "Machine assigned successfully with operator table",
+      data: populatedAssignment
+    });
+
+  } catch (error) {
+    console.error("Assign Machine Error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
