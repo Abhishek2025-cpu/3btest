@@ -43,23 +43,29 @@ exports.sendOtp = async (req, res) => {
 
 // Step 2: Verify OTP
 exports.verifyOtp = async (req, res) => {
-  // The 'email' is received but will not be used for now.
-  const { sessionId, otp, email } = req.body; 
+  const { sessionId, otp, email, number } = req.body;
 
-  // The check for 'email' is still here, we can remove it if you want.
-  if (!sessionId || !otp || !email) {
+  if (!sessionId || !otp || !email || !number) {
     return res.status(400).json({
       status: false,
-      message: 'sessionId, otp, and email are required'
+      message: 'sessionId, otp, email, and number are required'
     });
   }
 
   try {
+    // ✅ Test case bypass for 9999999999 and 123456
+    if (number === '9999999999' && otp === '123456') {
+      return res.status(200).json({
+        status: true,
+        message: '✅ Test OTP verified successfully (bypass mode)'
+      });
+    }
+
+    // 🔹 Normal flow using 2factor.in API
     const verifyRes = await axios.get(
       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
     );
 
-    // Check if the OTP from 2factor.in is valid
     if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
       return res.status(400).json({
         status: false,
@@ -68,17 +74,12 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    // --- MODIFICATION ---
-    // The try/catch block for sending the email has been removed.
-    // If we reach this point, the OTP is valid. We immediately return success.
-
     return res.status(200).json({
       status: true,
       message: 'OTP verified successfully'
     });
 
   } catch (error) {
-    // This will catch any errors from the 2factor.in API call
     console.error('OTP VERIFY API ERROR:', error.message);
     return res.status(500).json({
       status: false,
@@ -87,4 +88,5 @@ exports.verifyOtp = async (req, res) => {
     });
   }
 };
+
 
