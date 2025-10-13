@@ -105,13 +105,41 @@ exports.loginVerifyOtp = async (req, res) => {
 
 
 exports.signup = async (req, res) => {
-  const { name, number, email, fcmToken } = req.body;
+  const { name, number, email, fcmToken, otp } = req.body;
 
   if (!name || !number || !email) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
+    // ✅ Allow test signup bypass for testing number
+    if (number === '9999999999' && otp === '123456') {
+      const testUser = {
+        _id: 'test-user-id',
+        name,
+        number,
+        email,
+        role: 'client',
+        profileImage: null,
+        fcmTokens: fcmToken ? [fcmToken] : [],
+      };
+
+      if (fcmToken) {
+        await sendNotification(
+          testUser._id,
+          [fcmToken],
+          "Welcome 🎉 (Test Mode)",
+          `Dear ${name}, this is a test signup using number 9999999999.`
+        );
+      }
+
+      return res.status(201).json({
+        message: '✅ Test user registered successfully',
+        user: testUser,
+      });
+    }
+
+    // 🔹 Proceed with normal signup flow
     const existingEmail = await User.findOne({ email });
     const existingNumber = await User.findOne({ number });
 
@@ -132,12 +160,12 @@ exports.signup = async (req, res) => {
       email,
       role: 'client',
       profileImage,
-      fcmTokens: fcmToken ? [fcmToken] : []
+      fcmTokens: fcmToken ? [fcmToken] : [],
     });
 
     await newUser.save();
 
-    // ✅ Trigger welcome notification and save it in DB
+    // ✅ Trigger welcome notification
     if (fcmToken) {
       await sendNotification(
         newUser._id,
@@ -153,6 +181,7 @@ exports.signup = async (req, res) => {
     res.status(500).json({ message: 'Signup failed', error: error.message });
   }
 };
+
 
 
 
