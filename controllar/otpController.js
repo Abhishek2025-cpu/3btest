@@ -45,19 +45,32 @@ exports.sendOtp = async (req, res) => {
 exports.verifyOtp = async (req, res) => {
   const { sessionId, otp, email, number } = req.body;
 
-  if (!sessionId || !otp || !email || !number) {
+  // sessionId is now optional (we'll generate a dummy one for the test user if missing)
+  if (!otp || !email || !number) {
     return res.status(400).json({
       status: false,
-      message: 'sessionId, otp, email, and number are required'
+      message: 'otp, email, and number are required'
     });
   }
 
   try {
     // ✅ Test case bypass for 9999999999 and 123456
     if (number === '9999999999' && otp === '123456') {
+      // create a dummy session id if not provided
+      const dummySessionId = sessionId || `TESTSESSION_${number}_${Date.now()}`;
+
       return res.status(200).json({
         status: true,
-        message: '✅ Test OTP verified successfully (bypass mode)'
+        message: '✅ Test OTP verified successfully (bypass mode)',
+        sessionId: dummySessionId
+      });
+    }
+
+    // For normal users, sessionId is still required
+    if (!sessionId) {
+      return res.status(400).json({
+        status: false,
+        message: 'sessionId is required for non-test verification'
       });
     }
 
@@ -88,5 +101,6 @@ exports.verifyOtp = async (req, res) => {
     });
   }
 };
+
 
 
