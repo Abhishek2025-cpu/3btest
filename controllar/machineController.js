@@ -5,7 +5,7 @@ const cloudinary = require("cloudinary").v2;
 const MachineAssignment = require('../models/MachineAssignment');
 
 const MainItem = require('../models/item.model');
- 
+
 
 
 // Add new machine
@@ -100,12 +100,12 @@ exports.deleteMachine = async (req, res) => {
 
 exports.assignMachineToEmployees = async (req, res) => {
   try {
-    const { machineId, employeeIds , mainItemId } = req.body;
+    const { machineId, employeeIds, mainItemId } = req.body;
 
     // Step 2a: Validate input
-    if ( !machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0 || !mainItemId) {
+    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0 || !mainItemId) {
       return res.status(400).json({
-        statusCode:400,
+        statusCode: 400,
         success: false,
         message: "Machine ID, Main Item ID, and array of Employee IDs are required"
       });
@@ -119,37 +119,37 @@ exports.assignMachineToEmployees = async (req, res) => {
     // Step 2c: Check all employees exist
     const employees = await Employee.find({ _id: { $in: employeeIds } });
     if (employees.length !== employeeIds.length) {
-      return res.status(404).json({statusCode: 404, success: false, message: "Some employees not found" });
+      return res.status(404).json({ statusCode: 404, success: false, message: "Some employees not found" });
     }
 
 
-// ---Create main item exists--
+    // ---Create main item exists--
 
-const mainItem = await MainItem.findById(mainItemId);
+    const mainItem = await MainItem.findById(mainItemId);
 
-if(!mainItem) return res.status(404).json({
-  statusCode:404, success:false, 
-  message:"Main Item not Found"
-});
+    if (!mainItem) return res.status(404).json({
+      statusCode: 404, success: false,
+      message: "Main Item not Found"
+    });
 
 
     // Step 2d: Create assignment
     let assignment = await MachineAssignment.create({
       machine: machineId,
       employees: employeeIds,
-       mainItem: mainItemId
+      mainItem: mainItemId
     });
 
 
     // Step 2e: Populate machine and employee details
-   
+
     const populatedAssignment = await MachineAssignment.findById(assignment._id)
       .populate({ path: 'machine', select: 'name type' })
       .populate({ path: 'employees', select: 'name role' })
       .populate({ path: 'mainItem' }); // populate all mainItem details
 
     res.status(201).json({
-       statusCode: 201,
+      statusCode: 201,
       success: true,
       message: 'Machine assigned successfully with main item details',
       data: populatedAssignment
@@ -158,7 +158,8 @@ if(!mainItem) return res.status(404).json({
   } catch (error) {
     console.error("Assign Machine Error:", error);
     res.status(500).json({
-       statusCode: 500, success: false, message: "Server error while assigning machine" });
+      statusCode: 500, success: false, message: "Server error while assigning machine"
+    });
   }
 };
 
@@ -167,9 +168,9 @@ if(!mainItem) return res.status(404).json({
 exports.getAssignmentsByEmployee = async (req, res) => {
   try {
     const employeeId = req.params.employeeId || req.query.employeeId;
-if (!employeeId) {
-  return res.status(400).json({ statusCode: 400, success: false, message: "Employee ID is required" });
-}
+    if (!employeeId) {
+      return res.status(400).json({ statusCode: 400, success: false, message: "Employee ID is required" });
+    }
 
     const assignments = await MachineAssignment.find({ employees: employeeId })
       .populate({ path: 'machine', select: 'name type' })
@@ -229,53 +230,50 @@ exports.getAllAssignmentsForAdmin = async (req, res) => {
 
 //create post api assign Machine
 
-const MachineAssignment = require('../models/MachineAssignment');
-const Machine = require('../models/Machine');
-const Employee = require('../models/Employee');
-const MainItem = require('../models/item.model');
-const cloudinary = require('cloudinary').v2;
+
 
 exports.assignMachineWithOperator = async (req, res) => {
   try {
-    const { machineId, employeeIds, mainItemId, shift, operatorTable } = req.body;
+    let { machineId, employeeIds, mainItemId, shift, operatorTable } = req.body;
 
-    // Validate input
-    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || !mainItemId || !shift) {
+    // Convert employeeIds to array if string
+    employeeIds = typeof employeeIds === 'string' ? employeeIds.split(',') : employeeIds;
+
+    // Parse operatorTable JSON string to object
+    operatorTable = operatorTable ? JSON.parse(operatorTable) : [];
+
+    // Validate required fields
+    if (!machineId || !mainItemId || !employeeIds.length || !shift) {
       return res.status(400).json({
         success: false,
         message: "Machine ID, Main Item ID, Employee IDs array, and shift are required"
       });
     }
 
-    // Check machine
+    // Check machine, employees, mainItem
     const machine = await Machine.findById(machineId);
     if (!machine) return res.status(404).json({ success: false, message: "Machine not found" });
 
-    // Check employees
     const employees = await Employee.find({ _id: { $in: employeeIds } });
-    if (employees.length !== employeeIds.length) {
-      return res.status(404).json({ success: false, message: "Some employees not found" });
-    }
+    if (employees.length !== employeeIds.length) return res.status(404).json({ success: false, message: "Some employees not found" });
 
-    // Check mainItem
     const mainItem = await MainItem.findById(mainItemId);
     if (!mainItem) return res.status(404).json({ success: false, message: "Main item not found" });
 
-    // If operatorTable contains images, upload them
+    // Upload operator images to Cloudinary
     let processedOperatorTable = [];
-    if (operatorTable && operatorTable.length > 0) {
-      for (const operator of operatorTable) {
+    if (operatorTable.length > 0) {
+      for (let i = 0; i < operatorTable.length; i++) {
+        let operator = operatorTable[i];
         let imageUrl = null;
-        if (operator.imageFile) {
+
+        if (req.files && req.files[i]) {
           const result = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
               { folder: "operatorTable" },
-              (error, result) => {
-                if (error) reject(error);
-                else resolve(result);
-              }
+              (err, result) => err ? reject(err) : resolve(result)
             );
-            stream.end(operator.imageFile.buffer);
+            stream.end(req.files[i].buffer);
           });
           imageUrl = result.secure_url;
         }
@@ -287,16 +285,16 @@ exports.assignMachineWithOperator = async (req, res) => {
       }
     }
 
-    // Create assignment
+    // Create MachineAssignment
     const assignment = await MachineAssignment.create({
       machine: machineId,
-      employees: employeeIds,
+      employees,
       mainItem: mainItemId,
       shift,
       operatorTable: processedOperatorTable
     });
 
-    // Populate for response
+    // Populate response
     const populatedAssignment = await MachineAssignment.findById(assignment._id)
       .populate({ path: 'machine', select: 'name type' })
       .populate({ path: 'employees', select: 'name role' })
@@ -311,5 +309,81 @@ exports.assignMachineWithOperator = async (req, res) => {
   } catch (error) {
     console.error("Assign Machine Error:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+
+
+// 👉 Get assignments by employee ID
+exports.getOperatorAssignmentsByEmployee = async (req, res) => {
+  try {
+    const { employeeId } = req.query;
+
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID is required (use ?employeeId=...)"
+      });
+    }
+
+    // Find assignments for that employee
+    const assignments = await MachineAssignment.find({ employees: employeeId })
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role' })
+      .populate({ path: 'mainItem', select: 'itemName category' })
+      .populate({ path: 'operatorTable', select: 'name role' }); // <-- add this
+
+
+
+    if (!assignments.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No assignments found for this employee"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Fetched assignments successfully",
+      data: assignments
+    });
+
+  } catch (error) {
+    console.error("Get Assignments Error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+// GET /api/assignments/all
+
+
+exports.getAllAssignments = async (req, res) => {
+  try {
+    const assignments = await MachineAssignment.find()
+      .populate({ path: 'machine', select: 'name type' })
+      .populate({ path: 'employees', select: 'name role eid' })
+      .populate({ path: 'mainItem', select: 'itemName category helper operator' }) // populate mainItem
+      .sort({ createdAt: -1 }); // latest first
+
+    if (!assignments.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No machine assignments found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "All machine assignments fetched successfully",
+      data: assignments
+    });
+  } catch (error) {
+    console.error("Get All Assignments Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching all assignments"
+    });
   }
 };

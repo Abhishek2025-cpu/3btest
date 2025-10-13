@@ -6,8 +6,8 @@ const OperatorSchema = new mongoose.Schema({
   time: { type: String },
   frameLength: [{ type: Number }], // Array of frame lengths
   numberOfBox: { type: Number },
-  boxWeight: { type: String }, // e.g., "50kg"
-  frameWeight: { type: String }, // e.g., "300-350kg"
+  boxWeight: { type: String }, // "50kg"
+  frameWeight: { type: String }, //  "300-350kg"
   description: { type: String },
   image: { type: String } // Cloudinary URL
 });
@@ -22,3 +22,6 @@ const machineAssignmentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('MachineAssignment', machineAssignmentSchema);
+
+
+

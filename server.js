@@ -57,6 +57,8 @@ const pushRoutes = require('./routes/pushRoutes');
 const BillingRoutes = require('./routes/billingRoutes');
 const machineRoutes = require("./routes/machineRoutes");
 
+const operator = require("./routes/operatorRoutes");
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productUploadRoutes);
@@ -85,6 +87,7 @@ app.use('/api', pushRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/billings', BillingRoutes);
 app.use("/api/machines", machineRoutes);
+app.use("/api/operator", operator);
 
 
 
