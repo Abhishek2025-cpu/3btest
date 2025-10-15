@@ -105,14 +105,21 @@ app.use((req, res, next) => {
 
 // Start server immediately
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
 
-  // Connect to DB asynchronously after server starts
-  connectDB()
-    .then(() => console.log("✅ Database connected"))
-    .catch(err => console.error("❌ DB connection failed:", err.message));
-});
+// Connect to DB first, then start the server
+connectDB()
+  .then(() => {
+    console.log("✅ Database connected");
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error("❌ DB connection failed:", err.message);
+    process.exit(1); // Exit container so Cloud Run knows it failed
+  });
+
 
 // Example: Access translation API key safely
 console.log("TRANSLATION_API_KEY:", process.env.TRANSLATION_API_KEY);
