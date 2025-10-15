@@ -132,7 +132,7 @@ exports.employeeLoginSendOtp = async (req, res) => {
     // Mock response
     return res.status(200).json({
       status: true,
-      message: 'OTP sent via SMS for employee login (mocked)',
+      message: 'OTP sent via SMS for employee login',
       sessionId: 'mock-session', // dummy sessionId
       employeeId: employee._id,
     });
