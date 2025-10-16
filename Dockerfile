@@ -4,20 +4,16 @@ FROM node:18
 # Create app directory
 WORKDIR /app
 
-# Install app dependencies
+# Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --production
 
-
-bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
-
-
-
-# Copy the app source
+# Copy Firebase credentials and app source
+COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
 COPY . .
 
-# Expose the port that Cloud Run expects
+# Expose the port Cloud Run expects
 EXPOSE 8080
 
 # Start the server
-CMD [ "node", "server.js" ]
+CMD ["node", "server.js"]
