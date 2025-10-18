@@ -56,7 +56,8 @@ app.use((req, res, next) => {
 });
 
 // Start server after DB connection
-const PORT =  8080;
+
+const PORT = process.env.PORT || 8080;
 
 connectDB()
   .then(() => {
@@ -69,5 +70,6 @@ connectDB()
     console.error("❌ DB connection failed:", err.message);
     process.exit(1);
   });
+
 
 console.log("TRANSLATION_API_KEY:", process.env.TRANSLATION_API_KEY);
