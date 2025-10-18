@@ -1,15 +1,18 @@
 # Use Node.js LTS base image
 FROM node:18
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
 RUN npm install --production
 
-# Copy Firebase credentials and app source
-COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
+# Copy Firebase credentials (both files, if needed)
+COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./ || true
+COPY serviceAccountKey.json ./ || true
+
+# Copy the rest of the app source code
 COPY . .
 
 # Expose the port Cloud Run expects
