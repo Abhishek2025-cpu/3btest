@@ -55,12 +55,12 @@ app.use((req, res, next) => {
 });
 
 // Start server after DB connection
-const PORT = process.env.PORT || 8080;
+const PORT =  8080;
 
 connectDB()
   .then(() => {
     console.log("✅ Database connected successfully");
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
   })
