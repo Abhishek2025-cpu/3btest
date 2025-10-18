@@ -58,19 +58,12 @@ function initFirebase() {
 
   let serviceAccount;
 
-  // Read Firebase credentials from Cloud Run secret or local file
   if (process.env.FIREBASE_KEY) {
-    try {
-      serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-    } catch (err) {
-      console.error("Invalid JSON in FIREBASE_KEY secret:", err);
-      throw err;
-    }
-  } else if (process.env.FIREBASE_CONFIG) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+    // Cloud Run injects secret as env variable
+    serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
   } else {
-    // fallback to local file (for local development)
-    serviceAccount = require("./serviceAccountKey.json"); // use your local file
+    // fallback for local dev
+    serviceAccount = require("./serviceAccountKey.json");
   }
 
   if (!getApps().length) {
