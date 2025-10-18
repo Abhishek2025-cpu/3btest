@@ -47,6 +47,7 @@ app.use('/api/operator', require('./routes/operatorRoutes'));
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
+app.post('/api/test', (req, res) => res.send('Hello from API'));
 
 // Request logging middleware
 app.use((req, res, next) => {
