@@ -9,8 +9,10 @@ COPY package*.json ./
 RUN npm install --production
 
 # Copy Firebase credentials (both files, if needed)
-COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./ || true
-COPY serviceAccountKey.json ./ || true
+COPY bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json ./
+# Copy the Firebase credentials that exist
+COPY serviceAccountKey.json ./
+
 
 # Copy the rest of the app source code
 COPY . .
