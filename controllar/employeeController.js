@@ -9,6 +9,102 @@ const axios = require('axios');
 const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
 
 // STEP 1: Send OTP for employee login
+// exports.employeeLoginSendOtp = async (req, res) => {
+//   const { mobile } = req.body;
+
+//   if (!mobile) {
+//     return res.status(400).json({
+//       status: false,
+//       message: 'Mobile number is required',
+//     });
+//   }
+
+//   try {
+//     const employee = await Employee.findOne({ mobile });
+//     if (!employee) {
+//       return res.status(404).json({
+//         status: false,
+//         message: 'Employee not found with provided mobile',
+//       });
+//     }
+
+//     const otpRes = await axios.get(
+//       `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
+//     );
+
+//     if (otpRes.data.Status === 'Success') {
+//       return res.status(200).json({
+//         status: true,
+//         message: 'OTP sent via SMS for employee login',
+//         sessionId: otpRes.data.Details,
+//         employeeId: employee._id,
+//       });
+//     } else {
+//       return res.status(400).json({
+//         status: false,
+//         message: 'Failed to send OTP',
+//         details: otpRes.data,
+//       });
+//     }
+//   } catch (error) {
+//     console.error('Employee Login OTP Error:', error.response?.data || error.message);
+//     return res.status(500).json({
+//       status: false,
+//       message: 'Error sending employee login OTP',
+//       error: error.response?.data || error.message,
+//     });
+//   }
+// };
+
+// // STEP 2: Verify OTP for employee login
+// exports.employeeLoginVerifyOtp = async (req, res) => {
+//   const { sessionId, otp, mobile } = req.body;
+
+//   if (!sessionId || !otp || !mobile) {
+//     return res.status(400).json({
+//       status: false,
+//       message: 'sessionId, otp, and mobile are required',
+//     });
+//   }
+
+//   try {
+//     const verifyRes = await axios.get(
+//       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
+//     );
+
+//     if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
+//       return res.status(400).json({
+//         status: false,
+//         message: 'Invalid OTP',
+//         details: verifyRes.data,
+//       });
+//     }
+
+//     // Find employee by mobile instead of employeeId
+//     const employee = await Employee.findOne({ mobile });
+//     if (!employee) {
+//       return res.status(404).json({
+//         status: false,
+//         message: 'Employee not found',
+//       });
+//     }
+
+//     return res.status(200).json({
+//       status: true,
+//       message: 'Employee login successful',
+//       employee,
+//     });
+//   } catch (error) {
+//     console.error('Employee Login OTP VERIFY ERROR:', error.message);
+//     return res.status(500).json({
+//       status: false,
+//       message: 'Error during employee login OTP verification',
+//       error: error.response?.data || error.message,
+//     });
+//   }
+// };
+
+// STEP 1: Send OTP (Mocked)
 exports.employeeLoginSendOtp = async (req, res) => {
   const { mobile } = req.body;
 
@@ -28,59 +124,41 @@ exports.employeeLoginSendOtp = async (req, res) => {
       });
     }
 
-    const otpRes = await axios.get(
-      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
-    );
+    // Commented out actual OTP sending
+    // const otpRes = await axios.get(
+    //   `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
+    // );
 
-    if (otpRes.data.Status === 'Success') {
-      return res.status(200).json({
-        status: true,
-        message: 'OTP sent via SMS for employee login',
-        sessionId: otpRes.data.Details,
-        employeeId: employee._id,
-      });
-    } else {
-      return res.status(400).json({
-        status: false,
-        message: 'Failed to send OTP',
-        details: otpRes.data,
-      });
-    }
+    // Mock response
+    return res.status(200).json({
+      status: true,
+      message: 'OTP sent via SMS for employee login',
+      sessionId: 'mock-session', // dummy sessionId
+      employeeId: employee._id,
+    });
   } catch (error) {
-    console.error('Employee Login OTP Error:', error.response?.data || error.message);
+    console.error('Employee Login OTP Error:', error.message);
     return res.status(500).json({
       status: false,
       message: 'Error sending employee login OTP',
-      error: error.response?.data || error.message,
+      error: error.message,
     });
   }
 };
 
-// STEP 2: Verify OTP for employee login
+// STEP 2: Verify OTP (Mocked)
+// STEP 2: Verify OTP (Mocked with name and role)
 exports.employeeLoginVerifyOtp = async (req, res) => {
-  const { sessionId, otp, mobile } = req.body;
+  const { otp, mobile } = req.body;
 
-  if (!sessionId || !otp || !mobile) {
+  if (!otp || !mobile) {
     return res.status(400).json({
       status: false,
-      message: 'sessionId, otp, and mobile are required',
+      message: 'OTP and mobile are required',
     });
   }
 
   try {
-    const verifyRes = await axios.get(
-      `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
-    );
-
-    if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid OTP',
-        details: verifyRes.data,
-      });
-    }
-
-    // Find employee by mobile instead of employeeId
     const employee = await Employee.findOne({ mobile });
     if (!employee) {
       return res.status(404).json({
@@ -89,20 +167,32 @@ exports.employeeLoginVerifyOtp = async (req, res) => {
       });
     }
 
+    // Mock OTP verification
+    if (otp !== '123456') {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid OTP',
+      });
+    }
+
     return res.status(200).json({
       status: true,
       message: 'Employee login successful',
-      employee,
+      employeeId: employee._id,
+      name: employee.name,
+      role: employee.role
     });
   } catch (error) {
     console.error('Employee Login OTP VERIFY ERROR:', error.message);
     return res.status(500).json({
       status: false,
       message: 'Error during employee login OTP verification',
-      error: error.response?.data || error.message,
+      error: error.message,
     });
   }
 };
+
+
 
 
 

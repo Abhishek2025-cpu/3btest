@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Archive = require('../models/Archive');
 const { translateResponse } = require('../services/translation.service');
 const { sendNotification } = require('../services/notificationService');
 const userProfileFieldsToTranslate = [
@@ -32,6 +33,18 @@ exports.loginSendOtp = async (req, res) => {
       return res.status(400).json({ status: false, message: 'User does not have a phone number registered' });
     }
 
+    // ✅ Test bypass condition
+    if (user.number === '9999999999') {
+      return res.status(200).json({
+        status: true,
+        message: 'Test OTP sent successfully (bypassed 2Factor)',
+        sessionId: null, // No session ID for testing
+        userId: user._id,
+        testOtp: '123456'
+      });
+    }
+
+    // Normal flow using 2Factor API
     const otpRes = await axios.get(
       `https://2factor.in/API/V1/${API_KEY}/SMS/+91${user.number}/AUTOGEN`
     );
@@ -57,18 +70,45 @@ exports.loginSendOtp = async (req, res) => {
 };
 
 
+
 // STEP 2: Verify OTP at login
 exports.loginVerifyOtp = async (req, res) => {
   const { sessionId, otp, userId } = req.body;
 
-  if (!sessionId || !otp || !userId) {
+  if (!otp || !userId) {
     return res.status(400).json({
       status: false,
-      message: 'sessionId, otp, and userId are required'
+      message: 'otp and userId are required'
     });
   }
 
   try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'User not found' });
+    }
+
+    // Test bypass: only for test phone and test OTP.
+    // Optional: restrict bypass to development environment.
+    const isDev = process.env.NODE_ENV === 'development';
+    if (user.number === '9999999999' && otp === '123456' && (isDev || true)) {
+      // NOTE: change `(isDev || true)` to just `isDev` if you want the bypass only in dev
+      return res.status(200).json({
+        status: true,
+        message: 'Test login successful (bypassed OTP verification)',
+        user
+      });
+    }
+
+    // For non-test flows, sessionId is required
+    if (!sessionId) {
+      return res.status(400).json({
+        status: false,
+        message: 'sessionId is required for non-test users'
+      });
+    }
+
+    // Verify with 2Factor
     const verifyRes = await axios.get(
       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
     );
@@ -81,12 +121,7 @@ exports.loginVerifyOtp = async (req, res) => {
       });
     }
 
-    // OTP matched → login success
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ status: false, message: 'User not found' });
-    }
-
+    // OTP matched
     return res.status(200).json({
       status: true,
       message: 'Login successful',
@@ -94,7 +129,7 @@ exports.loginVerifyOtp = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login OTP VERIFY ERROR:', error.message);
+    console.error('Login OTP VERIFY ERROR:', error.response?.data || error.message);
     return res.status(500).json({
       status: false,
       message: 'Error during login OTP verification',
@@ -102,6 +137,7 @@ exports.loginVerifyOtp = async (req, res) => {
     });
   }
 };
+
 
 
 exports.signup = async (req, res) => {
@@ -289,15 +325,55 @@ exports.getUserProfileById = async (req, res) => {
   }
 };
 
+
+
 exports.deleteUserById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findByIdAndDelete(userId);
+
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.status(200).json({ message: 'User deleted successfully' });
+
+    // Save deleted user data in Archive
+    const archivedUser = await Archive.create({
+      originalUserId: user._id,
+      deletedUserData: user.toObject(),
+    });
+
+    // Delete user from main collection
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      message: 'User deleted successfully and archived',
+      archivedUser,
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete user', error: error.message });
+    res.status(500).json({
+      message: 'Failed to delete user',
+      error: error.message,
+    });
+  }
+};
+
+// Get all archived users
+exports.getArchivedUsers = async (req, res) => {
+  try {
+    const archivedUsers = await Archive.find().sort({ deletedAt: -1 });
+
+    if (!archivedUsers.length) {
+      return res.status(404).json({ message: 'No archived users found' });
+    }
+
+    res.status(200).json({
+      message: 'Archived users fetched successfully',
+      archivedUsers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Failed to fetch archived users',
+      error: error.message,
+    });
   }
 };
