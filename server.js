@@ -12,8 +12,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
+app.use(express.json({ limit: '1500mb' }));
+app.use(express.urlencoded({ limit: '1500mb', extended: true }));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -73,4 +73,3 @@ connectDB()
 
 
 console.log("TRANSLATION_API_KEY:", process.env.TRANSLATION_API_KEY);
-/////

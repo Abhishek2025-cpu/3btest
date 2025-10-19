@@ -1,6 +1,8 @@
 const Machine = require("../models/Machine");
 const Employee = require("../models/Employee");
 const cloudinary = require("cloudinary").v2;
+const { uploadBufferToGCS } = require('../utils/gcloud'); // your GCS upload helper
+const sharp = require('sharp');
 
 const MachineAssignment = require('../models/MachineAssignment');
 
@@ -260,27 +262,32 @@ exports.assignMachineWithOperator = async (req, res) => {
     const mainItem = await MainItem.findById(mainItemId);
     if (!mainItem) return res.status(404).json({ success: false, message: "Main item not found" });
 
-    // Upload operator images to Cloudinary
+    // Upload operator images to GCS
     let processedOperatorTable = [];
     if (operatorTable.length > 0) {
       for (let i = 0; i < operatorTable.length; i++) {
         let operator = operatorTable[i];
-        let imageUrl = null;
+        let imageUrl = operator.image || null;
 
         if (req.files && req.files[i]) {
-          const result = await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-              { folder: "operatorTable" },
-              (err, result) => err ? reject(err) : resolve(result)
-            );
-            stream.end(req.files[i].buffer);
-          });
-          imageUrl = result.secure_url;
+          try {
+            const compressedBuffer = await sharp(req.files[i].buffer)
+              .resize({ width: 1000, withoutEnlargement: true })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+
+            const filename = `operator-${Date.now()}-${req.files[i].originalname}`;
+            const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'operator-table');
+            imageUrl = uploadResult.url;
+          } catch (fileError) {
+            console.error(`❌ Failed to upload operator image ${req.files[i].originalname}:`, fileError);
+            // Optionally continue without failing the whole request
+          }
         }
 
         processedOperatorTable.push({
           ...operator,
-          image: imageUrl || operator.image || null
+          image: imageUrl
         });
       }
     }

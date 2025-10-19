@@ -7,8 +7,8 @@ const { uploadProduct } = require('../middleware/upload');
 
 router.post('/add',
   uploadProduct.fields([
-    { name: 'images', maxCount: 20 },
-    { name: 'colorImages', maxCount: 20 }
+    { name: 'images', maxCount: 50 },       
+    { name: 'colorImages', maxCount: 50 }   
   ]),
   productController.createProduct
 );
