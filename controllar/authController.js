@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Archive = require('../models/Archive');
 const { translateResponse } = require('../services/translation.service');
 const { sendNotification } = require('../services/notificationService');
 const userProfileFieldsToTranslate = [
@@ -324,15 +325,55 @@ exports.getUserProfileById = async (req, res) => {
   }
 };
 
+
+
 exports.deleteUserById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findByIdAndDelete(userId);
+
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.status(200).json({ message: 'User deleted successfully' });
+
+    // Save deleted user data in Archive
+    const archivedUser = await Archive.create({
+      originalUserId: user._id,
+      deletedUserData: user.toObject(),
+    });
+
+    // Delete user from main collection
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      message: 'User deleted successfully and archived',
+      archivedUser,
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete user', error: error.message });
+    res.status(500).json({
+      message: 'Failed to delete user',
+      error: error.message,
+    });
+  }
+};
+
+// Get all archived users
+exports.getArchivedUsers = async (req, res) => {
+  try {
+    const archivedUsers = await Archive.find().sort({ deletedAt: -1 });
+
+    if (!archivedUsers.length) {
+      return res.status(404).json({ message: 'No archived users found' });
+    }
+
+    res.status(200).json({
+      message: 'Archived users fetched successfully',
+      archivedUsers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Failed to fetch archived users',
+      error: error.message,
+    });
   }
 };

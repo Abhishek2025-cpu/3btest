@@ -9,7 +9,8 @@ const {
   getUserProfileById,
   deleteUserById,
   loginSendOtp,
-  loginVerifyOtp
+  loginVerifyOtp,
+  getArchivedUsers 
 
 } = require('../controllar/authController'); 
 const otpController = require('../controllar/otpController');
@@ -22,8 +23,10 @@ router.post('/login', login);
 router.post('/send-otp', otpController.sendOtp);
 router.post('/verify-otp', otpController.verifyOtp);
 router.get('/get-user-profiles', getUserProfiles);
+router.get('/users/archived', getArchivedUsers);
 router.get('/users/:userId', getUserProfileById);
 router.delete('/users/:userId',deleteUserById);
+
 router.post('/login/send-otp', loginSendOtp);
 router.post('/login/verify-otp', loginVerifyOtp);
 ///////////////////////////////////////
