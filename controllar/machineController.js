@@ -315,7 +315,7 @@ exports.assignMachineWithOperator = async (req, res) => {
 
 
 
-// 👉 Get assignments by employee ID
+//  Get assignments by employee ID
 exports.getOperatorAssignmentsByEmployee = async (req, res) => {
   try {
     const { employeeId } = req.query;
