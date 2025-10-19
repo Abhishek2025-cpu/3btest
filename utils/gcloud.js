@@ -201,28 +201,84 @@
 
 // module.exports = { uploadBufferToGCS };
 
+// const { Storage } = require("@google-cloud/storage");
+
+// let storage;
+
+// if (process.env.FIREBASE_KEY) {
+//   // Use secret injected as env variable on Cloud Run
+//   const credentials = JSON.parse(process.env.FIREBASE_KEY);
+//   storage = new Storage({ credentials });
+// } else {
+//   // fallback for local development
+//   storage = new Storage({
+//     keyFilename: require("path").join(
+//       __dirname,
+//       "../serviceAccountKey.json" // your local JSON
+//     ),
+//   });
+// }
+
+// // Bucket name
+// const BUCKET_NAME = "3bprofiles-products";
+// const bucket = storage.bucket(BUCKET_NAME);
+
+// async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
+//   const uniqueName = `${Date.now()}-${filename}`;
+//   const filePath = `${folder}/${uniqueName}`;
+//   const file = bucket.file(filePath);
+
+//   return new Promise((resolve, reject) => {
+//     const stream = file.createWriteStream({
+//       resumable: false,
+//       contentType: mimetype,
+//     });
+
+//     stream.on("error", reject);
+//     stream.on("finish", () => {
+//       resolve({
+//         url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+//         id: filePath,
+//       });
+//     });
+
+//     stream.end(buffer);
+//   });
+// }
+
+// async function deleteFileFromGCS(fileName) {
+//   try {
+//     await bucket.file(fileName).delete();
+//     console.log(`✅ Successfully deleted ${fileName} from GCS bucket.`);
+//   } catch (error) {
+//     if (error.code === 404) {
+//       console.warn(`⚠️ File not found in GCS: ${fileName}`);
+//       return;
+//     }
+//     console.error(`❌ Error deleting file ${fileName}:`, error);
+//     throw error;
+//   }
+// }
+
+// module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
+
 const { Storage } = require("@google-cloud/storage");
 
-let storage;
-
-if (process.env.FIREBASE_KEY) {
-  // Use secret injected as env variable on Cloud Run
-  const credentials = JSON.parse(process.env.FIREBASE_KEY);
-  storage = new Storage({ credentials });
-} else {
-  // fallback for local development
-  storage = new Storage({
-    keyFilename: require("path").join(
-      __dirname,
-      "../serviceAccountKey.json" // your local JSON
-    ),
-  });
-}
+// Initialize GCS storage using default credentials
+const storage = new Storage(); // uses ADC (Application Default Credentials)
 
 // Bucket name
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
 
+/**
+ * Upload a buffer to GCS
+ * @param {Buffer} buffer - The file buffer
+ * @param {string} filename - Original filename
+ * @param {string} folder - Folder path in bucket
+ * @param {string} mimetype - MIME type (default: application/octet-stream)
+ */
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   const uniqueName = `${Date.now()}-${filename}`;
   const filePath = `${folder}/${uniqueName}`;
@@ -246,6 +302,10 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
   });
 }
 
+/**
+ * Delete a file from GCS bucket
+ * @param {string} fileName - Full path in bucket
+ */
 async function deleteFileFromGCS(fileName) {
   try {
     await bucket.file(fileName).delete();
@@ -261,6 +321,7 @@ async function deleteFileFromGCS(fileName) {
 }
 
 module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
 
 
 
