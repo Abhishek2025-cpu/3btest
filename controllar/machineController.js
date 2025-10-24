@@ -99,71 +99,72 @@ exports.deleteMachine = async (req, res) => {
 
 
 //Api for Machine Controller
-
-exports.assignMachineToEmployees = async (req, res) => {
+exports.assignMachineWithOperator = async (req, res) => {
   try {
-    const { machineId, employeeIds, mainItemId } = req.body;
+    console.log("🔹 req.body:", req.body);
+    console.log("🔹 req.files:", req.files);
 
-    // Step 2a: Validate input
-    if (!machineId || !employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0 || !mainItemId) {
-      return res.status(400).json({
-        statusCode: 400,
-        success: false,
-        message: "Machine ID, Main Item ID, and array of Employee IDs are required"
-      });
+    let { machineId, employeeIds, mainItemId, shift, operatorTable } = req.body;
+
+    // Parse employeeIds
+    if (employeeIds && typeof employeeIds === "string") {
+      employeeIds = employeeIds.split(",").map(id => id.trim());
     }
 
-
-    // Step 2b: Check machine exists
-    const machine = await Machine.findById(machineId);
-    if (!machine) return res.status(404).json({ statusCode: 404, success: false, message: "Machine not found" });
-
-    // Step 2c: Check all employees exist
-    const employees = await Employee.find({ _id: { $in: employeeIds } });
-    if (employees.length !== employeeIds.length) {
-      return res.status(404).json({ statusCode: 404, success: false, message: "Some employees not found" });
+    // Parse operatorTable JSON
+    try {
+      operatorTable = operatorTable ? JSON.parse(operatorTable) : [];
+    } catch (err) {
+      console.error("❌ Failed to parse operatorTable JSON:", err);
+      operatorTable = [];
     }
 
+    // Upload max 2 images
+    const operatorImages = [];
+    if (req.files && req.files.length > 0) {
+      const filesToUpload = req.files.slice(0, 2); // max 2
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
+        const compressedBuffer = await sharp(file.buffer)
+          .resize({ width: 1000, withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
 
-    // ---Create main item exists--
+        const filename = `operator-${Date.now()}-${file.originalname}`;
+        const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'operator-table');
+        operatorImages.push(uploadResult.url);
+        console.log(`✅ Uploaded operator image:`, uploadResult.url);
+      }
+    }
 
-    const mainItem = await MainItem.findById(mainItemId);
-
-    if (!mainItem) return res.status(404).json({
-      statusCode: 404, success: false,
-      message: "Main Item not Found"
-    });
-
-
-    // Step 2d: Create assignment
-    let assignment = await MachineAssignment.create({
+    // Create assignment
+    const assignment = await MachineAssignment.create({
       machine: machineId,
       employees: employeeIds,
-      mainItem: mainItemId
+      mainItem: mainItemId,
+      shift,
+      operatorTable,
+      operatorImages
     });
-
-
-    // Step 2e: Populate machine and employee details
 
     const populatedAssignment = await MachineAssignment.findById(assignment._id)
       .populate({ path: 'machine', select: 'name type' })
       .populate({ path: 'employees', select: 'name role' })
-      .populate({ path: 'mainItem' }); // populate all mainItem details
+      .populate({ path: 'mainItem' });
 
     res.status(201).json({
-      statusCode: 201,
       success: true,
-      message: 'Machine assigned successfully with main item details',
+      message: "Machine assigned successfully with operator table and images",
       data: populatedAssignment
     });
 
   } catch (error) {
-    console.error("Assign Machine Error:", error);
-    res.status(500).json({
-      statusCode: 500, success: false, message: "Server error while assigning machine"
-    });
+    console.error("❌ Assign Machine Error:", error);
+    res.status(500).json({ success: false, message: "Server error while assigning machine" });
   }
 };
+
+
 
 
 // GET /api/assignments/employee/:employeeId
@@ -234,90 +235,10 @@ exports.getAllAssignmentsForAdmin = async (req, res) => {
 
 
 
-exports.assignMachineWithOperator = async (req, res) => {
-  try {
-    let { machineId, employeeIds, mainItemId, shift, operatorTable } = req.body;
 
-    // Convert employeeIds to array if string
-    employeeIds = typeof employeeIds === 'string' ? employeeIds.split(',') : employeeIds;
 
-    // Parse operatorTable JSON string to object
-    operatorTable = operatorTable ? JSON.parse(operatorTable) : [];
 
-    // Validate required fields
-    if (!machineId || !mainItemId || !employeeIds.length || !shift) {
-      return res.status(400).json({
-        success: false,
-        message: "Machine ID, Main Item ID, Employee IDs array, and shift are required"
-      });
-    }
 
-    // Check machine, employees, mainItem
-    const machine = await Machine.findById(machineId);
-    if (!machine) return res.status(404).json({ success: false, message: "Machine not found" });
-
-    const employees = await Employee.find({ _id: { $in: employeeIds } });
-    if (employees.length !== employeeIds.length) return res.status(404).json({ success: false, message: "Some employees not found" });
-
-    const mainItem = await MainItem.findById(mainItemId);
-    if (!mainItem) return res.status(404).json({ success: false, message: "Main item not found" });
-
-    // Upload operator images to GCS
-    let processedOperatorTable = [];
-    if (operatorTable.length > 0) {
-      for (let i = 0; i < operatorTable.length; i++) {
-        let operator = operatorTable[i];
-        let imageUrl = operator.image || null;
-
-        if (req.files && req.files[i]) {
-          try {
-            const compressedBuffer = await sharp(req.files[i].buffer)
-              .resize({ width: 1000, withoutEnlargement: true })
-              .jpeg({ quality: 80 })
-              .toBuffer();
-
-            const filename = `operator-${Date.now()}-${req.files[i].originalname}`;
-            const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'operator-table');
-            imageUrl = uploadResult.url;
-          } catch (fileError) {
-            console.error(`❌ Failed to upload operator image ${req.files[i].originalname}:`, fileError);
-            // Optionally continue without failing the whole request
-          }
-        }
-
-        processedOperatorTable.push({
-          ...operator,
-          image: imageUrl
-        });
-      }
-    }
-
-    // Create MachineAssignment
-    const assignment = await MachineAssignment.create({
-      machine: machineId,
-      employees,
-      mainItem: mainItemId,
-      shift,
-      operatorTable: processedOperatorTable
-    });
-
-    // Populate response
-    const populatedAssignment = await MachineAssignment.findById(assignment._id)
-      .populate({ path: 'machine', select: 'name type' })
-      .populate({ path: 'employees', select: 'name role' })
-      .populate({ path: 'mainItem' });
-
-    res.status(201).json({
-      success: true,
-      message: "Machine assigned successfully with operator table",
-      data: populatedAssignment
-    });
-
-  } catch (error) {
-    console.error("Assign Machine Error:", error);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
 
 
 

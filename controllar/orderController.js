@@ -120,25 +120,57 @@ exports.placeOrder = async (req, res) => {
       tracking: [{ status: "Pending", updatedAt: new Date() }],
     });
     await newOrder.save();
+// 4️⃣ Send notification safely (to user)
+try {
+  const validTokens = user.fcmTokens?.filter((t) => !!t);
+  if (validTokens?.length > 0) {
+    await sendNotification(
+      user._id,
+      validTokens,
+      "🎉 Order Placed!",
+      `Dear ${user.name}, your order has been placed successfully.`,
+      { orderId: newOrder._id.toString() }
+    );
+    console.log("✅ Order placement notification sent");
+  } else {
+    console.log("⚠️ User has no valid FCM tokens:", user._id);
+  }
+} catch (notifError) {
+  console.error("❌ Error sending notification (ignored):", notifError.message);
+}
 
-    // 4️⃣ Send notification safely
-    try {
-      const validTokens = user.fcmTokens?.filter((t) => !!t);
-      if (validTokens?.length > 0) {
-      await sendNotification(
-  user._id,
-  validTokens,
-  "🎉 Order Placed!",
-  `Dear ${user.name}, your order has been placed successfully.`,
-  { orderId: newOrder._id.toString() }
-);
-        console.log("✅ Order placement notification sent");
-      } else {
-        console.log("⚠️ User has no valid FCM tokens:", user._id);
-      }
-    } catch (notifError) {
-      console.error("❌ Error sending notification (ignored):", notifError.message);
-    }
+// 🆕 4.1️⃣ Create GLOBAL notification (for admins / system)
+try {
+  await Notification.create({
+    type: "order",
+    title: "🛒 New Order Placed",
+    message: `${user.name} placed a new order (#${newOrder.orderId})`,
+    orderId: newOrder._id,
+    userId: user._id,
+    isGlobal: true, // mark as global so all admins can see it
+    createdAt: new Date(),
+  });
+
+  // Optional: send FCM to admins (if you have admin tokens)
+  const adminUsers = await User.find({ role: "admin", fcmTokens: { $exists: true, $ne: [] } });
+  const adminTokens = adminUsers.flatMap((a) => a.fcmTokens).filter(Boolean);
+
+  if (adminTokens.length > 0) {
+    await sendNotification(
+      null,
+      adminTokens,
+      "🛒 New Order Alert",
+      `${user.name} placed a new order.`,
+      { orderId: newOrder._id.toString() }
+    );
+    console.log("📢 Global admin notification sent");
+  } else {
+    console.log("⚠️ No admin FCM tokens found");
+  }
+} catch (globalNotifError) {
+  console.error("❌ Error creating/sending global notification:", globalNotifError.message);
+}
+
 
     // 5️⃣ Return success
     res.status(201).json({
