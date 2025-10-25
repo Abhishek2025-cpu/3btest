@@ -269,7 +269,7 @@ const { Storage } = require("@google-cloud/storage");
 const storage = new Storage(); // uses ADC (Application Default Credentials)
 
 // Bucket name
-const BUCKET_NAME = "3bprofiles-products";
+const BUCKET_NAME = "opreator-images";
 const bucket = storage.bucket(BUCKET_NAME);
 
 /**

@@ -1,13 +1,8 @@
+// controllers/notificationController.js
 const Notification = require("../models/Notification");
-const admin = require('firebase-admin');
+const admin = require('../firebase'); // Firebase Admin SDK instance
 const User = require('../models/User');
 const cloudinary = require("../utils/cloudinary");
-const { initFirebase } = require("../firebase");
-const { translateResponse } = require("../services/translation.service");
-
-
-// Always grab fresh Firebase instance
-const { messaging } = initFirebase();
 
 // ========== GET USER NOTIFICATIONS ==========
 exports.getUserNotifications = async (req, res) => {
@@ -51,7 +46,7 @@ exports.clearUserNotifications = async (req, res) => {
   }
 };
 
-// ========== SEND USER NOTIFICATION ==========
+// ========== SEND USER PUSH NOTIFICATION ==========
 exports.sendPushNotification = async (req, res) => {
   try {
     const { fcmToken, userId, message } = req.body;
@@ -73,18 +68,17 @@ exports.sendPushNotification = async (req, res) => {
       tokens,
     };
 
-    const response = await messaging.sendEachForMulticast(firebaseMessage);
+    const response = await admin.messaging().sendMulticast(firebaseMessage);
 
-    // Save if successful
+    // Save notification if at least one token succeeded
     if (response.successCount > 0) {
-      const newNotification = new Notification({
+      await Notification.create({
         userId,
         fcmTokens: tokens,
         title: message.title,
         body: message.body,
         data: message.data || {},
       });
-      await newNotification.save();
     }
 
     res.status(200).json({
@@ -136,7 +130,6 @@ exports.sendAdminPushNotification = async (req, res) => {
       return res.status(404).json({ message: "No FCM tokens found" });
     }
 
-    // Build Firebase multicast message
     const firebaseMessage = {
       notification: {
         title,
@@ -150,8 +143,7 @@ exports.sendAdminPushNotification = async (req, res) => {
       tokens,
     };
 
-    // Send notifications
-    const response = await admin.messaging().sendEachForMulticast(firebaseMessage);
+    const response = await admin.messaging().sendMulticast(firebaseMessage);
 
     // Log failed tokens
     response.responses.forEach((resp, idx) => {
@@ -161,7 +153,7 @@ exports.sendAdminPushNotification = async (req, res) => {
     });
 
     // Save broadcast record in DB
-    const newNotification = new Notification({
+    await Notification.create({
       userId: null,
       fcmTokens: tokens,
       title,
@@ -169,7 +161,6 @@ exports.sendAdminPushNotification = async (req, res) => {
       image: imageUrl || null,
       data: { type: "admin_broadcast", campaign: "latestDeals" },
     });
-    await newNotification.save();
 
     res.status(200).json({
       message: "📢 Admin push notification sent successfully",

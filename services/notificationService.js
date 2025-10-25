@@ -1,108 +1,58 @@
-// const { messaging } = require("../firebase");
-// const Notification = require("../models/Notification");
-
-// exports.sendNotification = async (userId, tokens, title, body, data = {}) => {
-//   try {
-//     // Normalize to array
-//     const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
-
-//     if (tokenArray.length === 0) {
-//       console.log("⚠️ No FCM tokens provided, skipping notification");
-//       return null;
-//     }
-
-//     // Build the message (no tokens here)
-//     const message = {
-//       notification: { title, body },
-//       data,
-//       android: {
-//         priority: "high",
-//         notification: {
-//           channelId: "high_importance_channel",
-//           sound: "default",
-//         },
-//       },
-//       apns: {
-//         headers: { "apns-priority": "10" },
-//         payload: {
-//           aps: { sound: "default" },
-//         },
-//       },
-//     };
-
-//     // ✅ Correct usage with tokens passed separately
-//     const response = await messaging.sendEachForMulticast({
-//       tokens: tokenArray,
-//       ...message,
-//     });
-
-//     // Save notification in DB
-//     await Notification.create({ userId, title, body, data });
-
-//     console.log(
-//       "✅ Notification sent & saved:",
-//       response.successCount,
-//       "success,",
-//       response.failureCount,
-//       "failed"
-//     );
-
-//     return response;
-//   } catch (error) {
-//     console.error("❌ Error sending notification:", error);
-//     throw error;
-//   }
-// };
-
-
-// services/notificationService.js
-
-
-
-
-// services/notificationService.js
-const { initFirebase } = require("../firebase");
-const { messaging } = initFirebase();
+const admin = require("../firebase");
 const Notification = require("../models/Notification");
-const sendNotification = async (userId, fcmTokens, title, body, data = {}) => {
+
+/**
+ * Send notification to a single user
+ */
+async function sendUserNotification(user, title, body, data = {}) {
   try {
-    if (!fcmTokens || fcmTokens.length === 0) {
-      console.log("⚠️ No FCM tokens available for user:", userId);
-      return;
-    }
+    // Save in DB
+    await Notification.create({ userId: user._id, title, body, data });
+
+    const tokens = user.fcmTokens?.filter(Boolean);
+    if (!tokens?.length) return;
 
     const message = {
+      tokens,
       notification: { title, body },
-      data,
+      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.toString()])),
     };
 
-    const response = await messaging.sendEachForMulticast({
-      tokens: fcmTokens,
-      ...message,
+    const response = await admin.messaging().sendMulticast(message);
+    console.log("✅ Notification sent:", {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
     });
-
-    console.log("✅ Notification sent:", response);
-
-    const newNotification = new Notification({
-      userId,
-      fcmTokens,
-      title,
-      body,
-      data,
-    });
-    await newNotification.save();
-
-    return response;
-  } catch (error) {
-    console.error("❌ Error sending notification:", error);
-    throw error;
+  } catch (err) {
+    console.error("❌ Error sending notification:", err.message);
   }
-};
+}
 
-module.exports = { sendNotification };
+/**
+ * Send global notification to multiple users
+ */
+async function sendGlobalNotification(users, title, body, data = {}) {
+  const tokens = users.map(u => u.fcmTokens).flat().filter(Boolean);
+  if (!tokens.length) return;
 
+  const message = {
+    tokens,
+    notification: { title, body },
+    data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.toString()])),
+  };
 
+  try {
+    const response = await admin.messaging().sendMulticast(message);
+    console.log("📢 Global notification sent:", {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
 
+    // Save broadcast
+    await Notification.create({ userId: null, fcmTokens: tokens, title, body, data });
+  } catch (err) {
+    console.error("❌ Error sending global notification:", err.message);
+  }
+}
 
-
-
+module.exports = { sendUserNotification, sendGlobalNotification };

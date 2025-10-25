@@ -3,30 +3,14 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
-const GstDetails = require('../models/GstDetails'); 
-const Company = require('../models/company'); 
-const ReturnRequest  = require('../models/ReturnRequest');
-
-
-const { initFirebase } = require("../firebase");
-
-
-
-
-const { sendNotification } = require("../services/notificationService");
-
-
-const { messaging } = initFirebase(); // initialize Firebase safely
-
+const Notification = require('../models/Notification');
+const { sendUserNotification } = require("../services/notificationService");
 
 const generateOrderId = () => {
   const prefix = '#3b';
   const random = Math.floor(100000000000 + Math.random() * 900000000000); // 12 digits
   return `${prefix}${random}`;
 };
-
-
-
 
 exports.placeOrder = async (req, res) => {
   try {
@@ -52,11 +36,9 @@ exports.placeOrder = async (req, res) => {
         }
         if (!product) throw new Error(`Product not found with ID: ${item.productId}`);
 
-        // Deduct stock
         if (typeof product.quantity === "number") {
-          if (product.quantity < item.quantity) {
-            throw new Error(`Insufficient stock for product: ${product.name || product.productName}`);
-          }
+          if (product.quantity < item.quantity)
+            throw new Error(`Insufficient stock for product: ${product.productName || product.name}`);
           product.quantity -= item.quantity;
           if (product.quantity <= 0) {
             product.quantity = 0;
@@ -65,7 +47,6 @@ exports.placeOrder = async (req, res) => {
           await product.save();
         }
 
-        // Determine image
         let image = null;
         if (!isOtherProduct) {
           const colorKey = item.color?.trim();
@@ -92,12 +73,6 @@ exports.placeOrder = async (req, res) => {
           subtotal,
           image,
           orderId: generateOrderId(),
-          company: item.company || null,
-          materialName: item.materialName || null,
-          modelNo: item.modelNo || null,
-          selectedSize: item.selectedSize || null,
-          discount: item.discount || 0,
-          totalPrice: item.totalPrice || subtotal,
         };
       })
     );
@@ -120,57 +95,19 @@ exports.placeOrder = async (req, res) => {
       tracking: [{ status: "Pending", updatedAt: new Date() }],
     });
     await newOrder.save();
-// 4️⃣ Send notification safely (to user)
-try {
-  const validTokens = user.fcmTokens?.filter((t) => !!t);
-  if (validTokens?.length > 0) {
-    await sendNotification(
-      user._id,
-      validTokens,
-      "🎉 Order Placed!",
-      `Dear ${user.name}, your order has been placed successfully.`,
-      { orderId: newOrder._id.toString() }
-    );
-    console.log("✅ Order placement notification sent");
-  } else {
-    console.log("⚠️ User has no valid FCM tokens:", user._id);
-  }
-} catch (notifError) {
-  console.error("❌ Error sending notification (ignored):", notifError.message);
-}
 
-// 🆕 4.1️⃣ Create GLOBAL notification (for admins / system)
-try {
-  await Notification.create({
-    type: "order",
-    title: "🛒 New Order Placed",
-    message: `${user.name} placed a new order (#${newOrder.orderId})`,
-    orderId: newOrder._id,
-    userId: user._id,
-    isGlobal: true, // mark as global so all admins can see it
-    createdAt: new Date(),
-  });
-
-  // Optional: send FCM to admins (if you have admin tokens)
-  const adminUsers = await User.find({ role: "admin", fcmTokens: { $exists: true, $ne: [] } });
-  const adminTokens = adminUsers.flatMap((a) => a.fcmTokens).filter(Boolean);
-
-  if (adminTokens.length > 0) {
-    await sendNotification(
-      null,
-      adminTokens,
-      "🛒 New Order Alert",
-      `${user.name} placed a new order.`,
-      { orderId: newOrder._id.toString() }
-    );
-    console.log("📢 Global admin notification sent");
-  } else {
-    console.log("⚠️ No admin FCM tokens found");
-  }
-} catch (globalNotifError) {
-  console.error("❌ Error creating/sending global notification:", globalNotifError.message);
-}
-
+    // 4️⃣ Send notification using the service
+    try {
+      await sendUserNotification(
+        user,
+        "🎉 Order Placed!",
+        `Dear ${user.name}, your order has been placed successfully.`,
+        { orderId: newOrder._id.toString() }
+      );
+      console.log("✅ Order placement notification sent");
+    } catch (notifError) {
+      console.error("❌ Error sending notification (ignored):", notifError.message);
+    }
 
     // 5️⃣ Return success
     res.status(201).json({
@@ -187,6 +124,7 @@ try {
         subtotal: p.subtotal,
       })),
     });
+
   } catch (error) {
     console.error("❌ Error placing order:", error);
     res.status(500).json({
@@ -196,6 +134,8 @@ try {
     });
   }
 };
+
+
 
 
 exports.getOrders = async (req, res) => {
