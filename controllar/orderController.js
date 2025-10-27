@@ -5,12 +5,170 @@ const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const Notification = require('../models/Notification');
 const { sendUserNotification } = require("../services/notificationService");
+const axios = require('axios');
 
 const generateOrderId = () => {
   const prefix = '#3b';
   const random = Math.floor(100000000000 + Math.random() * 900000000000); // 12 digits
   return `${prefix}${random}`;
 };
+
+
+// exports.placeOrder = async (req, res) => {
+//   try {
+//     const { userId, shippingAddressId, items } = req.body;
+
+//     // 1️⃣ Get user and shipping address
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+//     const shippingAddress = user.shippingAddresses.id(shippingAddressId);
+//     if (!shippingAddress)
+//       return res.status(404).json({ success: false, message: "Shipping address not found" });
+
+//     // 2️⃣ Process items and calculate total
+//     let totalPrice = 0;
+//     const products = await Promise.all(
+//       items.map(async (item) => {
+//         let product = await Product.findById(item.productId);
+//         let isOtherProduct = false;
+//         if (!product) {
+//           product = await OtherProduct.findById(item.productId);
+//           isOtherProduct = true;
+//         }
+//         if (!product) throw new Error(`Product not found with ID: ${item.productId}`);
+
+//         if (typeof product.quantity === "number") {
+//           if (product.quantity < item.quantity)
+//             throw new Error(`Insufficient stock for product: ${product.productName || product.name}`);
+//           product.quantity -= item.quantity;
+//           if (product.quantity <= 0) {
+//             product.quantity = 0;
+//             product.available = false;
+//           }
+//           await product.save();
+//         }
+
+//         let image = null;
+//         if (!isOtherProduct) {
+//           const colorKey = item.color?.trim();
+//           if (colorKey && product.colorImageMap?.[colorKey]) image = product.colorImageMap[colorKey];
+//           else if (product.images?.length) image = product.images[0];
+//         } else {
+//           image = product.images?.[0] || product.image || null;
+//         }
+
+//         const priceForCalculation = item.price || item.priceAtPurchase;
+//         if (typeof priceForCalculation !== "number") {
+//           throw new Error(`Price missing for product: ${item.productName || item.productId}`);
+//         }
+
+//         const subtotal = priceForCalculation * item.quantity;
+//         totalPrice += subtotal;
+
+//         return {
+//           productId: product._id,
+//           productName: product.productName || product.name || "Unknown Product",
+//           quantity: item.quantity,
+//           color: item.color || "Not specified",
+//           priceAtPurchase: priceForCalculation,
+//           subtotal,
+//           image,
+//           orderId: generateOrderId(),
+//         };
+//       })
+//     );
+
+//     const roundedTotalPrice = Math.round(totalPrice);
+
+//     // 3️⃣ Save order
+//     const newOrder = new Order({
+//       userId,
+//       products,
+//       totalPrice: roundedTotalPrice,
+//       shippingDetails: {
+//         name: shippingAddress.name,
+//         phone: shippingAddress.phone,
+//         addressType: shippingAddress.addressType,
+//         detailedAddress: shippingAddress.detailedAddress,
+//       },
+//       orderId: generateOrderId(),
+//       currentStatus: "Pending",
+//       tracking: [{ status: "Pending", updatedAt: new Date() }],
+//     });
+//     await newOrder.save();
+
+//     // 4️⃣ Send user notification
+//     try {
+//       await sendUserNotification(
+//         user,
+//         "🎉 Order Placed!",
+//         `Dear ${user.name}, your order has been placed successfully.`,
+//         { orderId: newOrder._id.toString() }
+//       );
+//       console.log("✅ Order placement notification sent");
+//     } catch (notifError) {
+//       console.error("❌ Error sending notification (ignored):", notifError.message);
+//     }
+
+//     // 5️⃣ Send WhatsApp message to admin via Aicency API
+//     try {
+//       const apiKey = process.env.AICENCY_API_KEY; 
+//       const adminPhone = process.env.ADMIN_PHONE; 
+
+//       // Build message content
+//       const productList = products
+//         .map(
+//           (p) =>
+//             `• ${p.productName} × ${p.quantity} (${p.color}) — ₹${p.subtotal}`
+//         )
+//         .join("\n");
+
+//       const message = `📦 *New Order Placed!*\n\n` +
+//         `👤 Customer: ${user.name}\n` +
+//         `📞 Phone: ${shippingAddress.phone}\n` +
+//         `🏠 Address: ${shippingAddress.detailedAddress}\n\n` +
+//         `🧾 Order ID: ${newOrder.orderId}\n` +
+//         `💰 Total: ₹${roundedTotalPrice}\n\n` +
+//         `🛒 Items:\n${productList}\n\n` +
+//         `Check the admin panel for full details.`;
+
+//       await axios.post("https://api.aicency.com/send-message", {
+//         api_key: apiKey,
+//         number: adminPhone,
+//         message: message,
+//       });
+
+//       console.log("✅ WhatsApp message sent to admin via Aicency");
+//     } catch (whatsappError) {
+//       console.error("❌ Failed to send WhatsApp message to admin:", whatsappError.message);
+//     }
+
+//     // 6️⃣ Return success
+//     res.status(201).json({
+//       success: true,
+//       message: "Order placed successfully",
+//       order: newOrder,
+//       totalPrice: roundedTotalPrice,
+//       productBreakdown: products.map((p) => ({
+//         productId: p.productId,
+//         name: p.productName,
+//         quantity: p.quantity,
+//         color: p.color,
+//         priceAtPurchase: p.priceAtPurchase,
+//         subtotal: p.subtotal,
+//       })),
+//     });
+
+//   } catch (error) {
+//     console.error("❌ Error placing order:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//       error: "Server error placing order.",
+//     });
+//   }
+// };
 
 exports.placeOrder = async (req, res) => {
   try {
