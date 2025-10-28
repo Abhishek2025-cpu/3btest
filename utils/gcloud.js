@@ -1,3 +1,77 @@
+const { Storage } = require("@google-cloud/storage");
+const path = require("path");
+const fs = require("fs");
+
+// Define both possible key locations
+const localKey = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json"); // for local
+const cloudKey = path.join(__dirname, "../storage-uploader-key.json"); // for Cloud Shell / deployed environment
+
+let keyFileToUse = null;
+
+if (fs.existsSync(localKey)) {
+  keyFileToUse = localKey;
+  console.log("🗝️ Using local credentials file (b-profiles-461910-9cac166b8b09.json).");
+} else if (fs.existsSync(cloudKey)) {
+  keyFileToUse = cloudKey;
+  console.log("☁️ Using cloud credentials file (storage-uploader-key.json).");
+}
+
+let storage;
+if (keyFileToUse) {
+  storage = new Storage({ keyFilename: keyFileToUse });
+} else {
+  console.log("⚙️ Using default Google Cloud credentials (no key file found).");
+  storage = new Storage();
+}
+
+const BUCKET_NAME = "3bprofiles-products";
+const bucket = storage.bucket(BUCKET_NAME);
+
+// Upload function
+async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
+  const uniqueName = `${Date.now()}-${filename}`;
+  const filePath = `${folder}/${uniqueName}`;
+  const file = bucket.file(filePath);
+
+  return new Promise((resolve, reject) => {
+    const stream = file.createWriteStream({
+      resumable: false,
+      contentType: mimetype,
+    });
+
+    stream.on("error", reject);
+    stream.on("finish", () => {
+      resolve({
+        url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+        id: filePath,
+      });
+    });
+
+    stream.end(buffer);
+  });
+}
+
+// Delete function
+async function deleteFileFromGCS(fileName) {
+  try {
+    await bucket.file(fileName).delete();
+    console.log(`✅ Deleted ${fileName} from GCS bucket.`);
+  } catch (error) {
+    if (error.code === 404) {
+      console.warn(`⚠️ File not found in GCS: ${fileName}`);
+      return;
+    }
+    console.error(`❌ Error deleting file ${fileName}:`, error);
+    throw error;
+  }
+}
+
+module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
+
+
+
+
 // const { Storage } = require('@google-cloud/storage');
 // const path = require('path');
 // const uuid = require('uuid').v4;
@@ -263,62 +337,7 @@
 // module.exports = { uploadBufferToGCS, deleteFileFromGCS };
 
 
-const { Storage } = require("@google-cloud/storage");
-const path = require("path");
 
-
-const keyFilePath = path.join(__dirname, "b-profiles-461910-9cac166b8b09.json");
-
-
-
-const storage = new Storage({
-  keyFilename: keyFilePath,
-});
-
-const BUCKET_NAME = "3bprofiles-products";
-const bucket = storage.bucket(BUCKET_NAME);
-
-
-// Upload function
-async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
-  const uniqueName = `${Date.now()}-${filename}`;
-  const filePath = `${folder}/${uniqueName}`;
-  const file = bucket.file(filePath);
-
-  return new Promise((resolve, reject) => {
-    const stream = file.createWriteStream({
-      resumable: false,
-      contentType: mimetype,
-    });
-
-    stream.on("error", reject);
-    stream.on("finish", () => {
-      resolve({
-        url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
-        id: filePath,
-      });
-    });
-
-    stream.end(buffer);
-  });
-}
-
-// Delete function
-async function deleteFileFromGCS(fileName) {
-  try {
-    await bucket.file(fileName).delete();
-    console.log(`✅ Deleted ${fileName} from GCS bucket.`);
-  } catch (error) {
-    if (error.code === 404) {
-      console.warn(`⚠️ File not found in GCS: ${fileName}`);
-      return;
-    }
-    console.error(`❌ Error deleting file ${fileName}:`, error);
-    throw error;
-  }
-}
-
-module.exports = { uploadBufferToGCS, deleteFileFromGCS };
 
 
 
