@@ -266,13 +266,9 @@
 const path = require("path");
 const { Storage } = require("@google-cloud/storage");
 
-// Go up one directory from /utils to project root
-const keyPath = path.join(__dirname, "..", "b-profiles-461910-9cac166b8b09.json");
 
-const storage = new Storage({
-  keyFilename: keyPath,
-  projectId: "b-profiles-461910",
-});
+
+const storage = new Storage({ projectId: "b-profiles-461910" });
 
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
