@@ -6,6 +6,8 @@ servicekey.json
 node_modules/
 
 bprofiles-54714-firebase-adminsdk-fbsvc-5ae26f5109.json
+b-profiles-461910-9cac166b8b09.json
+
 firebase-messaging-sw.js
 notificationkey.json
 .env

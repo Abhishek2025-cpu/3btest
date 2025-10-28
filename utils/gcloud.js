@@ -263,22 +263,21 @@
 // module.exports = { uploadBufferToGCS, deleteFileFromGCS };
 
 
+const path = require("path");
 const { Storage } = require("@google-cloud/storage");
 
-// Initialize GCS storage using default credentials
-const storage = new Storage(); // uses ADC (Application Default Credentials)
+// Go up one directory from /utils to project root
+const keyPath = path.join(__dirname, "..", "b-profiles-461910-9cac166b8b09.json");
 
-// Bucket name
-const BUCKET_NAME = "opreator-images";
+const storage = new Storage({
+  keyFilename: keyPath,
+  projectId: "b-profiles-461910",
+});
+
+const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
 
-/**
- * Upload a buffer to GCS
- * @param {Buffer} buffer - The file buffer
- * @param {string} filename - Original filename
- * @param {string} folder - Folder path in bucket
- * @param {string} mimetype - MIME type (default: application/octet-stream)
- */
+// Upload function
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   const uniqueName = `${Date.now()}-${filename}`;
   const filePath = `${folder}/${uniqueName}`;
@@ -302,14 +301,11 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
   });
 }
 
-/**
- * Delete a file from GCS bucket
- * @param {string} fileName - Full path in bucket
- */
+// Delete function
 async function deleteFileFromGCS(fileName) {
   try {
     await bucket.file(fileName).delete();
-    console.log(`✅ Successfully deleted ${fileName} from GCS bucket.`);
+    console.log(`✅ Deleted ${fileName} from GCS bucket.`);
   } catch (error) {
     if (error.code === 404) {
       console.warn(`⚠️ File not found in GCS: ${fileName}`);
@@ -321,6 +317,7 @@ async function deleteFileFromGCS(fileName) {
 }
 
 module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
 
 
 

@@ -166,36 +166,69 @@ const upload = multer({ storage });
 
 // -------------------- SEND MESSAGE --------------------
 exports.sendMessage = [
+  // Multer middleware runs first in this array
   upload.single('file'),
   async (req, res) => {
+    console.log('✨ [sendMessage] - Function execution started.');
+    console.log('✨ [sendMessage] - Request method:', req.method);
+    console.log('✨ [sendMessage] - Request URL:', req.url);
+    console.log('✨ [sendMessage] - Headers:', req.headers); // Check Authorization header here!
+
     try {
+      console.log('✨ [sendMessage] - After multer: req.body:', req.body);
+      console.log('✨ [sendMessage] - After multer: req.file:', req.file);
+
       const { senderId, receiverId, message } = req.body;
       const file = req.file;
 
       if (!senderId || !receiverId) {
+        console.log('🛑 [sendMessage] - Validation failed: senderId or receiverId missing.');
         return res.status(400).json({ success: false, message: 'senderId and receiverId are required.' });
       }
       if (!message && !file) {
+        console.log('🛑 [sendMessage] - Validation failed: Message or file required.');
         return res.status(400).json({ success: false, message: 'A message or a file is required.' });
       }
 
+      console.log(`✨ [sendMessage] - Validated inputs: senderId=${senderId}, receiverId=${receiverId}, hasFile=${!!file}`);
+
       // Determine sender
+      console.log(`🔍 [sendMessage] - Searching for sender: ${senderId}`);
       let sender = await User.findById(senderId) || await Admin.findById(senderId);
-      if (!sender) return res.status(404).json({ success: false, message: 'Sender not found.' });
+      if (!sender) {
+        console.log('🛑 [sendMessage] - Sender not found.');
+        return res.status(404).json({ success: false, message: 'Sender not found.' });
+      }
+      console.log(`✅ [sendMessage] - Sender found: ${sender._id} (${sender instanceof User ? 'User' : 'Admin'})`);
+
 
       // Determine receiver
+      console.log(`🔍 [sendMessage] - Searching for receiver: ${receiverId}`);
       let receiver = await User.findById(receiverId) || await Admin.findById(receiverId);
-      if (!receiver) return res.status(404).json({ success: false, message: 'Receiver not found.' });
+      if (!receiver) {
+        console.log('🛑 [sendMessage] - Receiver not found.');
+        return res.status(404).json({ success: false, message: 'Receiver not found.' });
+      }
+      console.log(`✅ [sendMessage] - Receiver found: ${receiver._id} (${receiver instanceof User ? 'User' : 'Admin'})`);
+
 
       // File upload
       let fileUrl = null;
       if (file) {
-        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files');
-        if (!uploadResult?.url) throw new Error('File upload failed.');
+        console.log(`⬆️ [sendMessage] - File detected: ${file.originalname}, size: ${file.size} bytes`);
+        const uploadResult = await uploadBufferToGCS(file.buffer, file.originalname, 'chat-files', file.mimetype); // Pass mimetype
+        if (!uploadResult?.url) {
+          console.error('❌ [sendMessage] - File upload to GCS failed.');
+          throw new Error('File upload failed.');
+        }
         fileUrl = uploadResult.url;
+        console.log(`✅ [sendMessage] - File uploaded to GCS: ${fileUrl}`);
+      } else {
+        console.log('➡️ [sendMessage] - No file to upload.');
       }
 
       // Save chat
+      console.log('💾 [sendMessage] - Creating chat entry in DB.');
       const chat = await Chat.create({
         senderId,
         senderModel: sender instanceof User ? 'User' : 'Admin',
@@ -204,9 +237,12 @@ exports.sendMessage = [
         message: message || null,
         mediaUrl: fileUrl
       });
+      console.log(`✅ [sendMessage] - Chat saved: ${chat._id}`);
+
 
       // ✅ Trigger notification
       try {
+        console.log('🔔 [sendMessage] - Attempting to send notification.');
         const senderName = sender.name || 'Someone';
         await sendNotification(
           receiver._id,
@@ -215,14 +251,21 @@ exports.sendMessage = [
           `${senderName}: ${message ? message.substring(0, 50) : 'Sent a file'}`,
           { chatId: chat._id.toString() }
         );
+        console.log('✅ [sendMessage] - Notification sent successfully.');
       } catch (notifyErr) {
-        console.error("⚠️ Failed to send chat notification:", notifyErr.message);
+        console.error("⚠️ [sendMessage] - Failed to send chat notification:", notifyErr.message);
       }
 
+      console.log('🎉 [sendMessage] - Message sent successfully, responding with 201.');
       res.status(201).json({ success: true, data: chat });
     } catch (err) {
-      console.error('❌ sendMessage Error:', err);
-      res.status(500).json({ success: false, message: err.message });
+      console.error('❌ [sendMessage] - Caught error in try-catch block:', err);
+      // Ensure the error response matches the expected JWT error format if it's the actual cause
+      if (err.message.includes('JWT')) { // This is a heuristic, the actual error might not come from here
+          res.status(401).json({ success: false, message: 'invalid_grant: Invalid JWT Signature.' });
+      } else {
+          res.status(500).json({ success: false, message: err.message });
+      }
     }
   }
 ];
