@@ -263,21 +263,21 @@
 // module.exports = { uploadBufferToGCS, deleteFileFromGCS };
 
 
-const path = require("path");
 const { Storage } = require("@google-cloud/storage");
+const path = require("path");
+
+
+const keyFilePath = path.join(__dirname, "b-profiles-461910-9cac166b8b09.json");
 
 
 
-// Absolute path to your key file
-const keyFilePath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
-
-// Initialize Storage using the key file
 const storage = new Storage({
   keyFilename: keyFilePath,
 });
 
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
+
 
 // Upload function
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
