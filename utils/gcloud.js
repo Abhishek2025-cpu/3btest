@@ -268,7 +268,13 @@ const { Storage } = require("@google-cloud/storage");
 
 
 
-const storage = new Storage({ projectId: "b-profiles-461910" });
+// Absolute path to your key file
+const keyFilePath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
+
+// Initialize Storage using the key file
+const storage = new Storage({
+  keyFilename: keyFilePath,
+});
 
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
