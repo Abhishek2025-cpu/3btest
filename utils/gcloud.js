@@ -2,32 +2,35 @@ const { Storage } = require("@google-cloud/storage");
 const path = require("path");
 const fs = require("fs");
 
-// Define both possible key locations
-const localKey = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json"); // for local
-const cloudKey = path.join(__dirname, "../storage-uploader-key.json"); // for Cloud Shell / deployed environment
+// Detect environment
+// Cloud Shell / Cloud Run / GCE will have GOOGLE_CLOUD_PROJECT or GCP_PROJECT set
+const isCloud = !!process.env.GOOGLE_CLOUD_PROJECT || !!process.env.GCP_PROJECT;
 
-let keyFileToUse = null;
+let keyFilePath;
 
-if (fs.existsSync(localKey)) {
-  keyFileToUse = localKey;
-  console.log("🗝️ Using local credentials file (b-profiles-461910-9cac166b8b09.json).");
-} else if (fs.existsSync(cloudKey)) {
-  keyFileToUse = cloudKey;
-  console.log("☁️ Using cloud credentials file (storage-uploader-key.json).");
+// Prefer cloud key if exists
+if (isCloud && fs.existsSync(path.join(__dirname, "../storage-uploader-key.json"))) {
+  keyFilePath = path.join(__dirname, "../storage-uploader-key.json");
+  console.log("☁️ Using cloud key: storage-uploader-key.json");
+}
+// Fallback to local key
+else if (fs.existsSync(path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json"))) {
+  keyFilePath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
+  console.log("💻 Using local key: b-profiles-461910-9cac166b8b09.json");
+}
+// Use default credentials if none found
+else {
+  console.log("⚙️ No key file found. Using Application Default Credentials.");
 }
 
-let storage;
-if (keyFileToUse) {
-  storage = new Storage({ keyFilename: keyFileToUse });
-} else {
-  console.log("⚙️ Using default Google Cloud credentials (no key file found).");
-  storage = new Storage();
-}
+const storage = keyFilePath
+  ? new Storage({ keyFilename: keyFilePath })
+  : new Storage();
 
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
 
-// Upload function
+// Upload file
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   const uniqueName = `${Date.now()}-${filename}`;
   const filePath = `${folder}/${uniqueName}`;
@@ -51,7 +54,7 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
   });
 }
 
-// Delete function
+// Delete file
 async function deleteFileFromGCS(fileName) {
   try {
     await bucket.file(fileName).delete();
@@ -67,6 +70,7 @@ async function deleteFileFromGCS(fileName) {
 }
 
 module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
 
 
 
