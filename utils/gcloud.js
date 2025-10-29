@@ -1,115 +1,119 @@
-// const { Storage } = require("@google-cloud/storage");
-// const path = require("path");
-// const fs = require("fs");
+const { Storage } = require("@google-cloud/storage");
+const path = require("path");
+const fs = require("fs");
 
-// // Detect environment
-// // Cloud Shell / Cloud Run / GCE will have GOOGLE_CLOUD_PROJECT or GCP_PROJECT set
-// const isCloud = !!process.env.GOOGLE_CLOUD_PROJECT || !!process.env.GCP_PROJECT;
+// Detect if running on Cloud Run or other GCP runtime
+const isCloudEnv =
+  process.env.K_SERVICE || // Cloud Run
+  process.env.GOOGLE_CLOUD_PROJECT || // General GCP env var
+  process.env.GCP_PROJECT;
 
-// let keyFilePath;
+let storage;
 
-// // Prefer cloud key if exists
-// if (isCloud && fs.existsSync(path.join(__dirname, "../storage-uploader-key.json"))) {
-//   keyFilePath = path.join(__dirname, "../storage-uploader-key.json");
-//   console.log("☁️ Using cloud key: storage-uploader-key.json");
-// }
-// // Fallback to local key
-// else if (fs.existsSync(path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json"))) {
-//   keyFilePath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
-//   console.log("💻 Using local key: b-profiles-461910-9cac166b8b09.json");
-// }
-// // Use default credentials if none found
-// else {
-//   console.log("⚙️ No key file found. Using Application Default Credentials.");
-// }
+// 🧠 1️⃣  Local: Use local JSON key
+if (!isCloudEnv) {
+  const localKeyPath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
+  if (!fs.existsSync(localKeyPath)) {
+    throw new Error("❌ Local service account key file not found.");
+  }
+  console.log("💻 Using local service account key.");
+  storage = new Storage({ keyFilename: localKeyPath });
+}
 
-// const storage = keyFilePath
-//   ? new Storage({ keyFilename: keyFilePath })
-//   : new Storage();
+// 🧠 2️⃣  Cloud Run: Use Application Default Credentials (ADC)
+else {
+  console.log("☁️ Running on Cloud Run — using default service account credentials.");
+  storage = new Storage();
+}
 
-// const BUCKET_NAME = "3bprofiles-products";
-// const bucket = storage.bucket(BUCKET_NAME);
+const BUCKET_NAME = "3bprofiles-products";
+const bucket = storage.bucket(BUCKET_NAME);
 
-// // Upload file
-// async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
-//   const uniqueName = `${Date.now()}-${filename}`;
-//   const filePath = `${folder}/${uniqueName}`;
-//   const file = bucket.file(filePath);
+// 📤 Upload buffer
+async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
+  const uniqueName = `${Date.now()}-${filename}`;
+  const filePath = `${folder}/${uniqueName}`;
+  const file = bucket.file(filePath);
 
-//   return new Promise((resolve, reject) => {
-//     const stream = file.createWriteStream({
-//       resumable: false,
-//       contentType: mimetype,
-//     });
-
-//     stream.on("error", reject);
-//     stream.on("finish", () => {
-//       resolve({
-//         url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
-//         id: filePath,
-//       });
-//     });
-
-//     stream.end(buffer);
-//   });
-// }
-
-// // Delete file
-// async function deleteFileFromGCS(fileName) {
-//   try {
-//     await bucket.file(fileName).delete();
-//     console.log(`✅ Deleted ${fileName} from GCS bucket.`);
-//   } catch (error) {
-//     if (error.code === 404) {
-//       console.warn(`⚠️ File not found in GCS: ${fileName}`);
-//       return;
-//     }
-//     console.error(`❌ Error deleting file ${fileName}:`, error);
-//     throw error;
-//   }
-// }
-
-// module.exports = { uploadBufferToGCS, deleteFileFromGCS };
-
-
-
-
-
-
-const { Storage } = require('@google-cloud/storage');
-const path = require('path');
-const uuid = require('uuid').v4;
-
-const storage = new Storage({
- keyFilename: path.resolve('gcs-key.json'),
-
-  projectId: 'b-profiles-461910'
-});
-
-const bucket = storage.bucket('3bprofiles-products');
-
-exports.uploadBufferToGCS = (buffer, filename, folder = 'uploads') => {
   return new Promise((resolve, reject) => {
-    const gcsFileName = `${folder}/${uuid()}-${filename}`;
-    const file = bucket.file(gcsFileName);
-
     const stream = file.createWriteStream({
-      metadata: {
-        contentType: 'auto'
-      }
+      resumable: false,
+      contentType: mimetype,
     });
 
-    stream.on('error', err => reject(err));
+    stream.on("error", (err) => {
+      console.error("❌ GCS Upload Error:", err);
+      reject(err);
+    });
 
-    stream.on('finish', () => {
-      // Skip makePublic() because UBLA is enabled
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`;
-      resolve(publicUrl);
+    stream.on("finish", () => {
+      resolve({
+        url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+        id: filePath,
+      });
     });
 
     stream.end(buffer);
   });
-};
+}
+
+// 🗑️ Delete file
+async function deleteFileFromGCS(fileName) {
+  try {
+    await bucket.file(fileName).delete();
+    console.log(`✅ Deleted ${fileName} from GCS bucket.`);
+  } catch (error) {
+    if (error.code === 404) {
+      console.warn(`⚠️ File not found in GCS: ${fileName}`);
+      return;
+    }
+    console.error(`❌ Error deleting file ${fileName}:`, error);
+    throw error;
+  }
+}
+
+module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
+
+
+
+
+
+
+// const { Storage } = require('@google-cloud/storage');
+// const path = require('path');
+// const uuid = require('uuid').v4;
+
+// const storage = new Storage({
+//  keyFilename: path.resolve('gcs-key.json'),
+
+//   projectId: 'b-profiles-461910'
+// });
+
+// const bucket = storage.bucket('3bprofiles-products');
+
+// exports.uploadBufferToGCS = (buffer, filename, folder = 'uploads') => {
+//   return new Promise((resolve, reject) => {
+//     const gcsFileName = `${folder}/${uuid()}-${filename}`;
+//     const file = bucket.file(gcsFileName);
+
+//     const stream = file.createWriteStream({
+//       metadata: {
+//         contentType: 'auto'
+//       }
+//     });
+
+//     stream.on('error', err => reject(err));
+
+//     stream.on('finish', () => {
+//       // Skip makePublic() because UBLA is enabled
+//       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${gcsFileName}`;
+//       resolve(publicUrl);
+//     });
+
+//     stream.end(buffer);
+//   });
+// };
 
 // gcloud.js
 
