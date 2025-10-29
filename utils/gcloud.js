@@ -1,63 +1,28 @@
 const { Storage } = require("@google-cloud/storage");
-const path = require("path");
-const fs = require("fs");
 
-// Detect if running on Cloud Run or other GCP runtime
-const isCloudEnv =
-  process.env.K_SERVICE || // Cloud Run
-  process.env.GOOGLE_CLOUD_PROJECT || // General GCP env var
-  process.env.GCP_PROJECT;
-
-let storage;
-
-// 🧠 1️⃣  Local: Use local JSON key
-if (!isCloudEnv) {
-  const localKeyPath = path.join(__dirname, "../b-profiles-461910-9cac166b8b09.json");
-  if (!fs.existsSync(localKeyPath)) {
-    throw new Error("❌ Local service account key file not found.");
-  }
-  console.log("💻 Using local service account key.");
-  storage = new Storage({ keyFilename: localKeyPath });
-}
-
-// 🧠 2️⃣  Cloud Run: Use Application Default Credentials (ADC)
-else {
-  console.log("☁️ Running on Cloud Run — using default service account credentials.");
-  storage = new Storage();
-}
-
+const storage = new Storage(); // uses Cloud Run's service account automatically
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
 
-// 📤 Upload buffer
+// Upload buffer
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   const uniqueName = `${Date.now()}-${filename}`;
   const filePath = `${folder}/${uniqueName}`;
   const file = bucket.file(filePath);
 
-  return new Promise((resolve, reject) => {
-    const stream = file.createWriteStream({
-      resumable: false,
-      contentType: mimetype,
-    });
-
-    stream.on("error", (err) => {
-      console.error("❌ GCS Upload Error:", err);
-      reject(err);
-    });
-
-    stream.on("finish", () => {
-      resolve({
-        url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
-        id: filePath,
-      });
-    });
-
-    stream.end(buffer);
+  await file.save(buffer, {
+    resumable: false,
+    contentType: mimetype,
+    public: true,
   });
+
+  return {
+    url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+    id: filePath,
+  };
 }
 
-// 🗑️ Delete file
+// Delete file
 async function deleteFileFromGCS(fileName) {
   try {
     await bucket.file(fileName).delete();
@@ -73,6 +38,7 @@ async function deleteFileFromGCS(fileName) {
 }
 
 module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
 
 
 
