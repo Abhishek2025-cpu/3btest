@@ -22,8 +22,9 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
     await file.save(buffer, {
       resumable: false,
       contentType: mimetype,
-      public: true,
+      // ⚠️ Removed 'public: true' (caused ACL issue)
     });
+
 
     return {
       url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
@@ -31,25 +32,13 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
     };
   } catch (gcsError) {
     console.error(`❌ GCS Upload Error for file '${filename}':`, gcsError);
-   
     throw new Error(`GCS upload failed for ${filename}: ${gcsError.message}`);
   }
 }
 
 
-async function deleteFileFromGCS(fileName) {
-  try {
-    await bucket.file(fileName).delete();
-    console.log(`✅ Deleted ${fileName} from GCS bucket.`);
-  } catch (error) {
-    if (error.code === 404) {
-      console.warn(`⚠️ File not found in GCS for deletion: ${fileName}`);
-      return;
-    }
-    console.error(`❌ Error deleting file ${fileName}:`, error);
-    throw error;
-  }
-}
+
+
 
 // --- Machine Controller Logic ---
 exports.assignMachineWithOperator = async (req, res) => {
