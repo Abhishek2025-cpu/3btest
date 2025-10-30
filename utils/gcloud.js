@@ -1,5 +1,7 @@
 const { Storage } = require("@google-cloud/storage");
 
+
+
 const storage = new Storage();
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
@@ -14,21 +16,15 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
     contentType: mimetype,
   });
 
-  // ✅ If bucket is public (optional)
-  // await file.makePublic(); // Only if you truly need public URLs
-
-  // Generate a signed URL valid for long-term access (recommended)
-  const [url] = await file.getSignedUrl({
-    version: 'v4',
-    action: 'read',
-    expires: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
-  });
+  // ✅ If bucket is public (via IAM)
+  const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filePath}`;
 
   return {
-    url,
+    url: publicUrl,
     id: filePath,
   };
 }
+
 
 async function deleteFileFromGCS(fileName) {
   try {
