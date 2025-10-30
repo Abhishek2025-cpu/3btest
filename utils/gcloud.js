@@ -1,10 +1,9 @@
 const { Storage } = require("@google-cloud/storage");
 
-const storage = new Storage(); // uses Cloud Run's service account automatically
+const storage = new Storage();
 const BUCKET_NAME = "3bprofiles-products";
 const bucket = storage.bucket(BUCKET_NAME);
 
-// Upload buffer
 async function uploadBufferToGCS(buffer, filename, folder, mimetype = "application/octet-stream") {
   const uniqueName = `${Date.now()}-${filename}`;
   const filePath = `${folder}/${uniqueName}`;
@@ -13,16 +12,24 @@ async function uploadBufferToGCS(buffer, filename, folder, mimetype = "applicati
   await file.save(buffer, {
     resumable: false,
     contentType: mimetype,
-    public: true,
+  });
+
+  // ✅ If bucket is public (optional)
+  // await file.makePublic(); // Only if you truly need public URLs
+
+  // Generate a signed URL valid for long-term access (recommended)
+  const [url] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
   });
 
   return {
-    url: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+    url,
     id: filePath,
   };
 }
 
-// Delete file
 async function deleteFileFromGCS(fileName) {
   try {
     await bucket.file(fileName).delete();
@@ -38,6 +45,7 @@ async function deleteFileFromGCS(fileName) {
 }
 
 module.exports = { uploadBufferToGCS, deleteFileFromGCS };
+
 
 
 
