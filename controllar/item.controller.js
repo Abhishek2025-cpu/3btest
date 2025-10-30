@@ -109,6 +109,121 @@ exports.createItemWithBoxes = async (req, res) => {
   }
 };
 
+
+exports.updateItemWithBoxes = async (req, res) => {
+  try {
+    const { 
+      itemNo,
+      length,
+      noOfSticks,
+      helperEid,
+      operatorEid,
+      shift,
+      company,
+      noOfBoxes // can be changed
+    } = req.body;
+
+    // 1️⃣ Find existing item
+    const existingItem = await MainItem.findOne({ itemNo });
+    if (!existingItem) {
+      return res.status(404).json({ error: `Item with itemNo '${itemNo}' not found.` });
+    }
+
+    // 2️⃣ Fetch employees (optional update)
+    const [helper, operator] = await Promise.all([
+      helperEid ? Employee.findOne({ eid: helperEid }) : null,
+      operatorEid ? Employee.findOne({ eid: operatorEid }) : null,
+    ]);
+
+    if (helperEid && !helper) {
+      return res.status(400).json({ error: 'Invalid helper EID.' });
+    }
+    if (operatorEid && !operator) {
+      return res.status(400).json({ error: 'Invalid operator EID.' });
+    }
+
+    // 3️⃣ Update product image if provided
+    let updatedProductImageUrl = existingItem.productImageUrl;
+    if (req.file) {
+      const productImageUpload = await uploadBufferToGCS(
+        req.file.buffer,
+        req.file.originalname,
+        'product-images',
+        req.file.mimetype
+      );
+      updatedProductImageUrl = productImageUpload.url;
+    }
+
+    // 4️⃣ Determine new number of boxes
+    const newBoxCount = noOfBoxes ? parseInt(noOfBoxes, 10) : existingItem.boxes.length;
+    if (isNaN(newBoxCount) || newBoxCount <= 0) {
+      return res.status(400).json({ error: 'Invalid number of boxes.' });
+    }
+
+    let updatedBoxes = existingItem.boxes;
+
+    // 5️⃣ If number of boxes changed, regenerate boxes & QR codes
+    if (newBoxCount !== existingItem.boxes.length) {
+      const boxIndexes = Array.from({ length: newBoxCount }, (_, i) => i + 1);
+
+      updatedBoxes = await Promise.all(
+        boxIndexes.map(async (index) => {
+          const boxSerialNo = String(index).padStart(3, '0');
+          const qrCodeData = JSON.stringify({
+            itemNo: itemNo,
+            boxSerialNo,
+            totalBoxes: newBoxCount,
+            length: length || existingItem.length,
+            noOfSticks: noOfSticks || existingItem.noOfSticks,
+            operator: (operator?.name || existingItem.operator.name),
+            helper: (helper?.name || existingItem.helper.name),
+            shift: shift || existingItem.shift,
+            company: company || existingItem.company,
+            updatedAt: new Date().toISOString()
+          });
+
+          const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
+            type: 'png',
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 500,
+          });
+
+          const qrCodeFileName = `qr-${itemNo}-${boxSerialNo}.png`;
+          const qrCodeUpload = await uploadBufferToGCS(qrCodeBuffer, qrCodeFileName, 'qr-codes', 'image/png');
+
+          return {
+            boxSerialNo,
+            qrCodeUrl: qrCodeUpload.url,
+            stockStatus: 'In Stock',
+          };
+        })
+      );
+    }
+
+    // 6️⃣ Update item details
+    existingItem.length = length ?? existingItem.length;
+    existingItem.noOfSticks = noOfSticks ?? existingItem.noOfSticks;
+    existingItem.shift = shift ?? existingItem.shift;
+    existingItem.company = company ?? existingItem.company;
+    existingItem.productImageUrl = updatedProductImageUrl;
+    if (helper) existingItem.helper = { _id: helper._id, name: helper.name, eid: helper.eid };
+    if (operator) existingItem.operator = { _id: operator._id, name: operator.name, eid: operator.eid };
+    existingItem.boxes = updatedBoxes;
+
+    // 7️⃣ Save and respond
+    await existingItem.save();
+
+    res.status(200).json({
+      message: 'Item updated successfully.',
+      updatedItem: existingItem,
+    });
+  } catch (error) {
+    console.error('Update Item Error:', error.message, error.stack);
+    res.status(500).json({ error: error.message || 'Failed to update item.' });
+  }
+};
+
 // REPLACE your old function with this corrected version in your controller file
 
 
