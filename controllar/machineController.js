@@ -457,31 +457,7 @@ exports.getOperatorAssignmentsByEmployee = async (req, res) => {
 
 
 // GET /api/assignments/all
-exports.getAllAssignments = async (req, res) => {
-  try {
-    const assignments = await MachineAssignment.find()
-      .populate({ path: "machine", select: "name type" })
-      .populate({ path: "employees", select: "name role" })
-      .populate({ path: "mainItem" })
-      .sort({ createdAt: -1 });
 
-    if (!assignments || assignments.length === 0) {
-      return res.status(404).json({ success: false, message: "No assignments found." });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "All machine assignments fetched successfully.",
-      data: assignments
-    });
-  } catch (error) {
-    console.error("❌ Error fetching all assignments:", error);
-    res.status(500).json({
-      success: false,
-      message: `Server error while fetching assignments: ${error.message}`
-    });
-  }
-};
 
 exports.getAllAssignments = async (req, res) => {
   try {

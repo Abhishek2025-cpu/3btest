@@ -232,37 +232,56 @@ exports.updateProduct = async (req, res) => {
       updates.mrpPerBox = updates.pricePerPiece * updates.totalPiecesPerBox;
     }
 
-    // Step 2: Fetch existing product to access previous values if needed
+    // Step 2: Fetch existing product
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: '❌ Product not found' });
     }
 
-    // Use existing values if not present in the update body
-    const mrp = updates.mrpPerBox || existingProduct.mrpPerBox;
-    const discount = updates.discountPercentage !== undefined ? updates.discountPercentage : existingProduct.discountPercentage || 0;
-
     // Step 3: Calculate final price
-    updates.finalPricePerBox = Math.round(mrp - (mrp * discount / 100));
+    const mrp = updates.mrpPerBox || existingProduct.mrpPerBox;
+    const discount =
+      updates.discountPercentage !== undefined
+        ? updates.discountPercentage
+        : existingProduct.discountPercentage || 0;
 
-    // Step 4: Handle image uploads if any
+    updates.finalPricePerBox = Math.round(mrp - (mrp * discount) / 100);
+
+    // Step 4: Handle product description update
+    if (updates.description) {
+      // If your product has multi-language support (like description.en / description.hi etc.)
+      // you can handle it like this:
+      if (typeof updates.description === 'object') {
+        updates.description = {
+          ...existingProduct.description.toObject?.() || existingProduct.description,
+          ...updates.description,
+        };
+      } else {
+        // If it's just a single text field
+        updates.description = updates.description.trim();
+      }
+    }
+
+    // Step 5: Handle image uploads if any
     if (req.files?.images?.length > 0) {
       const uploadedImages = await Promise.all(
-        req.files.images.map(file =>
+        req.files.images.map((file) =>
           uploadBufferToGCS(file.buffer, file.originalname, 'product-images')
         )
       );
       updates.images = uploadedImages;
     }
 
-    // Step 5: Perform update
+    // Step 6: Perform update
     const updated = await Product.findByIdAndUpdate(productId, updates, { new: true });
 
-    res.json({ success: true, message: '✅ Product updated', product: updated });
+    res.json({ success: true, message: '✅ Product updated successfully', product: updated });
   } catch (err) {
+    console.error('❌ Product update failed:', err);
     res.status(500).json({ success: false, message: '❌ Update failed', error: err.message });
   }
 };
+
 
 
 exports.deleteProduct = async (req, res) => {
