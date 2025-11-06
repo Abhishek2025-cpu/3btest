@@ -4,7 +4,7 @@ const User = require('../models/User');
 const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const Notification = require('../models/Notification');
-const Company = require('../models/Company');
+const Company = require('../models/company');
 const { sendUserNotification } = require("../services/notificationService");
 const axios = require('axios');
 
