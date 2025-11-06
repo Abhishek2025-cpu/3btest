@@ -10,13 +10,11 @@ const boxSchema = new mongoose.Schema({
   },
 }, { _id: true, timestamps: true });
 
-// --- Updated schema ---
 const mainItemSchema = new mongoose.Schema({
   itemNo: { type: String, required: true, unique: true },
   length: { type: String, required: true },
   noOfSticks: { type: Number, required: true },
 
-  // ✅ multiple helpers/operators
   helpers: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
@@ -41,6 +39,9 @@ const mainItemSchema = new mongoose.Schema({
   // ✅ new counters
   pendingBoxes: { type: Number, required: true },
   completedBoxes: { type: Number, default: 0 },
+
+  // ✅ new optional key
+  machineNumber: { type: String }, // not required
 
 }, { timestamps: true });
 
