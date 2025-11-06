@@ -16,36 +16,31 @@ exports.createItemWithBoxes = async (req, res) => {
       shift, 
       company,
       noOfBoxes,
-      machineNumber // optional field
+      machineNumber // optional
     } = req.body;
 
-    // --- 1. Initial Validations ---
-    if (!req.file) {
-      return res.status(400).json({ error: 'Product image is required' });
-    }
-    const numBoxes = parseInt(noOfBoxes, 10);
-    if (isNaN(numBoxes) || numBoxes <= 0) {
-        return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
-    }
-    
-    // Check if an item with this itemNo already exists
-    const existingItem = await MainItem.findOne({ itemNo });
-    if (existingItem) {
-        return res.status(409).json({ error: `An item with itemNo '${itemNo}' already exists.` });
-    }
+    // --- 1. Validations ---
+    if (!req.file) return res.status(400).json({ error: 'Product image is required' });
 
-    // --- 2. Fetch Shared Data ---
+    const numBoxes = parseInt(noOfBoxes, 10);
+    if (isNaN(numBoxes) || numBoxes <= 0)
+      return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
+
+    // Check duplicate itemNo
+    const existingItem = await MainItem.findOne({ itemNo });
+    if (existingItem) return res.status(409).json({ error: `Item '${itemNo}' already exists.` });
+
+    // --- 2. Fetch Employees and upload image ---
     const [helper, operator, productImageUpload] = await Promise.all([
-        Employee.findById(helperId),
-        Employee.findById(operatorId),
-        uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype)
+      Employee.findById(helperId),
+      Employee.findById(operatorId),
+      uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype)
     ]);
 
-    if (!helper || !operator) {
-      return res.status(400).json({ error: 'Invalid helper or operator ID' });
-    }
-    
-    // --- 3. Generate Box Data in Parallel ---
+    if (!helper || !operator)
+      return res.status(400).json({ error: 'Invalid helperId or operatorId' });
+
+    // --- 3. Generate Boxes ---
     const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
 
     const generatedBoxes = await Promise.all(
@@ -53,37 +48,34 @@ exports.createItemWithBoxes = async (req, res) => {
         const boxSerialNo = String(index).padStart(3, '0');
 
         const qrCodeData = JSON.stringify({
-            itemNo,
-            boxSerialNo,
-            totalBoxes: numBoxes,
-            length,
-            noOfSticks,
-            operator: operator.name,
-            helper: helper.name,
-            shift,
-            company,
-            machineNumber: machineNumber || '',
-            createdAt: new Date().toISOString()
+          itemNo,
+          boxSerialNo,
+          totalBoxes: numBoxes,
+          length,
+          noOfSticks,
+          operator: operator.name,
+          helper: helper.name,
+          shift,
+          company,
+          machineNumber: machineNumber || '',
+          createdAt: new Date().toISOString()
         });
-        
+
         const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
-            type: 'png',
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 500,
+          type: 'png',
+          errorCorrectionLevel: 'H',
+          margin: 1,
+          width: 500
         });
 
         const qrCodeFileName = `qr-${itemNo}-${boxSerialNo}.png`;
         const qrCodeUpload = await uploadBufferToGCS(qrCodeBuffer, qrCodeFileName, 'qr-codes', 'image/png');
 
-        return {
-          boxSerialNo,
-          qrCodeUrl: qrCodeUpload.url,
-        };
+        return { boxSerialNo, qrCodeUrl: qrCodeUpload.url };
       })
     );
 
-    // --- 4. Create the MainItem document with all its boxes ---
+    // --- 4. Create MainItem ---
     const newMainItem = await MainItem.create({
       itemNo,
       length,
@@ -92,17 +84,18 @@ exports.createItemWithBoxes = async (req, res) => {
       operators: [{ _id: operator._id, name: operator.name, eid: operator.eid }],
       shift,
       company,
-      machineNumber: machineNumber || null,
+      machineNumber: machineNumber ? String(machineNumber) : null,
       productImageUrl: productImageUpload.url,
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
       completedBoxes: 0
     });
 
-    res.status(201).json(newMainItem);
+    return res.status(201).json(newMainItem);
+
   } catch (error) {
     console.error('Create Item with Boxes Error:', error.message, error.stack);
-    res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
+    return res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
   }
 };
 
