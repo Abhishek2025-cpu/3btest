@@ -44,6 +44,7 @@ app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
 app.use('/api/machines', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
+app.use('/api',require('./routes/testRoute'));
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));

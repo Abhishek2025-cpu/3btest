@@ -6,7 +6,6 @@ const upload = multer({ storage });
 const controller = require('../controllar/item.controller');
 
 
-
 router.post('/add-items', upload.single('productImage'), controller.createItemWithBoxes);
 router.put('/update', upload.single('productImage'), controller.updateItemWithBoxes);
 router.get('/get-items', controller.getAllItems);
@@ -15,6 +14,4 @@ router.get('/item/:itemNo', controller.getItemByItemNo);
 router.delete('/delete-items/:id', controller.deleteItem);
 router.patch('/:id/add-boxes', controller.addBoxesToItem);
 router.patch('/update-stock-status/:id', controller.updateStockStatus);
-
-
 module.exports = router;

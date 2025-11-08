@@ -3,6 +3,7 @@ const QRCode = require('qrcode');
 const MainItem = require('../models/item.model'); // IMPORTANT: Use the new MainItem model
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
+const Product = require('../models/ProductUpload');
 
 // ADVANCED CREATE FUNCTION
 exports.createItemWithBoxes = async (req, res) => {
@@ -98,9 +99,6 @@ exports.createItemWithBoxes = async (req, res) => {
     return res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
   }
 };
-
-
-
 
 exports.updateItemWithBoxes = async (req, res) => {
   try {
@@ -216,8 +214,6 @@ exports.updateItemWithBoxes = async (req, res) => {
   }
 };
 
-
-
 exports.addBoxesToItem = async (req, res) => {
   // MODIFICATION 1: We are getting 'id' from the URL, not 'itemNo'.
   const { id } = req.params; 
@@ -310,28 +306,97 @@ exports.addBoxesToItem = async (req, res) => {
   }
 };
 
-
 exports.getAllItemsForList = async (req, res) => {
   try {
+    const { id, name } = req.query;
+    const matchStage = {};
+
+    if (id) {
+      matchStage._id = new mongoose.Types.ObjectId(id);
+    } else if (name) {
+      matchStage.itemNo = { $regex: new RegExp(name, "i") };
+    }
+
     const items = await MainItem.aggregate([
-      {
-        $sort: { createdAt: -1 } // Sort newest first
-      },
+      { $match: matchStage },
+      { $sort: { createdAt: -1 } },
       {
         $addFields: {
-          // Create a new field 'boxCount' with the size of the 'boxes' array
-          boxCount: { $size: "$boxes" }
+          boxCount: { $size: { $ifNull: ["$boxes", []] } },
+          // Add this to see the lowercased itemNo that goes into the lookup
+          debug_itemNoLower: { $toLower: "$itemNo" }
         }
+      },
+      {
+        $lookup: {
+          from: "productuploads",
+          let: { itemNo: "$debug_itemNoLower" }, // Use the debug field
+          pipeline: [
+            {
+              $addFields: {
+                nameLower: { $toLower: "$name" }
+              }
+            },
+            // DEBUG: Project fields here before the match to see what's being compared
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    description: 1,
+                    nameLower: 1,
+                    debug_itemNoFromOuter: "$$itemNo" // Bring in the itemNo from the outer pipeline
+                }
+            },
+            // The actual match stage
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$nameLower", "$$itemNo"]
+                }
+              }
+            }
+            // No need for $project after match for debugging, we want the original fields
+          ],
+          as: "productDetails"
+        }
+      },
+      {
+        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true }
       },
       {
         $project: {
-          boxes: 0 // Now, explicitly remove the large 'boxes' array from the output
+          boxes: 0,
+          // Keep debug fields if you want them in final output
+          debug_itemNoLower: 0 // Remove from final output
         }
       }
     ]);
-    res.status(200).json(items);
+
+    return res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: "Items fetched successfully (with debug)",
+      count: items.length,
+      data: items.map(item => ({
+        ...item,
+        product: item.productDetails
+          ? {
+              _id: item.productDetails._id,
+              name: item.productDetails.name,
+              about: item.productDetails.about, // about might be missing in debug $project above
+              description: item.productDetails.description
+            }
+          : null
+      }))
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch items' });
+    console.error("Error fetching items:", error);
+    return res.status(500).json({
+      success: false,
+      statusCode: 500,
+      message: "Failed to fetch items",
+      error: error.message
+    });
   }
 };
 
