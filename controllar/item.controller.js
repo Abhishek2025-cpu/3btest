@@ -400,6 +400,137 @@ exports.getAllItemsForList = async (req, res) => {
   }
 };
 
+
+
+// ... your existing exports.getAllItemsForList function ...
+
+exports.getEmployeeAssignedProducts = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Employee ID format."
+      });
+    }
+
+    const items = await MainItem.aggregate([
+      // Stage 1: Match items where the employeeId is in either helpers or operators
+      {
+        $match: {
+          $or: [
+            { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
+            { "operators._id": new mongoose.Types.ObjectId(employeeId) }
+          ]
+        }
+      },
+      // Stage 2: Sort by creation date (optional but good practice)
+      { $sort: { createdAt: -1 } },
+      // Stage 3: Add boxCount field (from your existing logic)
+      {
+        $addFields: {
+          boxCount: { $size: { $ifNull: ["$boxes", []] } }
+        }
+      },
+      // Stage 4: Lookup product details (similar to your existing logic)
+      {
+        $lookup: {
+          from: "productuploads", // Make sure this is 'productuploads'
+          let: { itemNo: { $toLower: "$itemNo" } }, // Lowercase itemNo for matching
+          pipeline: [
+            {
+              $addFields: {
+                nameLower: { $toLower: "$name" }
+              }
+            },
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$nameLower", "$$itemNo"]
+                }
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                about: 1,
+                description: 1,
+                productImageUrl: 1 // If you want the product's image too
+              }
+            }
+          ],
+          as: "productDetails"
+        }
+      },
+      // Stage 5: Unwind productDetails array
+      {
+        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true }
+      },
+      // Stage 6: Project only the necessary fields for the output
+      {
+        $project: {
+          _id: 1,
+          itemNo: 1,
+          length: 1,
+          noOfSticks: 1,
+          helpers: 1,
+          operators: 1,
+          shift: 1,
+          company: 1,
+          productImageUrl: 1, // This is the item's specific image
+          pendingBoxes: 1,
+          completedBoxes: 1,
+          machineNumber: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          boxCount: 1,
+          // Map the productDetails to a cleaner 'product' field
+          product: {
+            $cond: {
+              if: "$productDetails",
+              then: {
+                _id: "$productDetails._id",
+                name: "$productDetails.name",
+                about: "$productDetails.about",
+                description: "$productDetails.description",
+                productImageUrl: "$productDetails.productImageUrl" // Product's image
+              },
+              else: null
+            }
+          }
+        }
+      }
+    ]);
+
+    if (items.length === 0) {
+      return res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: "No items found for this employee, or no matching products.",
+        data: []
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: `Items assigned to employee ${employeeId} fetched successfully`,
+      count: items.length,
+      data: items
+    });
+  } catch (error) {
+    console.error("Error fetching assigned products for employee:", error);
+    return res.status(500).json({
+      success: false,
+      statusCode: 500,
+      message: "Failed to fetch assigned products",
+      error: error.message
+    });
+  }
+};
+
 // CORRECTED CODE (includes the 'boxes' array)
 exports.getAllItems = async (req, res) => {
   try {
