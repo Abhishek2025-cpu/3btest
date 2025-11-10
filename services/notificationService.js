@@ -33,7 +33,7 @@ async function sendUserNotification(user, title, body, data = {}) {
  */
 async function sendGlobalNotification(users, title, body, data = {}) {
   const tokens = users.map(u => u.fcmTokens).flat().filter(Boolean);
-  if (!tokens.length) return;
+  if (!tokens.length) return; // ❌ early exit if tokens array is empty
 
   const message = {
     tokens,
@@ -41,18 +41,14 @@ async function sendGlobalNotification(users, title, body, data = {}) {
     data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.toString()])),
   };
 
-  try {
-    const response = await admin.messaging().sendMulticast(message);
-    console.log("📢 Global notification sent:", {
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-    });
+  const response = await admin.messaging().sendMulticast(message);
+  console.log("📢 Global notification sent:", {
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+  });
 
-    // Save broadcast
-    await Notification.create({ userId: null, fcmTokens: tokens, title, body, data });
-  } catch (err) {
-    console.error("❌ Error sending global notification:", err.message);
-  }
+  await Notification.create({ userId: null, fcmTokens: tokens, title, body, data });
 }
+
 
 module.exports = { sendUserNotification, sendGlobalNotification };
