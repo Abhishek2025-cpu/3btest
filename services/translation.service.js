@@ -3,9 +3,7 @@
 const translateText = require('../utils/translateText');
 
 const translateSingleItem = async (item, fields, lang) => {
-  // --- THIS IS THE KEY FIX ---
-  // Create a true deep copy of the item to avoid any reference issues.
-  // This works perfectly for both Mongoose docs and plain objects from .lean().
+
   const translated = JSON.parse(JSON.stringify(item));
 
   for (const field of fields) {
