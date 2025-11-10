@@ -1,15 +1,13 @@
 const admin = require("firebase-admin");
-const path = require("path");
 
 try {
-  // Load directly from JSON file
-  const serviceAccount = require(path.join(__dirname, "serviceAccountKey.json"));
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
 
-  console.log("✅ Firebase Admin initialized successfully (local)");
+  console.log("✅ Firebase Admin initialized successfully");
 } catch (error) {
   console.error("❌ Failed to initialize Firebase Admin:", error.message);
 }
