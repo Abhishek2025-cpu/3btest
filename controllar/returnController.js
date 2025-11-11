@@ -35,39 +35,48 @@ exports.createReturnRequest = async (req, res) => {
 
     // 1️⃣ Basic validation
     if (!orderId || !userId || !products || !description) {
-      return res.status(400).json({ success: false, message: 'Missing required fields.' });
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields.",
+      });
     }
 
     // 2️⃣ Find the order
     const order = await Order.findById(orderId);
-
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found.' });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
     }
 
     // 3️⃣ Ensure order belongs to this user
     if (order.userId.toString() !== userId) {
-      return res.status(403).json({ success: false, message: 'This order does not belong to the user.' });
+      return res.status(403).json({
+        success: false,
+        message: "This order does not belong to the user.",
+      });
     }
 
     // 4️⃣ Check order status and delivery window
-    if (order.status !== 'Delivered') {
+    const orderStatus = (order.status || order.currentStatus || "").toLowerCase();
+    if (orderStatus !== "delivered") {
       return res.status(400).json({
         success: false,
-        message: 'Return requests can only be made for orders that have been delivered.'
+        message: "Return requests can only be made for orders that have been delivered.",
       });
     }
 
-    // Ensure order has a deliveredAt or deliveredVerifiedAt timestamp
-    const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt; // fallback
+    // Determine delivery date (prefer deliveredAt or verifiedAt)
+    const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt;
     if (!deliveredAt) {
       return res.status(400).json({
         success: false,
-        message: 'Delivery date not found. Cannot process return request.'
+        message: "Delivery date not found. Cannot process return request.",
       });
     }
 
-    // Calculate 30-day window
+    // 5️⃣ Calculate 30-day return window
     const now = new Date();
     const deliveryDate = new Date(deliveredAt);
     const diffInDays = Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24));
@@ -75,14 +84,29 @@ exports.createReturnRequest = async (req, res) => {
     if (diffInDays > 30) {
       return res.status(400).json({
         success: false,
-        message: `Return request period expired. (${diffInDays} days since delivery — limit is 30 days).`
+        message: `Return request period expired. (${diffInDays} days since delivery — limit is 30 days).`,
       });
     }
 
-    // 5️⃣ Parse product data
-    const parsedProducts = JSON.parse(products);
+    // 6️⃣ Parse and validate product data
+    let parsedProducts;
+    try {
+      parsedProducts = typeof products === "string" ? JSON.parse(products) : products;
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product format. Must be valid JSON.",
+      });
+    }
 
-    // 6️⃣ Validate requested products
+    if (!Array.isArray(parsedProducts) || parsedProducts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one product must be included in the return request.",
+      });
+    }
+
+    // Validate each product
     for (const item of parsedProducts) {
       const requestIdentifier = item.productId || item._id;
       const productInOrder = order.products.find(
@@ -94,7 +118,7 @@ exports.createReturnRequest = async (req, res) => {
       if (!productInOrder) {
         return res.status(400).json({
           success: false,
-          message: `Product with identifier ${requestIdentifier} not found in this specific order.`,
+          message: `Product with ID ${requestIdentifier} not found in this order.`,
         });
       }
 
@@ -106,31 +130,47 @@ exports.createReturnRequest = async (req, res) => {
       }
     }
 
-    // 7️⃣ Upload any attached images
-    const boxImages = await uploadFilesToCloud(req.files?.boxImages, 'return-requests/box-images');
-    const damagedPieceImages = await uploadFilesToCloud(req.files?.damagedPieceImages, 'return-requests/damaged-pieces');
+    // 7️⃣ Upload attached images
+    const boxImages = await uploadFilesToCloud(
+      req.files?.boxImages,
+      "return-requests/box-images"
+    );
+    const damagedPieceImages = await uploadFilesToCloud(
+      req.files?.damagedPieceImages,
+      "return-requests/damaged-pieces"
+    );
 
-    // 8️⃣ Create and save the return request
+    // 8️⃣ Create the return request
     const returnRequest = await ReturnRequest.create({
       orderId,
       userId,
       products: parsedProducts,
       description,
-      boxSerialNumbers: boxSerialNumbers ? JSON.parse(boxSerialNumbers) : [],
+      boxSerialNumbers: boxSerialNumbers
+        ? typeof boxSerialNumbers === "string"
+          ? JSON.parse(boxSerialNumbers)
+          : boxSerialNumbers
+        : [],
       boxImages,
       damagedPieceImages,
     });
 
+    // 9️⃣ Respond to client
     res.status(201).json({
       success: true,
-      message: 'Return request submitted successfully.',
+      message: "Return request submitted successfully.",
       data: returnRequest,
     });
   } catch (error) {
-    console.error('Error creating return request:', error);
-    res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+    console.error("❌ Error creating return request:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
   }
 };
+
 
 
 // =========================================================================
