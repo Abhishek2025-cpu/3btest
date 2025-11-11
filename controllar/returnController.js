@@ -33,73 +33,84 @@ exports.createReturnRequest = async (req, res) => {
   try {
     const { orderId, userId, products, description, boxSerialNumbers } = req.body;
 
-    // 1. Basic Validation
+    // 1️⃣ Basic validation
     if (!orderId || !userId || !products || !description) {
       return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
 
-    // 2. Find the original order to validate against
-    console.log(`--- DEBUG: Finding order with ID: ${orderId} ---`);
+    // 2️⃣ Find the order
     const order = await Order.findById(orderId);
 
     if (!order) {
-      console.log('--- DEBUG: Order not found in database. ---');
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
 
-    // --- ADDED FOR DEBUGGING ---
-    console.log('--- DEBUG: Found Order. The products in THIS order are: ---');
-    console.log(JSON.stringify(order.products, null, 2));
-    // --- END DEBUGGING ---
-
-
-    // 3. Check if the order belongs to the user
+    // 3️⃣ Ensure order belongs to this user
     if (order.userId.toString() !== userId) {
       return res.status(403).json({ success: false, message: 'This order does not belong to the user.' });
     }
-    
-    const parsedProducts = JSON.parse(products);
 
-    // 4. Validate products and quantities in the return request
-    for (const item of parsedProducts) {
-        const requestIdentifier = item.productId || item._id;
-        
-        // --- ADDED FOR DEBUGGING ---
-        console.log(`--- DEBUG: Trying to find a product in the order that matches this identifier from the request: ${requestIdentifier} ---`);
-        // --- END DEBUGGING ---
-        
-        const productInOrder = order.products.find(p => 
-            (p.productId && p.productId.toString() === requestIdentifier) || 
-            (p._id && p._id.toString() === requestIdentifier)
-        );
-
-        if (!productInOrder) {
-            console.log(`--- DEBUG: FAILED to find a match for identifier: ${requestIdentifier}. Aborting. ---`);
-            // This error message is slightly improved from the last version.
-            const identifierForError = requestIdentifier || 'N/A';
-            return res.status(400).json({ 
-                success: false, 
-                message: `Product with identifier ${identifierForError} not found in this specific order.` 
-            });
-        }
-
-        // We found it!
-        console.log(`--- DEBUG: SUCCESS! Found a matching product in the order for identifier: ${requestIdentifier} ---`);
-
-        if (item.quantityToReturn > productInOrder.quantity) {
-            const identifierForError = requestIdentifier || 'N/A';
-            return res.status(400).json({ 
-                success: false, 
-                message: `Cannot return more items than were purchased for product ${identifierForError}.`
-            });
-        }
+    // 4️⃣ Check order status and delivery window
+    if (order.status !== 'Delivered') {
+      return res.status(400).json({
+        success: false,
+        message: 'Return requests can only be made for orders that have been delivered.'
+      });
     }
 
-    // 5. Handle File Uploads
-    const boxImages = await uploadFilesToCloud(req.files.boxImages, 'return-requests/box-images');
-    const damagedPieceImages = await uploadFilesToCloud(req.files.damagedPieceImages, 'return-requests/damaged-pieces');
+    // Ensure order has a deliveredAt or deliveredVerifiedAt timestamp
+    const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt; // fallback
+    if (!deliveredAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery date not found. Cannot process return request.'
+      });
+    }
 
-    // 6. Create and save the new return request
+    // Calculate 30-day window
+    const now = new Date();
+    const deliveryDate = new Date(deliveredAt);
+    const diffInDays = Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24));
+
+    if (diffInDays > 30) {
+      return res.status(400).json({
+        success: false,
+        message: `Return request period expired. (${diffInDays} days since delivery — limit is 30 days).`
+      });
+    }
+
+    // 5️⃣ Parse product data
+    const parsedProducts = JSON.parse(products);
+
+    // 6️⃣ Validate requested products
+    for (const item of parsedProducts) {
+      const requestIdentifier = item.productId || item._id;
+      const productInOrder = order.products.find(
+        (p) =>
+          (p.productId && p.productId.toString() === requestIdentifier) ||
+          (p._id && p._id.toString() === requestIdentifier)
+      );
+
+      if (!productInOrder) {
+        return res.status(400).json({
+          success: false,
+          message: `Product with identifier ${requestIdentifier} not found in this specific order.`,
+        });
+      }
+
+      if (item.quantityToReturn > productInOrder.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot return more items than were purchased for product ${requestIdentifier}.`,
+        });
+      }
+    }
+
+    // 7️⃣ Upload any attached images
+    const boxImages = await uploadFilesToCloud(req.files?.boxImages, 'return-requests/box-images');
+    const damagedPieceImages = await uploadFilesToCloud(req.files?.damagedPieceImages, 'return-requests/damaged-pieces');
+
+    // 8️⃣ Create and save the return request
     const returnRequest = await ReturnRequest.create({
       orderId,
       userId,
@@ -120,6 +131,7 @@ exports.createReturnRequest = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error.', error: error.message });
   }
 };
+
 
 // =========================================================================
 // NO CHANGES ARE NEEDED FOR THE OTHER CONTROLLER FUNCTIONS BELOW THIS LINE
