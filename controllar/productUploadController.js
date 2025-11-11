@@ -357,7 +357,7 @@ exports.updateProduct = async (req, res) => {
     const { productId } = req.params;
     const updates = req.body;
 
-    // Convert numbers if sent as strings
+    // Convert numeric strings
     if (updates.pricePerPiece) updates.pricePerPiece = Number(updates.pricePerPiece);
     if (updates.totalPiecesPerBox) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
     if (updates.discountPercentage) updates.discountPercentage = Number(updates.discountPercentage);
@@ -382,22 +382,25 @@ exports.updateProduct = async (req, res) => {
 
     updates.finalPricePerBox = Math.round(mrp - (mrp * discount) / 100);
 
-    // Step 4: Handle product description update
+    // Step 4: Handle description updates
     if (updates.description) {
-      // If your product has multi-language support (like description.en / description.hi etc.)
-      // you can handle it like this:
       if (typeof updates.description === 'object') {
         updates.description = {
           ...existingProduct.description.toObject?.() || existingProduct.description,
           ...updates.description,
         };
       } else {
-        // If it's just a single text field
         updates.description = updates.description.trim();
       }
     }
 
-    // Step 5: Handle image uploads if any
+    // ✅ Step 5: Make categoryId optional
+    // If categoryId is an empty string or undefined, don't include it in updates
+    if (updates.categoryId === '' || updates.categoryId === undefined || updates.categoryId === null) {
+      delete updates.categoryId;
+    }
+
+    // Step 6: Handle image uploads (if any)
     if (req.files?.images?.length > 0) {
       const uploadedImages = await Promise.all(
         req.files.images.map((file) =>
@@ -407,15 +410,20 @@ exports.updateProduct = async (req, res) => {
       updates.images = uploadedImages;
     }
 
-    // Step 6: Perform update
+    // Step 7: Apply updates
     const updated = await Product.findByIdAndUpdate(productId, updates, { new: true });
 
-    res.json({ success: true, message: '✅ Product updated successfully', product: updated });
+    res.json({
+      success: true,
+      message: '✅ Product updated successfully',
+      product: updated
+    });
   } catch (err) {
     console.error('❌ Product update failed:', err);
     res.status(500).json({ success: false, message: '❌ Update failed', error: err.message });
   }
 };
+
 
 
 
