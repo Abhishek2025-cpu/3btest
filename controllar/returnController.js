@@ -58,16 +58,16 @@ exports.createReturnRequest = async (req, res) => {
       });
     }
 
-    // 4️⃣ Check order status and delivery window
+    // 4️⃣ Check order status
     const orderStatus = (order.status || order.currentStatus || "").toLowerCase();
     if (orderStatus !== "delivered") {
       return res.status(400).json({
         success: false,
-        message: "Return requests can only be made for orders that have been delivered.",
+        message: "Return requests can only be made for delivered orders.",
       });
     }
 
-    // Determine delivery date (prefer deliveredAt or verifiedAt)
+    // 5️⃣ Determine delivery date
     const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt;
     if (!deliveredAt) {
       return res.status(400).json({
@@ -76,19 +76,19 @@ exports.createReturnRequest = async (req, res) => {
       });
     }
 
-    // 5️⃣ Calculate 30-day return window
+    // 6️⃣ Calculate 30-day window
     const now = new Date();
     const deliveryDate = new Date(deliveredAt);
     const diffInDays = Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24));
 
-    if (diffInDays > 30) {
+    if (diffInDays > 30 && !order.returnEligible) {
       return res.status(400).json({
         success: false,
-        message: `Return request period expired. (${diffInDays} days since delivery — limit is 30 days).`,
+        message: `Return request period expired (${diffInDays} days since delivery). Return window can only be enabled by admin.`,
       });
     }
 
-    // 6️⃣ Parse and validate product data
+    // 7️⃣ Parse and validate products
     let parsedProducts;
     try {
       parsedProducts = typeof products === "string" ? JSON.parse(products) : products;
@@ -106,7 +106,6 @@ exports.createReturnRequest = async (req, res) => {
       });
     }
 
-    // Validate each product
     for (const item of parsedProducts) {
       const requestIdentifier = item.productId || item._id;
       const productInOrder = order.products.find(
@@ -130,32 +129,25 @@ exports.createReturnRequest = async (req, res) => {
       }
     }
 
-    // 7️⃣ Upload attached images
-    const boxImages = await uploadFilesToCloud(
-      req.files?.boxImages,
-      "return-requests/box-images"
-    );
-    const damagedPieceImages = await uploadFilesToCloud(
-      req.files?.damagedPieceImages,
-      "return-requests/damaged-pieces"
-    );
+    // 8️⃣ Upload images
+    const boxImages = await uploadFilesToCloud(req.files?.boxImages, "return-requests/box-images");
+    const damagedPieceImages = await uploadFilesToCloud(req.files?.damagedPieceImages, "return-requests/damaged-pieces");
 
-    // 8️⃣ Create the return request
+    // 9️⃣ Create return request
     const returnRequest = await ReturnRequest.create({
       orderId,
       userId,
       products: parsedProducts,
       description,
-      boxSerialNumbers: boxSerialNumbers
-        ? typeof boxSerialNumbers === "string"
-          ? JSON.parse(boxSerialNumbers)
-          : boxSerialNumbers
+      boxSerialNumbers: Array.isArray(boxSerialNumbers)
+        ? boxSerialNumbers
+        : boxSerialNumbers
+        ? JSON.parse(boxSerialNumbers)
         : [],
       boxImages,
       damagedPieceImages,
     });
 
-    // 9️⃣ Respond to client
     res.status(201).json({
       success: true,
       message: "Return request submitted successfully.",
@@ -170,6 +162,7 @@ exports.createReturnRequest = async (req, res) => {
     });
   }
 };
+
 
 
 

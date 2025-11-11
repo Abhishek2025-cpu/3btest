@@ -304,103 +304,105 @@ exports.getOrders = async (req, res) => {
     const orders = await Order.find()
       .sort({ createdAt: -1 })
       .populate('userId', 'name email number')
-      .populate('products.productId'); // This populates the full product document
+      .populate('products.productId');
 
-    // Preload all companies once to avoid querying DB repeatedly
     const companies = await Company.find();
     const companyMap = {};
-    companies.forEach(c => {
-      companyMap[c.name.toLowerCase()] = c;
-    });
+    companies.forEach(c => (companyMap[c.name.toLowerCase()] = c));
 
-    const formattedOrders = orders.map(order => {
-      const populatedOrder = order.toObject();
+    const now = new Date();
 
-      populatedOrder.totalAmount = order.products.reduce(
-        (sum, item) => sum + (item.priceAtPurchase * item.quantity),
-        0
-      );
+    const formattedOrders = await Promise.all(
+      orders.map(async (order) => {
+        const populatedOrder = order.toObject();
 
-      populatedOrder.user = populatedOrder.userId;
-      delete populatedOrder.userId;
+        // ✅ Check 30-day return eligibility
+        const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt;
+        const deliveryDate = deliveredAt ? new Date(deliveredAt) : null;
+        let diffInDays = deliveryDate ? Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24)) : null;
 
-      populatedOrder.products = populatedOrder.products.map(item => {
-        const isOtherProduct = !item.productId || typeof item.productId === 'string';
-
-        if (isOtherProduct) {
-          // Try to get company details if present
-          let companyDetails = null;
-          if (item.company) {
-            const key = item.company.toLowerCase();
-            companyDetails = companyMap[key] || null;
-          }
-
-          return {
-            productId: null,
-            productName: item.productName || 'Custom Product',
-            quantity: item.quantity,
-            color: item.color || null,
-            priceAtPurchase: item.priceAtPurchase,
-            image: item.image || null,
-            orderId: item.orderId,
-            currentStatus: item.currentStatus,
-            discount: item.discount || 0,
-            selectedSize: item.selectedSize || null,
-            materialName: item.materialName || null,
-            modelNo: item.modelNo || null,
-            totalPrice: item.totalPrice || (item.priceAtPurchase * item.quantity),
-            totalPiecesPerBox: null, // MODIFICATION: Added for consistency
-            // Company details
-            company: companyDetails
-              ? {
-                  name: companyDetails.name,
-                  logo: companyDetails.logo
-                }
-              : {
-                  name: item.company || 'Unknown',
-                  logo: null
-                }
-          };
-        } else {
-          const product = item.productId || {};
-          const colorImageMap = product.colorImageMap || {};
-          const images = product.images || [];
-
-          let image = colorImageMap[item.color];
-          if (!image && images.length > 0) image = images[0];
-
-          return {
-            productId: product._id,
-            productName: product.name,
-            quantity: item.quantity,
-            color: item.color,
-            priceAtPurchase: item.priceAtPurchase,
-            image: image || null,
-            orderId: item.orderId,
-            currentStatus: item.currentStatus,
-            // MODIFICATION: Added totalPiecesPerBox from the populated product
-            totalPiecesPerBox: product.totalPiecesPerBox || null 
-          };
+        // automatically mark as false if more than 30 days old and not manually overridden
+        if (diffInDays > 30 && order.returnEligible !== true) {
+          order.returnEligible = false;
+          await order.save();
         }
-      });
 
-      return populatedOrder;
-    });
+        populatedOrder.returnEligible = order.returnEligible;
+
+        populatedOrder.totalAmount = order.products.reduce(
+          (sum, item) => sum + item.priceAtPurchase * item.quantity,
+          0
+        );
+
+        populatedOrder.user = populatedOrder.userId;
+        delete populatedOrder.userId;
+
+        populatedOrder.products = populatedOrder.products.map(item => {
+          const isOtherProduct = !item.productId || typeof item.productId === 'string';
+          if (isOtherProduct) {
+            let companyDetails = null;
+            if (item.company) {
+              const key = item.company.toLowerCase();
+              companyDetails = companyMap[key] || null;
+            }
+            return {
+              productId: null,
+              productName: item.productName || 'Custom Product',
+              quantity: item.quantity,
+              color: item.color || null,
+              priceAtPurchase: item.priceAtPurchase,
+              image: item.image || null,
+              orderId: item.orderId,
+              currentStatus: item.currentStatus,
+              discount: item.discount || 0,
+              selectedSize: item.selectedSize || null,
+              materialName: item.materialName || null,
+              modelNo: item.modelNo || null,
+              totalPrice: item.totalPrice || item.priceAtPurchase * item.quantity,
+              totalPiecesPerBox: null,
+              company: companyDetails
+                ? { name: companyDetails.name, logo: companyDetails.logo }
+                : { name: item.company || 'Unknown', logo: null },
+            };
+          } else {
+            const product = item.productId || {};
+            const colorImageMap = product.colorImageMap || {};
+            const images = product.images || [];
+            let image = colorImageMap[item.color];
+            if (!image && images.length > 0) image = images[0];
+            return {
+              productId: product._id,
+              productName: product.name,
+              quantity: item.quantity,
+              color: item.color,
+              priceAtPurchase: item.priceAtPurchase,
+              image: image || null,
+              orderId: item.orderId,
+              currentStatus: item.currentStatus,
+              totalPiecesPerBox: product.totalPiecesPerBox || null,
+            };
+          }
+        });
+
+        return populatedOrder;
+      })
+    );
 
     res.status(200).json({
       success: true,
       count: formattedOrders.length,
-      orders: formattedOrders
+      orders: formattedOrders,
     });
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({
       success: false,
       message: 'Server error fetching orders.',
-      error: error.message
+      error: error.message,
     });
   }
 };
+
 
 
 
@@ -588,6 +590,41 @@ exports.updateOrderStatusById = async (req, res) => {
 };
 
 
+exports.toggleReturnEligibility = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { eligible } = req.body; // expects true or false
+
+    if (typeof eligible !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid boolean value for 'eligible'.",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found." });
+    }
+
+    order.returnEligible = eligible;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Return eligibility updated successfully.`,
+      orderId: order._id,
+      returnEligible: order.returnEligible,
+    });
+  } catch (error) {
+    console.error('Error updating return eligibility:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating return eligibility.',
+      error: error.message,
+    });
+  }
+};
 
 
 

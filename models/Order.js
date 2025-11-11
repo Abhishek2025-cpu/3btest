@@ -41,6 +41,11 @@ const orderSchema = new mongoose.Schema({
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
     default: 'Pending'
   },
+  returnEligible: {
+  type: Boolean,
+  default: true,
+},
+
   statusHistory: [
     {
       status: { type: String, required: true },
