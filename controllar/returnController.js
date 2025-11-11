@@ -130,23 +130,37 @@ exports.createReturnRequest = async (req, res) => {
 // @route   GET /api/v1/returns/my-requests/:userId
 // @access  Private (Customer)
 exports.getUserReturnRequests = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const requests = await ReturnRequest.find({ userId })
-            .populate('orderId', 'orderId totalPrice') 
-            .populate('products.productId', 'name images') 
-            .sort({ createdAt: -1 });
+  try {
+    const { userId } = req.params;
 
-        if (!requests) {
-            return res.status(404).json({ success: false, message: 'No return requests found for this user.' });
-        }
+    const requests = await ReturnRequest.find({ userId })
+      .populate('userId', 'name email') // ✅ populate user name (and email if needed)
+      .populate('orderId', 'orderId totalPrice') // populate order details
+      .populate('products.productId', 'name images') // populate product details
+      .sort({ createdAt: -1 });
 
-        res.status(200).json({ success: true, count: requests.length, data: requests });
-    } catch (error) {
-        console.error('Error fetching user return requests:', error);
-        res.status(500).json({ success: false, message: 'Server error.' });
+    if (!requests || requests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No return requests found for this user.',
+      });
     }
+
+    res.status(200).json({
+      success: true,
+      count: requests.length,
+      data: requests,
+    });
+  } catch (error) {
+    console.error('Error fetching user return requests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error.',
+      error: error.message,
+    });
+  }
 };
+
 
 
 // @desc    Get all return requests (for Admin)
