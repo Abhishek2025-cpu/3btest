@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllar/orderController'); // <-- fix path
+console.log(orderController);
 
 router.post('/place-order', orderController.placeOrder);
 router.get('/get-orders', orderController.getOrders);

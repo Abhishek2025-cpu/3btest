@@ -316,40 +316,33 @@ exports.getOrders = async (req, res) => {
       orders.map(async (order) => {
         const populatedOrder = order.toObject();
 
-        // ✅ Calculate delivery date and 30-day difference
+        // ✅ Determine delivery date
         const deliveredAt = order.deliveredAt || order.deliveredVerifiedAt || order.updatedAt;
         const deliveryDate = deliveredAt ? new Date(deliveredAt) : null;
-        const diffInDays = deliveryDate ? Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24)) : null;
 
-        // ✅ Determine return eligibility based on rules
-        let isEligible = false;
+        // ✅ Calculate days since delivery
+        const diffInDays = deliveryDate
+          ? Math.floor((now - deliveryDate) / (1000 * 60 * 60 * 24))
+          : null;
 
-        if (order.currentStatus === 'Delivered' && deliveryDate) {
-          isEligible = diffInDays <= 30;
+        // ✅ Set return eligibility (Delivered within 30 days only)
+        let returnEligible = false;
+        if (order.currentStatus === 'Delivered' && diffInDays <= 30) {
+          returnEligible = true;
         }
 
-        // ✅ Automatically update DB if outdated
-        if (order.returnEligible !== isEligible) {
-          order.returnEligible = isEligible;
-          await order.save();
-        }
+        populatedOrder.returnEligible = returnEligible;
 
-        populatedOrder.returnEligible = isEligible;
-
-        // ✅ Compute total
         populatedOrder.totalAmount = order.products.reduce(
           (sum, item) => sum + item.priceAtPurchase * item.quantity,
           0
         );
 
-        // ✅ Map user
         populatedOrder.user = populatedOrder.userId;
         delete populatedOrder.userId;
 
-        // ✅ Populate product details
         populatedOrder.products = populatedOrder.products.map(item => {
           const isOtherProduct = !item.productId || typeof item.productId === 'string';
-
           if (isOtherProduct) {
             let companyDetails = null;
             if (item.company) {
@@ -381,7 +374,6 @@ exports.getOrders = async (req, res) => {
             const images = product.images || [];
             let image = colorImageMap[item.color];
             if (!image && images.length > 0) image = images[0];
-
             return {
               productId: product._id,
               productName: product.name,
@@ -414,6 +406,8 @@ exports.getOrders = async (req, res) => {
     });
   }
 };
+
+
 
 
 
@@ -508,14 +502,82 @@ exports.getOrdersByUserId = async (req, res) => {
 
 
 
-
-
-
 // PATCH /api/orders/update-status/:orderId
 // PATCH /api/orders/status/:id
 // PATCH /api/orders/status/:id
+exports.updateOrderStatusById = async (req, res) => {
+  const { id } = req.params;
+  const { newStatus } = req.body;
 
+  if (!newStatus) {
+    return res.status(400).json({
+      success: false,
+      message: "New status is required",
+    });
+  }
 
+  try {
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // 1. Update top-level status
+    order.currentStatus = newStatus;
+
+    // 2. Record in statusHistory (make sure array exists)
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: newStatus,
+      notes: `Status changed to ${newStatus}`,
+      updatedAt: new Date(),
+    });
+
+    // 3. Update each product's currentStatus
+    if (order.products && order.products.length > 0) {
+      order.products.forEach((product) => {
+        product.currentStatus = newStatus;
+      });
+    }
+
+    await order.save();
+
+    // 4. 🔔 Trigger notification safely
+    try {
+      const user = await User.findById(order.userId);
+      if (user && Array.isArray(user.fcmTokens) && user.fcmTokens.length > 0) {
+        await sendNotification(
+          user._id,
+          [user.fcmTokens[user.fcmTokens.length - 1]], // latest token
+          `📦 Order Update: ${newStatus}`,
+          `Dear ${user.name}, your order ${order.orderId} is "${newStatus}".`
+        );
+      } else {
+        console.log("⚠️ No FCM tokens for user, skipping notification");
+      }
+    } catch (notifyErr) {
+      console.error("⚠️ Failed to send notification:", notifyErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      currentStatus: order.currentStatus,
+    });
+  } catch (error) {
+    console.error("❌ Error updating order status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while updating order status",
+      error: error.message,
+    });
+  }
+};
 
 
 exports.toggleReturnEligibility = async (req, res) => {
