@@ -417,12 +417,6 @@ exports.getOrders = async (req, res) => {
 
 
 
-
-
-
-// PATCH /api/orders/update-status/:orderId
-// PATCH /api/orders/status/:id
-// PATCH /api/orders/status/:id
 exports.getOrdersByUserId = async (req, res) => {
   const { userId } = req.params;
 
@@ -511,6 +505,16 @@ exports.getOrdersByUserId = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+// PATCH /api/orders/update-status/:orderId
+// PATCH /api/orders/status/:id
+// PATCH /api/orders/status/:id
+
 
 
 
