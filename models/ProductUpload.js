@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema({
   // CHANGE 1: The type is now String, to match the custom ID in the Category model.
   // We also remove the 'ref' here because the link will be virtual.
-  categoryId: { type: String, required: true },
+  categoryId: { type: String, required: false },
   name: { type: String, required: true },
   about: { type: String },
    description: { type: String },
