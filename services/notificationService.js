@@ -1,54 +1,60 @@
 const admin = require("../firebase");
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 
 /**
- * Send notification to a single user
+ * Register a user's FCM token
  */
-async function sendUserNotification(user, title, body, data = {}) {
+async function registerUserToken(userId, fcmToken) {
   try {
-    // Save in DB
-    await Notification.create({ userId: user._id, title, body, data });
-
-    const tokens = user.fcmTokens?.filter(Boolean);
-    if (!tokens?.length) return;
-
-    const message = {
-      tokens,
-      notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.toString()])),
-    };
-
-    const response = await admin.messaging().sendMulticast(message);
-    console.log("✅ Notification sent:", {
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-    });
+    console.log(`💾 Registering FCM token for userId: ${userId}`);
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { fcmTokens: fcmToken } },
+      { new: true, upsert: true }
+    );
+    console.log("✅ FCM token registered successfully");
   } catch (err) {
-    console.error("❌ Error sending notification:", err.message);
+    console.error("❌ Error registering FCM token:", err.message);
   }
 }
 
 /**
- * Send global notification to multiple users
+ * Send global notification to all users individually
  */
-async function sendGlobalNotification(users, title, body, data = {}) {
-  const tokens = users.map(u => u.fcmTokens).flat().filter(Boolean);
-  if (!tokens.length) return; // ❌ early exit if tokens array is empty
+async function sendGlobalNotification(title, body, data = {}) {
+  try {
+    const users = await User.find({ fcmTokens: { $exists: true, $ne: [] } });
+    const tokens = users.map(u => u.fcmTokens).flat().filter(Boolean);
 
-  const message = {
-    tokens,
-    notification: { title, body },
-    data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.toString()])),
-  };
+    if (!tokens.length) {
+      console.log("⚠️ No FCM tokens found. Skipping notification.");
+      return;
+    }
 
-  const response = await admin.messaging().sendMulticast(message);
-  console.log("📢 Global notification sent:", {
-    successCount: response.successCount,
-    failureCount: response.failureCount,
-  });
+    console.log(`📢 Sending global notification "${title}" to ${tokens.length} tokens individually`);
 
-  await Notification.create({ userId: null, fcmTokens: tokens, title, body, data });
+    for (const token of tokens) {
+      try {
+        await admin.messaging().send({
+          token,
+          notification: { title, body },
+          data: Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, v.toString()])
+          ),
+        });
+      } catch (err) {
+        console.warn(`❌ Failed to send to token: ${token}, Error: ${err.message}`);
+      }
+    }
+
+    await Notification.create({ userId: null, fcmTokens: tokens, title, body, data });
+    console.log("💾 Global notification saved in DB");
+
+  } catch (err) {
+    console.error("❌ Error sending global notification:", err.message);
+    throw err;
+  }
 }
 
-
-module.exports = { sendUserNotification, sendGlobalNotification };
+module.exports = { registerUserToken, sendGlobalNotification };
