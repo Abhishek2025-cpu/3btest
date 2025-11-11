@@ -47,6 +47,8 @@ app.use('/api/operator', require('./routes/operatorRoutes'));
 app.use('/api',require('./routes/testRoute'));
 const notificationRoutes = require("./routes/TestnotificationRoutes");
 app.use("/api/notifications", notificationRoutes);
+const workerRoutes = require('./routes/workerRoutes');
+app.use('/api/workers', workerRoutes);
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
