@@ -299,7 +299,9 @@ exports.createProduct = async (req, res) => {
         error: err.message, details: err.errors
       });
     }
-    // Removed LIMIT_UNEXPECTED_FILE check
+   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ success: false, message: 'Too many files uploaded or unexpected file field.', error: err.message });
+    }
     return res.status(500).json({
       success: false, message: '❌ An internal server error occurred.',
       error: err.message
