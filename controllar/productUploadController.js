@@ -1,5 +1,5 @@
 const Product = require('../models/ProductUpload');
-const { uploadBufferToGCS } = require('../utils/gcloud');
+const { uploadBufferToGCS,deleteFileFromGCS  } = require('../utils/gcloud');
 const QRCode = require('qrcode');
 const sharp = require('sharp');
 const mongoose = require('mongoose');
@@ -479,6 +479,62 @@ exports.filterAndSortProducts = async (req, res) => {
       success: false,
       message: '❌ Failed to filter/sort products',
       error: err.message
+    });
+  }
+};
+
+
+exports.deleteProductImage = async (req, res) => {
+  try {
+    const { productId, imageId } = req.params;
+
+    if (!productId || !imageId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "❌ Product ID and Image ID are required." });
+    }
+
+    // Step 1: Find the product
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "❌ Product not found." });
+    }
+
+    // Step 2: Find the image inside product.images
+    const imageToDelete = product.images.find((img) => img.id === imageId);
+    if (!imageToDelete) {
+      return res
+        .status(404)
+        .json({ success: false, message: "❌ Image not found in this product." });
+    }
+
+    // Step 3: Remove the image from the DB
+    product.images = product.images.filter((img) => img.id !== imageId);
+    await product.save();
+
+    // Step 4: Delete image from Google Cloud Storage
+    try {
+      // image.id = 'product-images/169970232-product.jpg'
+      await deleteFileFromGCS(imageToDelete.id);
+      console.log(`✅ Deleted ${imageToDelete.id} from GCS.`);
+    } catch (error) {
+      console.warn(`⚠️ GCS delete failed for ${imageToDelete.id}:`, error.message);
+    }
+
+    // Step 5: Return updated image list
+    res.status(200).json({
+      success: true,
+      message: "✅ Image deleted successfully.",
+      remainingImages: product.images,
+    });
+  } catch (err) {
+    console.error("❌ Error in deleteProductImage:", err);
+    res.status(500).json({
+      success: false,
+      message: "❌ Failed to delete image.",
+      error: err.message,
     });
   }
 };
