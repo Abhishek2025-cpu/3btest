@@ -510,20 +510,26 @@ exports.deleteProductImage = async (req, res) => {
         .json({ success: false, message: "❌ Image not found in this product." });
     }
 
-    // Step 3: Remove the image from the DB
+    // Step 3: Remove from DB
     product.images = product.images.filter((img) => img.id !== imageId);
     await product.save();
 
-    // Step 4: Delete image from Google Cloud Storage
+    // Step 4: Delete from Google Cloud Storage
     try {
-      // image.id = 'product-images/169970232-product.jpg'
-      await deleteFileFromGCS(imageToDelete.id);
-      console.log(`✅ Deleted ${imageToDelete.id} from GCS.`);
+      // ✅ Extract filename from URL (everything after 'product-images/')
+      const match = imageToDelete.url.match(/product-images\/(.+)$/);
+      if (match && match[1]) {
+        const gcsFilePath = `product-images/${match[1]}`;
+        await deleteFileFromGCS(gcsFilePath);
+        console.log(`✅ Deleted ${gcsFilePath} from GCS.`);
+      } else {
+        console.warn(`⚠️ Could not extract GCS path from URL: ${imageToDelete.url}`);
+      }
     } catch (error) {
-      console.warn(`⚠️ GCS delete failed for ${imageToDelete.id}:`, error.message);
+      console.warn(`⚠️ GCS delete failed for ${imageToDelete.url}:`, error.message);
     }
 
-    // Step 5: Return updated image list
+    // Step 5: Return updated list
     res.status(200).json({
       success: true,
       message: "✅ Image deleted successfully.",
