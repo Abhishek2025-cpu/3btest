@@ -416,7 +416,6 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     }
 
     const items = await MainItem.aggregate([
-      // 🧩 Match assignments for this employee (as helper or operator)
       {
         $match: {
           $or: [
@@ -425,33 +424,20 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           ]
         }
       },
-
-      // 🧩 Sort newest first
       { $sort: { createdAt: -1 } },
-
-      // 🧩 Add boxCount field
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
-
-      // 🧩 Lookup product details
+      // ✅ Product lookup
       {
         $lookup: {
           from: "productuploads",
           let: { itemNo: { $toLower: "$itemNo" } },
           pipeline: [
-            {
-              $addFields: {
-                nameLower: { $toLower: "$name" }
-              }
-            },
-            {
-              $match: {
-                $expr: { $eq: ["$nameLower", "$$itemNo"] }
-              }
-            },
+            { $addFields: { nameLower: { $toLower: "$name" } } },
+            { $match: { $expr: { $eq: ["$nameLower", "$$itemNo"] } } },
             {
               $project: {
                 _id: 1,
@@ -465,26 +451,23 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           as: "productDetails"
         }
       },
-
-      // 🧩 Lookup machine details by machineNumber
+      // ✅ Machine lookup (matching name to machineNumber)
       {
         $lookup: {
           from: "machines",
           localField: "machineNumber",
-          foreignField: "name", // assuming machine.name stores its number ("1", "2", etc.)
+          foreignField: "name",
           as: "machineDetails"
         }
       },
-
       { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
       { $unwind: { path: "$machineDetails", preserveNullAndEmptyArrays: true } },
-
-      // 🧩 Final output
+      // ✅ Final shape
       {
         $project: {
           _id: 1,
           itemNo: 1,
-          mainItemId: "$_id", // ✅ show item ID below itemNo
+          mainItemId: "$_id",
           length: 1,
           noOfSticks: 1,
           helpers: 1,
@@ -495,49 +478,37 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           pendingBoxes: 1,
           completedBoxes: 1,
           machineNumber: 1,
-          machineId: "$machineDetails._id", // ✅ show machine ID below machineNumber
+          machineId: "$machineDetails._id",
           createdAt: 1,
           updatedAt: 1,
           boxCount: 1,
           product: {
-            $cond: {
-              if: "$productDetails",
-              then: {
-                _id: "$productDetails._id",
-                name: "$productDetails.name",
-                about: "$productDetails.about",
-                description: "$productDetails.description",
-                productImageUrl: "$productDetails.productImageUrl"
-              },
-              else: null
-            }
+            _id: "$productDetails._id",
+            name: "$productDetails.name",
+            about: "$productDetails.about",
+            description: "$productDetails.description",
+            productImageUrl: "$productDetails.productImageUrl"
           },
           machine: {
-            $cond: {
-              if: "$machineDetails",
-              then: {
-                _id: "$machineDetails._id",
-                name: "$machineDetails.name",
-                companyName: "$machineDetails.companyName",
-                type: "$machineDetails.type"
-              },
-              else: null
-            }
+            _id: "$machineDetails._id",
+            name: "$machineDetails.name",
+            companyName: "$machineDetails.companyName",
+            type: "$machineDetails.type"
           }
         }
       }
     ]);
 
-    if (items.length === 0) {
+    if (!items.length) {
       return res.status(404).json({
         success: false,
         statusCode: 404,
-        message: "No items found for this employee, or no matching products.",
+        message: "No items found for this employee or no matching machines/products.",
         data: []
       });
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       statusCode: 200,
       message: `Items assigned to employee ${employeeId} fetched successfully`,
@@ -546,7 +517,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching assigned products for employee:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       statusCode: 500,
       message: "Failed to fetch assigned products",
