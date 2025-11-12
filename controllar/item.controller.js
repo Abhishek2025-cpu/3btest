@@ -482,45 +482,52 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
       // Project final response
       {
-        $project: {
-          _id: 1,
-          itemNo: 1,
-          length: 1,
-          noOfSticks: 1,
-          helpers: 1,
-          operators: 1,
-          shift: 1,
-          company: 1,
-          productImageUrl: 1,
-          pendingBoxes: 1,
-          completedBoxes: 1,
-          machineNumber: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          boxCount: 1,
-
-          // ✅ Main Item ID (your current _id)
-          mainItemId: "$_id",
-
-          // ✅ Machine Info (with ID)
-          machine: {
-            _id: "$machineDetails._id",
-            name: "$machineDetails.name",
-            type: "$machineDetails.type",
-            companyName: "$machineDetails.companyName"
-          },
-
-          // ✅ Product Info
-          product: {
-            _id: "$productDetails._id",
-            name: "$productDetails.name",
-            about: "$productDetails.about",
-            description: "$productDetails.description",
-            productImageUrl: "$productDetails.productImageUrl"
-          }
-        }
+  $project: {
+    _id: 1,
+    itemNo: 1,
+    mainItemId: "$_id", // ✅ expose item id below itemNo
+    length: 1,
+    noOfSticks: 1,
+    helpers: 1,
+    operators: 1,
+    shift: 1,
+    company: 1,
+    productImageUrl: 1,
+    pendingBoxes: 1,
+    completedBoxes: 1,
+    machineNumber: 1,
+    machineId: "$machineDetails._id", // ✅ expose machine id below machineNumber
+    createdAt: 1,
+    updatedAt: 1,
+    boxCount: 1,
+    product: {
+      $cond: {
+        if: "$productDetails",
+        then: {
+          _id: "$productDetails._id",
+          name: "$productDetails.name",
+          about: "$productDetails.about",
+          description: "$productDetails.description",
+          productImageUrl: "$productDetails.productImageUrl"
+        },
+        else: null
       }
-    ]);
+    },
+    machine: {
+      $cond: {
+        if: "$machineDetails",
+        then: {
+          _id: "$machineDetails._id",
+          name: "$machineDetails.name",
+          type: "$machineDetails.type",
+          companyName: "$machineDetails.companyName"
+        },
+        else: null
+      }
+    }
+  }
+}
+    ]); 
 
     if (!items.length) {
       return res.status(404).json({
