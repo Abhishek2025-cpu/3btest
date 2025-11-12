@@ -416,7 +416,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     }
 
     const items = await MainItem.aggregate([
-      // Match items assigned to this employee (as helper or operator)
+      // 🧩 Match assignments for this employee (as helper or operator)
       {
         $match: {
           $or: [
@@ -425,23 +425,28 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           ]
         }
       },
-      // Sort newest first
+
+      // 🧩 Sort newest first
       { $sort: { createdAt: -1 } },
 
-      // Add box count
+      // 🧩 Add boxCount field
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
 
-      // Lookup product details by itemNo (case-insensitive)
+      // 🧩 Lookup product details
       {
         $lookup: {
           from: "productuploads",
           let: { itemNo: { $toLower: "$itemNo" } },
           pipeline: [
-            { $addFields: { nameLower: { $toLower: "$name" } } },
+            {
+              $addFields: {
+                nameLower: { $toLower: "$name" }
+              }
+            },
             {
               $match: {
                 $expr: { $eq: ["$nameLower", "$$itemNo"] }
@@ -460,76 +465,70 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           as: "productDetails"
         }
       },
-      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
 
-      // 🔹 Lookup Machine details using machineNumber
+      // 🧩 Lookup machine details by machineNumber
       {
         $lookup: {
           from: "machines",
-          let: { machineNum: "$machineNumber" },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: [{ $toString: "$name" }, "$$machineNum"] }
-              }
-            },
-            { $project: { _id: 1, name: 1, type: 1, companyName: 1 } }
-          ],
+          localField: "machineNumber",
+          foreignField: "name", // assuming machine.name stores its number ("1", "2", etc.)
           as: "machineDetails"
         }
       },
+
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
       { $unwind: { path: "$machineDetails", preserveNullAndEmptyArrays: true } },
 
-      // Project final response
+      // 🧩 Final output
       {
-  $project: {
-    _id: 1,
-    itemNo: 1,
-    mainItemId: "$_id", // ✅ expose item id below itemNo
-    length: 1,
-    noOfSticks: 1,
-    helpers: 1,
-    operators: 1,
-    shift: 1,
-    company: 1,
-    productImageUrl: 1,
-    pendingBoxes: 1,
-    completedBoxes: 1,
-    machineNumber: 1,
-    machineId: "$machineDetails._id", // ✅ expose machine id below machineNumber
-    createdAt: 1,
-    updatedAt: 1,
-    boxCount: 1,
-    product: {
-      $cond: {
-        if: "$productDetails",
-        then: {
-          _id: "$productDetails._id",
-          name: "$productDetails.name",
-          about: "$productDetails.about",
-          description: "$productDetails.description",
-          productImageUrl: "$productDetails.productImageUrl"
-        },
-        else: null
+        $project: {
+          _id: 1,
+          itemNo: 1,
+          mainItemId: "$_id", // ✅ show item ID below itemNo
+          length: 1,
+          noOfSticks: 1,
+          helpers: 1,
+          operators: 1,
+          shift: 1,
+          company: 1,
+          productImageUrl: 1,
+          pendingBoxes: 1,
+          completedBoxes: 1,
+          machineNumber: 1,
+          machineId: "$machineDetails._id", // ✅ show machine ID below machineNumber
+          createdAt: 1,
+          updatedAt: 1,
+          boxCount: 1,
+          product: {
+            $cond: {
+              if: "$productDetails",
+              then: {
+                _id: "$productDetails._id",
+                name: "$productDetails.name",
+                about: "$productDetails.about",
+                description: "$productDetails.description",
+                productImageUrl: "$productDetails.productImageUrl"
+              },
+              else: null
+            }
+          },
+          machine: {
+            $cond: {
+              if: "$machineDetails",
+              then: {
+                _id: "$machineDetails._id",
+                name: "$machineDetails.name",
+                companyName: "$machineDetails.companyName",
+                type: "$machineDetails.type"
+              },
+              else: null
+            }
+          }
+        }
       }
-    },
-    machine: {
-      $cond: {
-        if: "$machineDetails",
-        then: {
-          _id: "$machineDetails._id",
-          name: "$machineDetails.name",
-          type: "$machineDetails.type",
-          companyName: "$machineDetails.companyName"
-        },
-        else: null
-      }
-    }
-  }
-}
-    ]); 
+    ]);
 
-    if (!items.length) {
+    if (items.length === 0) {
       return res.status(404).json({
         success: false,
         statusCode: 404,
@@ -555,6 +554,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     });
   }
 };
+
 
 
 // CORRECTED CODE (includes the 'boxes' array)
