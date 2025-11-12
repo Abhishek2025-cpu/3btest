@@ -416,7 +416,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     }
 
     const items = await MainItem.aggregate([
-      // Stage 1: Match items where the employeeId is in either helpers or operators
+      // Match items assigned to this employee (as helper or operator)
       {
         $match: {
           $or: [
@@ -425,30 +425,26 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           ]
         }
       },
-      // Stage 2: Sort by creation date (optional but good practice)
+      // Sort newest first
       { $sort: { createdAt: -1 } },
-      // Stage 3: Add boxCount field (from your existing logic)
+
+      // Add box count
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
-      // Stage 4: Lookup product details (similar to your existing logic)
+
+      // Lookup product details by itemNo (case-insensitive)
       {
         $lookup: {
-          from: "productuploads", // Make sure this is 'productuploads'
-          let: { itemNo: { $toLower: "$itemNo" } }, // Lowercase itemNo for matching
+          from: "productuploads",
+          let: { itemNo: { $toLower: "$itemNo" } },
           pipeline: [
-            {
-              $addFields: {
-                nameLower: { $toLower: "$name" }
-              }
-            },
+            { $addFields: { nameLower: { $toLower: "$name" } } },
             {
               $match: {
-                $expr: {
-                  $eq: ["$nameLower", "$$itemNo"]
-                }
+                $expr: { $eq: ["$nameLower", "$$itemNo"] }
               }
             },
             {
@@ -457,18 +453,34 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
                 name: 1,
                 about: 1,
                 description: 1,
-                productImageUrl: 1 // If you want the product's image too
+                productImageUrl: 1
               }
             }
           ],
           as: "productDetails"
         }
       },
-      // Stage 5: Unwind productDetails array
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+
+      // 🔹 Lookup Machine details using machineNumber
       {
-        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true }
+        $lookup: {
+          from: "machines",
+          let: { machineNum: "$machineNumber" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: [{ $toString: "$name" }, "$$machineNum"] }
+              }
+            },
+            { $project: { _id: 1, name: 1, type: 1, companyName: 1 } }
+          ],
+          as: "machineDetails"
+        }
       },
-      // Stage 6: Project only the necessary fields for the output
+      { $unwind: { path: "$machineDetails", preserveNullAndEmptyArrays: true } },
+
+      // Project final response
       {
         $project: {
           _id: 1,
@@ -479,32 +491,38 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           operators: 1,
           shift: 1,
           company: 1,
-          productImageUrl: 1, // This is the item's specific image
+          productImageUrl: 1,
           pendingBoxes: 1,
           completedBoxes: 1,
           machineNumber: 1,
           createdAt: 1,
           updatedAt: 1,
           boxCount: 1,
-          // Map the productDetails to a cleaner 'product' field
+
+          // ✅ Main Item ID (your current _id)
+          mainItemId: "$_id",
+
+          // ✅ Machine Info (with ID)
+          machine: {
+            _id: "$machineDetails._id",
+            name: "$machineDetails.name",
+            type: "$machineDetails.type",
+            companyName: "$machineDetails.companyName"
+          },
+
+          // ✅ Product Info
           product: {
-            $cond: {
-              if: "$productDetails",
-              then: {
-                _id: "$productDetails._id",
-                name: "$productDetails.name",
-                about: "$productDetails.about",
-                description: "$productDetails.description",
-                productImageUrl: "$productDetails.productImageUrl" // Product's image
-              },
-              else: null
-            }
+            _id: "$productDetails._id",
+            name: "$productDetails.name",
+            about: "$productDetails.about",
+            description: "$productDetails.description",
+            productImageUrl: "$productDetails.productImageUrl"
           }
         }
       }
     ]);
 
-    if (items.length === 0) {
+    if (!items.length) {
       return res.status(404).json({
         success: false,
         statusCode: 404,
@@ -530,6 +548,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     });
   }
 };
+
 
 // CORRECTED CODE (includes the 'boxes' array)
 exports.getAllItems = async (req, res) => {
