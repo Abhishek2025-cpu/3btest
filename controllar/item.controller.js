@@ -416,6 +416,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     }
 
     const items = await MainItem.aggregate([
+      // Match items where employee is helper or operator
       {
         $match: {
           $or: [
@@ -425,19 +426,22 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         }
       },
       { $sort: { createdAt: -1 } },
+
+      // Add boxCount field
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
-      // ✅ Product lookup
+
+      // ✅ Lookup Product Details
       {
         $lookup: {
           from: "productuploads",
-          let: { itemNo: { $toLower: "$itemNo" } },
+          let: { itemNoLower: { $toLower: "$itemNo" } },
           pipeline: [
             { $addFields: { nameLower: { $toLower: "$name" } } },
-            { $match: { $expr: { $eq: ["$nameLower", "$$itemNo"] } } },
+            { $match: { $expr: { $eq: ["$nameLower", "$$itemNoLower"] } } },
             {
               $project: {
                 _id: 1,
@@ -451,23 +455,44 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           as: "productDetails"
         }
       },
-      // ✅ Machine lookup (matching name to machineNumber)
+
+      // ✅ Lookup Machine Details (flexible match)
       {
         $lookup: {
           from: "machines",
-          localField: "machineNumber",
-          foreignField: "name",
+          let: { machineNum: { $toLower: "$machineNumber" } },
+          pipeline: [
+            { $addFields: { machineNameLower: { $toLower: "$name" } } },
+            {
+              $match: {
+                $expr: {
+                  $regexMatch: {
+                    input: "$machineNameLower",
+                    regex: "$$machineNum"
+                  }
+                }
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                companyName: 1,
+                type: 1
+              }
+            }
+          ],
           as: "machineDetails"
         }
       },
-      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: "$machineDetails", preserveNullAndEmptyArrays: true } },
-      // ✅ Final shape
+
+      // ✅ Project final structure
       {
         $project: {
           _id: 1,
-          itemNo: 1,
           mainItemId: "$_id",
+          itemNo: 1,
+          itemId: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
           length: 1,
           noOfSticks: 1,
           helpers: 1,
@@ -478,22 +503,24 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           pendingBoxes: 1,
           completedBoxes: 1,
           machineNumber: 1,
-          machineId: "$machineDetails._id",
+          machineId: { $ifNull: [{ $arrayElemAt: ["$machineDetails._id", 0] }, null] },
           createdAt: 1,
           updatedAt: 1,
           boxCount: 1,
-          product: {
-            _id: "$productDetails._id",
-            name: "$productDetails.name",
-            about: "$productDetails.about",
-            description: "$productDetails.description",
-            productImageUrl: "$productDetails.productImageUrl"
-          },
+
+          // Nested objects
           machine: {
-            _id: "$machineDetails._id",
-            name: "$machineDetails.name",
-            companyName: "$machineDetails.companyName",
-            type: "$machineDetails.type"
+            _id: { $arrayElemAt: ["$machineDetails._id", 0] },
+            name: { $arrayElemAt: ["$machineDetails.name", 0] },
+            companyName: { $arrayElemAt: ["$machineDetails.companyName", 0] },
+            type: { $arrayElemAt: ["$machineDetails.type", 0] }
+          },
+          product: {
+            _id: { $arrayElemAt: ["$productDetails._id", 0] },
+            name: { $arrayElemAt: ["$productDetails.name", 0] },
+            about: { $arrayElemAt: ["$productDetails.about", 0] },
+            description: { $arrayElemAt: ["$productDetails.description", 0] },
+            productImageUrl: { $arrayElemAt: ["$productDetails.productImageUrl", 0] }
           }
         }
       }
@@ -502,13 +529,11 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     if (!items.length) {
       return res.status(404).json({
         success: false,
-        statusCode: 404,
-        message: "No items found for this employee or no matching machines/products.",
-        data: []
+        message: "No items found for this employee."
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       statusCode: 200,
       message: `Items assigned to employee ${employeeId} fetched successfully`,
@@ -517,7 +542,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching assigned products for employee:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       statusCode: 500,
       message: "Failed to fetch assigned products",
