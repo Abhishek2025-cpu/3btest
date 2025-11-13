@@ -196,6 +196,7 @@ exports.employeeLoginVerifyOtp = async (req, res) => {
 
 
 
+
 /**
  * Generates a robust Employee ID (EID).
  * If DOB is provided, it uses your original logic.
