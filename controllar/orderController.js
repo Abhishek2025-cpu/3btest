@@ -224,17 +224,18 @@ exports.placeOrder = async (req, res) => {
 
         const subtotal = priceForCalculation * item.quantity;
         totalPrice += subtotal;
+return {
+  productId: product._id,
+  productName: product.productName || product.name || "Unknown Product",
+  quantity: item.quantity,
+  color: item.color || "Not specified",
+  priceAtPurchase: priceForCalculation,
+  subtotal,
+  image,
+  orderId: generateOrderId(),
+  categoryId: item.categoryId || null, // ✔ optional field
+};
 
-        return {
-          productId: product._id,
-          productName: product.productName || product.name || "Unknown Product",
-          quantity: item.quantity,
-          color: item.color || "Not specified",
-          priceAtPurchase: priceForCalculation,
-          subtotal,
-          image,
-          orderId: generateOrderId(),
-        };
       })
     );
 

@@ -36,6 +36,7 @@ const orderSchema = new mongoose.Schema({
   },
   orderId: { type: String, required: true, unique: true },
   totalPrice: { type: Number, required: true },
+   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: false },
   currentStatus: {
     type: String,
     enum: ['Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'],
