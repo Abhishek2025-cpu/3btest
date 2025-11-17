@@ -425,14 +425,16 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
     const items = await MainItem.aggregate([
       // Match items where employee is helper or operator
-      {
-        $match: {
-          $or: [
-            { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
-            { "operators._id": new mongoose.Types.ObjectId(employeeId) }
-          ]
-        }
-      },
+    {
+  $match: {
+    $or: [
+      { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
+      { "operators._id": new mongoose.Types.ObjectId(employeeId) },
+      { "mixtures._id": new mongoose.Types.ObjectId(employeeId) }   // ✅ NEW
+    ]
+  }
+    },
+
       { $sort: { createdAt: -1 } },
 
       // Add boxCount
