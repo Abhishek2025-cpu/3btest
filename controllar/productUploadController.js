@@ -19,6 +19,15 @@ const productFieldsToTranslate = [
   'categoryId.name'       // The name of the populated category
 ];
 
+async function adjustPositions(newPosition, excludedProductId = null) {
+  await Product.updateMany(
+    {
+      _id: { $ne: excludedProductId }, // prevent shifting itself during updates
+      position: { $gte: newPosition }
+    },
+    { $inc: { position: 1 } } // shift by +1
+  );
+}
 
 
 // exports.createProduct = async (req, res) => {
@@ -187,6 +196,11 @@ exports.createProduct = async (req, res) => {
       discountPercentage
     } = req.body;
 
+
+    const newPosition = Number(position) || 1;
+
+    // SHIFT positions using N+1 rule
+    await adjustPositions(newPosition);
     const parsedPrice = Number(pricePerPiece);
     const parsedTotal = Number(totalPiecesPerBox);
     const parsedQty = Number(quantity) || 0;
@@ -278,7 +292,8 @@ exports.createProduct = async (req, res) => {
       discountPercentage: parsedDiscount, 
       finalPricePerBox: discountedPricePerBox,
       images: finalImagesForDB,
-      colorImageMap: Object.fromEntries(finalColorImageMap)
+      colorImageMap: Object.fromEntries(finalColorImageMap),
+       position: newPosition
     });
 
     const qrData = product._id.toString();
@@ -371,7 +386,19 @@ exports.updateProduct = async (req, res) => {
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: '❌ Product not found' });
+    } 
+
+      if (updates.position) {
+      const newPosition = Number(updates.position);
+
+      if (newPosition !== existingProduct.position) {
+        await adjustPositions(newPosition, existingProduct._id);
+        existingProduct.position = newPosition;
+      }
     }
+
+    // PRICE & DESCRIPTION UPDATES
+    Object.assign(existingProduct, updates);
 
     // Step 3: Calculate final price
     const mrp = updates.mrpPerBox || existingProduct.mrpPerBox;
