@@ -51,6 +51,8 @@ const mainItemSchema = new mongoose.Schema({
 
   // ✅ new optional key
   machineNumber: { type: String }, // not required
+  mixtureMachine: { type: String }, // optional
+
 
 }, { timestamps: true });
 

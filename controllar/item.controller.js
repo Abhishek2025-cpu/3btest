@@ -18,7 +18,8 @@ exports.createItemWithBoxes = async (req, res) => {
       shift, 
       company,
       noOfBoxes,
-      machineNumber // optional
+      machineNumber ,// optional
+        mixtureMachine  
     } = req.body;
 
     // --- 1. Validations ---
@@ -62,6 +63,8 @@ exports.createItemWithBoxes = async (req, res) => {
           shift,
           company,
           machineNumber: machineNumber || '',
+          mixtureMachine: mixtureMachine || '',
+
           createdAt: new Date().toISOString()
         });
 
@@ -90,6 +93,7 @@ exports.createItemWithBoxes = async (req, res) => {
       shift,
       company,
       machineNumber: machineNumber ? String(machineNumber) : null,
+        mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
       productImageUrl: productImageUpload.url,
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
