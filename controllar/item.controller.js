@@ -435,14 +435,24 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       },
       { $sort: { createdAt: -1 } },
 
-      // Add boxCount field
+      // Add boxCount
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
 
-      // ✅ Lookup Product Details
+      // 🔍 LOOKUP PRODUCT USING mixture._id (MainItem _id)
+      {
+        $lookup: {
+          from: "productuploads",
+          localField: "_id",        // mixture _id
+          foreignField: "mixtureId", // mixtureId stored inside productUpload
+          as: "mixtureProduct"
+        }
+      },
+
+      // Existing product name lookup (if itemNo = product name)
       {
         $lookup: {
           from: "productuploads",
@@ -464,7 +474,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         }
       },
 
-      // ✅ Lookup Machine Details (flexible match)
+      // Machine lookup
       {
         $lookup: {
           from: "machines",
@@ -494,13 +504,13 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         }
       },
 
-      // ✅ Project final structure
+      // Final projection
       {
         $project: {
           _id: 1,
           mainItemId: "$_id",
           itemNo: 1,
-          itemId: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
+          mixtureAssignedProduct: { $arrayElemAt: ["$mixtureProduct", 0] }, // 🎯 NEW FIELD
           length: 1,
           noOfSticks: 1,
           helpers: 1,
@@ -511,24 +521,21 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           pendingBoxes: 1,
           completedBoxes: 1,
           machineNumber: 1,
-          machineId: { $ifNull: [{ $arrayElemAt: ["$machineDetails._id", 0] }, null] },
-          createdAt: 1,
-          updatedAt: 1,
           boxCount: 1,
 
-          // Nested objects
-          machine: {
-            _id: { $arrayElemAt: ["$machineDetails._id", 0] },
-            name: { $arrayElemAt: ["$machineDetails.name", 0] },
-            companyName: { $arrayElemAt: ["$machineDetails.companyName", 0] },
-            type: { $arrayElemAt: ["$machineDetails.type", 0] }
-          },
           product: {
             _id: { $arrayElemAt: ["$productDetails._id", 0] },
             name: { $arrayElemAt: ["$productDetails.name", 0] },
             about: { $arrayElemAt: ["$productDetails.about", 0] },
             description: { $arrayElemAt: ["$productDetails.description", 0] },
             productImageUrl: { $arrayElemAt: ["$productDetails.productImageUrl", 0] }
+          },
+
+          machine: {
+            _id: { $arrayElemAt: ["$machineDetails._id", 0] },
+            name: { $arrayElemAt: ["$machineDetails.name", 0] },
+            companyName: { $arrayElemAt: ["$machineDetails.companyName", 0] },
+            type: { $arrayElemAt: ["$machineDetails.type", 0] }
           }
         }
       }
@@ -543,21 +550,21 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      statusCode: 200,
       message: `Items assigned to employee ${employeeId} fetched successfully`,
       count: items.length,
       data: items
     });
+
   } catch (error) {
     console.error("Error fetching assigned products for employee:", error);
     return res.status(500).json({
       success: false,
-      statusCode: 500,
       message: "Failed to fetch assigned products",
       error: error.message
     });
   }
 };
+
 
 
 
