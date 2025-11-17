@@ -11,7 +11,8 @@ exports.createItemWithBoxes = async (req, res) => {
     const { 
       itemNo, 
       length, 
-      noOfSticks, 
+      noOfSticks,
+      mixtureId,     
       helperId, 
       operatorId, 
       shift, 
@@ -32,9 +33,10 @@ exports.createItemWithBoxes = async (req, res) => {
     if (existingItem) return res.status(409).json({ error: `Item '${itemNo}' already exists.` });
 
     // --- 2. Fetch Employees and upload image ---
-    const [helper, operator, productImageUpload] = await Promise.all([
+    const [helper, operator,mixture, productImageUpload] = await Promise.all([
       Employee.findById(helperId),
       Employee.findById(operatorId),
+       Employee.findById(mixtureId),
       uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype)
     ]);
 
@@ -56,6 +58,7 @@ exports.createItemWithBoxes = async (req, res) => {
           noOfSticks,
           operator: operator.name,
           helper: helper.name,
+          mixture: mixture.name,  
           shift,
           company,
           machineNumber: machineNumber || '',
@@ -82,6 +85,7 @@ exports.createItemWithBoxes = async (req, res) => {
       length,
       noOfSticks,
       helpers: [{ _id: helper._id, name: helper.name, eid: helper.eid }],
+      mixtures: [{_id: mixture._id,name: mixture.name,eid: mixture.eid}],
       operators: [{ _id: operator._id, name: operator.name, eid: operator.eid }],
       shift,
       company,

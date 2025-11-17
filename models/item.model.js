@@ -30,6 +30,15 @@ const mainItemSchema = new mongoose.Schema({
     }
   ],
 
+  mixtures: [
+  {
+    _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    name: { type: String, required: true },
+    eid: { type: String, required: true },
+  }
+],
+
+
   shift: { type: String, enum: ['Day', 'Night'], required: true },
   company: { type: String, enum: ['B', 'BI'], required: true },
   productImageUrl: { type: String, required: true },
