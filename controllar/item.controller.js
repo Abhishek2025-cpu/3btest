@@ -424,16 +424,16 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     }
 
     const items = await MainItem.aggregate([
-      // Match items where employee is helper or operator
-    {
-  $match: {
-    $or: [
-      { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
-      { "operators._id": new mongoose.Types.ObjectId(employeeId) },
-      { "mixtures._id": new mongoose.Types.ObjectId(employeeId) }   // ✅ NEW
-    ]
-  }
-    },
+      // Match items where employee is helper, operator, or mixture
+      {
+        $match: {
+          $or: [
+            { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
+            { "operators._id": new mongoose.Types.ObjectId(employeeId) },
+            { "mixtures._id": new mongoose.Types.ObjectId(employeeId) }   // ✅ mixture match
+          ]
+        }
+      },
 
       { $sort: { createdAt: -1 } },
 
@@ -444,17 +444,17 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         }
       },
 
-      // 🔍 LOOKUP PRODUCT USING mixture._id (MainItem _id)
+      // 🔍 Lookup product based on mixtureId (MainItem._id stored in productUpload)
       {
         $lookup: {
           from: "productuploads",
-          localField: "_id",        // mixture _id
-          foreignField: "mixtureId", // mixtureId stored inside productUpload
+          localField: "_id",
+          foreignField: "mixtureId",
           as: "mixtureProduct"
         }
       },
 
-      // Existing product name lookup (if itemNo = product name)
+      // 🔍 Lookup product by itemNo = name
       {
         $lookup: {
           from: "productuploads",
@@ -476,7 +476,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         }
       },
 
-      // Machine lookup
+      // 🔍 Machine lookup for operator machine
       {
         $lookup: {
           from: "machines",
@@ -494,35 +494,60 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
               }
             },
             {
-              $project: {
-                _id: 1,
-                name: 1,
-                companyName: 1,
-                type: 1
-              }
+              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
             }
           ],
           as: "machineDetails"
         }
       },
 
-      // Final projection
+      // 🔍 Mixture Machine lookup
+      {
+        $lookup: {
+          from: "machines",
+          let: { mixMachineNum: { $toLower: "$mixtureMachine" } },
+          pipeline: [
+            { $addFields: { machineNameLower: { $toLower: "$name" } } },
+            {
+              $match: {
+                $expr: {
+                  $regexMatch: {
+                    input: "$machineNameLower",
+                    regex: "$$mixMachineNum"
+                  }
+                }
+              }
+            },
+            {
+              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
+            }
+          ],
+          as: "mixtureMachineDetails"
+        }
+      },
+
+      // Final Projection
       {
         $project: {
           _id: 1,
           mainItemId: "$_id",
           itemNo: 1,
-          mixtureAssignedProduct: { $arrayElemAt: ["$mixtureProduct", 0] }, // 🎯 NEW FIELD
+
+          // Product assigned to mixture employee
+          mixtureAssignedProduct: { $arrayElemAt: ["$mixtureProduct", 0] },
+
           length: 1,
           noOfSticks: 1,
           helpers: 1,
           operators: 1,
+          mixtures: 1,
           shift: 1,
           company: 1,
           productImageUrl: 1,
           pendingBoxes: 1,
           completedBoxes: 1,
           machineNumber: 1,
+          mixtureMachine: 1,
           boxCount: 1,
 
           product: {
@@ -538,6 +563,13 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
             name: { $arrayElemAt: ["$machineDetails.name", 0] },
             companyName: { $arrayElemAt: ["$machineDetails.companyName", 0] },
             type: { $arrayElemAt: ["$machineDetails.type", 0] }
+          },
+
+          mixtureMachineDetails: {
+            _id: { $arrayElemAt: ["$mixtureMachineDetails._id", 0] },
+            name: { $arrayElemAt: ["$mixtureMachineDetails.name", 0] },
+            companyName: { $arrayElemAt: ["$mixtureMachineDetails.companyName", 0] },
+            type: { $arrayElemAt: ["$mixtureMachineDetails.type", 0] }
           }
         }
       }
@@ -550,10 +582,10 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: `Items assigned to employee ${employeeId} fetched successfully`,
       count: items.length,
+      message: `Items assigned to employee ${employeeId} fetched successfully`,
       data: items
     });
 
@@ -566,6 +598,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     });
   }
 };
+
 
 
 
