@@ -382,37 +382,64 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const productsFromDB = await Product.find()
+    // 1️⃣ Total count
+    const totalProducts = await Product.countDocuments();
+
+    // 2️⃣ Calculate date 15 days ago
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+    // 3️⃣ Fetch RECENT products only
+    const recentProductsDB = await Product.find({
+      createdAt: { $gte: fifteenDaysAgo }
+    })
+      .populate("categoryId", "name")
       .sort({ createdAt: -1 })
-      .populate('categoryId', 'name')
-      .lean(); // .lean() is good! Keep it.
+      .lean();
 
-    // Pass the raw data from the DB to our robust translation service
-    const translatedProducts = await translateResponse(req, productsFromDB, productFieldsToTranslate);
+    // 4️⃣ Fetch NON-RECENT products
+    const oldProductsDB = await Product.find({
+      createdAt: { $lt: fifteenDaysAgo }
+    })
+      .populate("categoryId", "name")
+      .sort({ position: 1 }) // sorted by position ASC
+      .lean();
 
-    // Now, perform your mapping logic on the translated data
+    // 5️⃣ Combine (recent first)
+    let productsFromDB = [...recentProductsDB, ...oldProductsDB];
+
+    // 6️⃣ For translation system
+    const translatedProducts = await translateResponse(
+      req,
+      productsFromDB,
+      productFieldsToTranslate
+    );
+
+    // 7️⃣ Final formatting
     const formattedProducts = translatedProducts.map(p => {
-      // This check is still valid and important
-      const hasPopulatedCategory = p.categoryId && typeof p.categoryId === 'object' && p.categoryId.name;
+      const hasCategory =
+        p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
 
       return {
         ...p,
-        // This will now be the translated name if ?lang=hi was used
-        categoryName: hasPopulatedCategory ? p.categoryId.name : null,
-        categoryId: hasPopulatedCategory ? p.categoryId._id.toString() : p.categoryId,
+        categoryName: hasCategory ? p.categoryId.name : null,
+        categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId,
       };
     });
 
     res.status(200).json({
       success: true,
-      message: '✅ Products fetched successfully',
+      message: "✅ Products fetched successfully",
+      totalProducts,
+      recentProducts: recentProductsDB.length, // optional
       products: formattedProducts
     });
+
   } catch (err) {
-    console.error('❌ Error fetching products:', err);
+    console.error("❌ Error fetching products:", err);
     res.status(500).json({
       success: false,
-      message: '❌ Failed to fetch products',
+      message: "❌ Failed to fetch products",
       error: err.message
     });
   }
@@ -437,9 +464,9 @@ exports.updateProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: '❌ Product not found' });
     }
 
-    // -----------------------------------------------
-    // ✅ POSITION UPDATE LOGIC (new correct logic)
-    // -----------------------------------------------
+    // -------------------------------------------------
+    // ✅ POSITION UPDATE LOGIC — FINAL CORRECT VERSION
+    // -------------------------------------------------
     if (updates.position !== undefined) {
       const requestedPosition = Number(updates.position);
 
@@ -455,9 +482,9 @@ exports.updateProduct = async (req, res) => {
 
       delete updates.position; // prevent overriding later
     }
-    // -----------------------------------------------
+    // -------------------------------------------------
 
-    // Step 2: Recalculate MRP if needed
+    // Step 2: Recalculate MRP if both values provided
     if (updates.pricePerPiece && updates.totalPiecesPerBox) {
       updates.mrpPerBox = updates.pricePerPiece * updates.totalPiecesPerBox;
     }
@@ -471,7 +498,7 @@ exports.updateProduct = async (req, res) => {
 
     updates.finalPricePerBox = Math.round(mrp - (mrp * discount) / 100);
 
-    // Step 4: Handle description updates
+    // Step 4: Handle description
     if (updates.description) {
       if (typeof updates.description === 'object') {
         updates.description = {
@@ -483,12 +510,12 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // Step 5: Handle optional categoryId
+    // Step 5: Optional categoryId
     if (updates.categoryId === '' || updates.categoryId === undefined || updates.categoryId === null) {
       delete updates.categoryId;
     }
 
-    // Step 6: Handle image uploads (if any)
+    // Step 6: Handle new images
     if (req.files?.images?.length > 0) {
       const uploadedImages = await Promise.all(
         req.files.images.map((file) =>
@@ -498,12 +525,10 @@ exports.updateProduct = async (req, res) => {
       updates.images = uploadedImages;
     }
 
-    // -----------------------------------------------
-    // APPLY REMAINING UPDATES to object
-    // -----------------------------------------------
+    // Step 7: Apply remaining updates
     Object.assign(existingProduct, updates);
 
-    // SAVE FINAL UPDATED PRODUCT
+    // SAVE updated product
     await existingProduct.save();
 
     res.json({
@@ -517,6 +542,7 @@ exports.updateProduct = async (req, res) => {
     res.status(500).json({ success: false, message: '❌ Update failed', error: err.message });
   }
 };
+
 
 
 
