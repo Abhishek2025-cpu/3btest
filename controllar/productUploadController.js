@@ -19,15 +19,91 @@ const productFieldsToTranslate = [
   'categoryId.name'       // The name of the populated category
 ];
 
-async function adjustPositions(newPosition, excludedProductId = null) {
-  await Product.updateMany(
-    {
-      _id: { $ne: excludedProductId }, // prevent shifting itself during updates
-      position: { $gte: newPosition }
-    },
-    { $inc: { position: 1 } } // shift by +1
-  );
+
+async function clampPosition(requestedPosition, excludedProductId = null) {
+  const filter = excludedProductId ? { _id: { $ne: excludedProductId } } : {};
+  const count = await Product.countDocuments(filter);
+  // If excludedProductId provided, count excludes that product (useful on update)
+  const maxPos = Math.max(1, count + (excludedProductId ? 1 : 0)); // when creating, allowed max = count+1
+  const n = Number(requestedPosition) || 1;
+  if (n < 1) return 1;
+  if (n > maxPos) return maxPos;
+  return Math.floor(n);
 }
+
+
+async function normalizePositions(filter = {}) {
+  const docs = await Product.find(filter).sort({ position: 1, updatedAt: 1 }).select('_id position').lean();
+  let expected = 1;
+  const bulkOps = [];
+
+  for (const d of docs) {
+    const pos = Number(d.position) || Infinity;
+    if (pos !== expected) {
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: d._id },
+          update: { $set: { position: expected } }
+        }
+      });
+    }
+    expected++;
+  }
+
+  if (bulkOps.length > 0) {
+    await Product.bulkWrite(bulkOps);
+  }
+}
+
+
+async function adjustPositionsForInsert(newPosition) {
+  const clamped = await clampPosition(newPosition, null);
+  await Product.updateMany(
+    { position: { $gte: clamped } },
+    { $inc: { position: 1 } }
+  );
+  return clamped;
+}
+
+
+async function adjustPositionsForUpdate(oldPosition, newPosition, excludedProductId) {
+  // Ensure numeric
+  oldPosition = Number(oldPosition) || 0;
+  newPosition = Number(newPosition) || 0;
+
+  // clamp newPosition based on count excluding the moving product
+  const clamped = await clampPosition(newPosition, excludedProductId);
+
+  if (clamped === oldPosition) {
+    // nothing to do
+    return clamped;
+  }
+
+  if (clamped > oldPosition) {
+    // Moving down (e.g. 2 -> 5): decrement positions in (oldPosition, clamped] by 1
+    await Product.updateMany(
+      {
+        _id: { $ne: excludedProductId },
+        position: { $gt: oldPosition, $lte: clamped }
+      },
+      { $inc: { position: -1 } }
+    );
+  } else {
+    // clamped < oldPosition => Moving up (e.g. 8 -> 3): increment positions in [clamped, oldPosition) by 1
+    await Product.updateMany(
+      {
+        _id: { $ne: excludedProductId },
+        position: { $gte: clamped, $lt: oldPosition }
+      },
+      { $inc: { position: 1 } }
+    );
+  }
+
+  return clamped;
+}
+
+
+
 
 
 // exports.createProduct = async (req, res) => {
@@ -193,14 +269,15 @@ exports.createProduct = async (req, res) => {
       quantity,
       pricePerPiece,
       totalPiecesPerBox,
-      discountPercentage
+      discountPercentage,
+      position // ← IMPORTANT: ensure this exists in req.body
     } = req.body;
 
+    // 1️⃣ PARSE POSITION & CLAMP + SHIFT
+    const requestedPosition = Number(position) || 1;
+    const finalPosition = await adjustPositionsForInsert(requestedPosition);
 
-    const newPosition = Number(position) || 1;
-
-    // SHIFT positions using N+1 rule
-    await adjustPositions(newPosition);
+    // 2️⃣ PARSE NUMBER FIELDS
     const parsedPrice = Number(pricePerPiece);
     const parsedTotal = Number(totalPiecesPerBox);
     const parsedQty = Number(quantity) || 0;
@@ -209,120 +286,97 @@ exports.createProduct = async (req, res) => {
     const productImages = req.files?.images || [];
     const colorImages = req.files?.colorImages || [];
 
-    // Mandatory field checks
+    // Required fields
     if (!name || !description || !dimensions || productImages.length === 0 || isNaN(parsedPrice) || isNaN(parsedTotal)) {
-      return res.status(400).json({ success: false, message: '❌ Required fields missing or invalid. Description, dimensions, and at least one image are mandatory.' });
+      return res.status(400).json({
+        success: false,
+        message: '❌ Required fields missing or invalid.'
+      });
     }
 
-    console.log(`Received ${productImages.length} product images and ${colorImages.length} color images.`);
-
+    // UPLOAD IMAGES
     const uniqueFilesToUpload = new Map();
     productImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
     colorImages.forEach(file => uniqueFilesToUpload.set(file.originalname, file));
 
-    const allUniqueFiles = Array.from(uniqueFilesToUpload.values());
+    const uploadPromises = [...uniqueFilesToUpload.values()].map(async (file) => {
+      const compressedBuffer = await sharp(file.buffer)
+        .resize({ width: 1000, withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
 
-    console.log(`Processing ${allUniqueFiles.length} unique image files.`);
+      const filename = `product-${Date.now()}-${file.originalname}`;
+      const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
 
-    const uploadPromises = allUniqueFiles.map(async (file) => {
-      try {
-        const compressedBuffer = await sharp(file.buffer)
-          .resize({ width: 1000, withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-        const filename = `product-${Date.now()}-${file.originalname}`;
-        
-        const uploadResult = await uploadBufferToGCS(compressedBuffer, filename, 'product-images');
-        const urlString = uploadResult.url;
-
-        return {
-          id: crypto.randomUUID(),
-          url: urlString,
-          originalname: file.originalname
-        };
-      } catch (fileError) {
-        console.error(`❌ Error processing or uploading file ${file.originalname}:`, fileError);
-        throw fileError; 
-      }
+      return {
+        id: crypto.randomUUID(),
+        url: uploadResult.url,
+        originalname: file.originalname
+      };
     });
 
-    const uploadedFilesData = await Promise.all(uploadPromises);
-    
-    console.log(`Successfully uploaded ${uploadedFilesData.length} unique files to GCS.`);
+    const uploadedFiles = await Promise.all(uploadPromises);
 
-    const urlMap = new Map();
-    uploadedFilesData.forEach(data => {
-      urlMap.set(data.originalname, { url: data.url, id: data.id });
-    });
+    const urlMap = new Map(uploadedFiles.map(f => [f.originalname, f]));
 
+    // Format final images
     const finalImagesForDB = productImages
-      .map(file => {
-        const data = urlMap.get(file.originalname);
-        if (!data) {
-            console.warn(`File ${file.originalname} was in productImages but not found in uploadedFilesData. Skipping.`);
-            return null;
-        }
-        return { id: data.id, url: data.url, originalname: file.originalname };
-      })
+      .map(file => urlMap.get(file.originalname))
       .filter(Boolean);
 
-    const finalColorImageMap = new Map();
+    const finalColorImageMap = {};
     colorImages.forEach(file => {
       const data = urlMap.get(file.originalname);
-      if (data) {
-        finalColorImageMap.set(file.originalname, { id: data.id, url: data.url });
-      } else {
-        console.warn(`File ${file.originalname} was in colorImages but not found in uploadedFilesData. Skipping.`);
-      }
+      if (data) finalColorImageMap[file.originalname] = { id: data.id, url: data.url };
     });
 
+    // PRICE CALCULATIONS
     const mrpPerBox = parsedPrice * parsedTotal;
-    const discountedPricePerBox = parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
+    const finalPricePerBox =
+      parsedDiscount > 0 ? mrpPerBox - (mrpPerBox * parsedDiscount) / 100 : mrpPerBox;
 
+    // CREATE PRODUCT
     const product = new Product({
-      categoryId: categoryId || null,
-      name, 
+      categoryId,
+      name,
       about,
       description,
       dimensions: dimensions.split(',').map(d => d.trim()),
-      quantity: parsedQty, 
-      pricePerPiece: parsedPrice, 
+      quantity: parsedQty,
+      pricePerPiece: parsedPrice,
       totalPiecesPerBox: parsedTotal,
-      mrpPerBox, 
-      discountPercentage: parsedDiscount, 
-      finalPricePerBox: discountedPricePerBox,
+      mrpPerBox,
+      discountPercentage: parsedDiscount,
+      finalPricePerBox,
       images: finalImagesForDB,
-      colorImageMap: Object.fromEntries(finalColorImageMap),
-       position: newPosition
+      colorImageMap: finalColorImageMap,
+      position: finalPosition // 👈 Correct position after shifting
     });
 
+    // QR Code
     const qrData = product._id.toString();
     const qrBuffer = await QRCode.toBuffer(qrData);
-
     const qrUploadResult = await uploadBufferToGCS(qrBuffer, `qr-${product._id}.png`, 'product-qrcodes');
     product.qrCodeUrl = qrUploadResult.url;
 
     await product.save();
 
-    res.status(201).json({ success: true, message: '✅ Product created successfully', product });
+    res.status(201).json({
+      success: true,
+      message: '✅ Product created successfully',
+      product
+    });
 
   } catch (err) {
     console.error('❌ FATAL ERROR IN createProduct:', err);
-    if (err.name === 'ValidationError') {
-      return res.status(422).json({
-        success: false, message: '❌ Validation Failed. Please check your input data.',
-        error: err.message, details: err.errors
-      });
-    }
-   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-        return res.status(400).json({ success: false, message: 'Too many files uploaded or unexpected file field.', error: err.message });
-    }
     return res.status(500).json({
-      success: false, message: '❌ An internal server error occurred.',
+      success: false,
+      message: 'Internal server error.',
       error: err.message
     });
   }
 };
+
 
 
 
@@ -377,28 +431,36 @@ exports.updateProduct = async (req, res) => {
     if (updates.totalPiecesPerBox) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
     if (updates.discountPercentage) updates.discountPercentage = Number(updates.discountPercentage);
 
-    // Step 1: Recalculate MRP if needed
-    if (updates.pricePerPiece && updates.totalPiecesPerBox) {
-      updates.mrpPerBox = updates.pricePerPiece * updates.totalPiecesPerBox;
-    }
-
-    // Step 2: Fetch existing product
+    // Step 1: Fetch existing product
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
       return res.status(404).json({ success: false, message: '❌ Product not found' });
-    } 
-
-      if (updates.position) {
-      const newPosition = Number(updates.position);
-
-      if (newPosition !== existingProduct.position) {
-        await adjustPositions(newPosition, existingProduct._id);
-        existingProduct.position = newPosition;
-      }
     }
 
-    // PRICE & DESCRIPTION UPDATES
-    Object.assign(existingProduct, updates);
+    // -----------------------------------------------
+    // ✅ POSITION UPDATE LOGIC (new correct logic)
+    // -----------------------------------------------
+    if (updates.position !== undefined) {
+      const requestedPosition = Number(updates.position);
+
+      if (!isNaN(requestedPosition)) {
+        const finalPosition = await adjustPositionsForUpdate(
+          existingProduct.position,
+          requestedPosition,
+          existingProduct._id
+        );
+
+        existingProduct.position = finalPosition;
+      }
+
+      delete updates.position; // prevent overriding later
+    }
+    // -----------------------------------------------
+
+    // Step 2: Recalculate MRP if needed
+    if (updates.pricePerPiece && updates.totalPiecesPerBox) {
+      updates.mrpPerBox = updates.pricePerPiece * updates.totalPiecesPerBox;
+    }
 
     // Step 3: Calculate final price
     const mrp = updates.mrpPerBox || existingProduct.mrpPerBox;
@@ -421,8 +483,7 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // ✅ Step 5: Make categoryId optional
-    // If categoryId is an empty string or undefined, don't include it in updates
+    // Step 5: Handle optional categoryId
     if (updates.categoryId === '' || updates.categoryId === undefined || updates.categoryId === null) {
       delete updates.categoryId;
     }
@@ -437,19 +498,26 @@ exports.updateProduct = async (req, res) => {
       updates.images = uploadedImages;
     }
 
-    // Step 7: Apply updates
-    const updated = await Product.findByIdAndUpdate(productId, updates, { new: true });
+    // -----------------------------------------------
+    // APPLY REMAINING UPDATES to object
+    // -----------------------------------------------
+    Object.assign(existingProduct, updates);
+
+    // SAVE FINAL UPDATED PRODUCT
+    await existingProduct.save();
 
     res.json({
       success: true,
       message: '✅ Product updated successfully',
-      product: updated
+      product: existingProduct
     });
+
   } catch (err) {
     console.error('❌ Product update failed:', err);
     res.status(500).json({ success: false, message: '❌ Update failed', error: err.message });
   }
 };
+
 
 
 
