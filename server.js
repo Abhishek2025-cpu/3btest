@@ -44,6 +44,8 @@ app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
 app.use('/api/machines', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
+const mixtureTableRoutes = require("./routes/mixtureTableRoutes");
+app.use("/api/mixture-tables", mixtureTableRoutes);
 app.use('/api/task-transfers', require('./routes/taskTransferRoutes')); 
 app.use('/api',require('./routes/testRoute'));
 const notificationRoutes = require("./routes/TestnotificationRoutes");
