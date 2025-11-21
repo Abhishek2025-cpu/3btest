@@ -11,7 +11,7 @@ const MixtureTableSchema = new mongoose.Schema(
 
     blackGula: { type: Number, required: true },
     whiteGula: { type: Number, required: true },
-    whiteGulaGrades: { type: Number, required: true },
+    whiteGulaGrades: { type: String, required: true },
     yellowForm: { type: Number, required: true },
     whiteForm: { type: Number }, // optional
     zinc: { type: Number, required: true },
