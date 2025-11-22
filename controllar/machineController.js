@@ -171,6 +171,70 @@ exports.assignMachineWithOperator = async (req, res) => {
 
 
 
+exports.updateEmployeeTask = async (req, res) => {
+  try {
+    console.log("--- Starting updateEmployeeTask ---");
+
+    const taskId = req.params.id;
+    if (!taskId) {
+      return res.status(400).json({ success: false, message: "Task ID is required." });
+    }
+
+    const {
+      time,
+      shift,
+      frameLength,
+      numberOfBox,
+      boxWeight,
+      frameWeight,
+      description,
+      employee
+    } = req.body;
+
+    // Validate required fields
+    if (!employee) {
+      return res.status(400).json({ success: false, message: "Employee ID is required." });
+    }
+
+    // Create update data object
+    const updateData = {};
+
+    if (time) updateData.time = time;
+    if (shift) updateData.shift = shift;
+    if (frameLength) updateData.frameLength = frameLength;
+    if (numberOfBox) updateData.numberOfBox = numberOfBox;
+    if (boxWeight) updateData.boxWeight = boxWeight;
+    if (frameWeight) updateData.frameWeight = frameWeight;
+    if (description) updateData.description = description;
+    if (employee) updateData.employee = employee;
+
+    const updatedTask = await EmployeeTask.findByIdAndUpdate(taskId, updateData, {
+      new: true
+    })
+      .populate({
+        path: "employee",
+        select: "name mobile role"
+      });
+
+    if (!updatedTask) {
+      return res.status(404).json({ success: false, message: "Task not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Employee task updated successfully",
+      data: updatedTask
+    });
+
+  } catch (error) {
+    console.error("❌ updateEmployeeTask Error:", error);
+    res.status(500).json({
+      success: false,
+      message: `Server error while updating task: ${error.message}`
+    });
+  }
+};
+
 
 
 // Add new machine
