@@ -18,8 +18,8 @@ exports.createItemWithBoxes = async (req, res) => {
       shift, 
       company,
       noOfBoxes,
-      machineNumber ,// optional
-        mixtureMachine  
+      machineNumber,
+      mixtureMachine  
     } = req.body;
 
     // --- 1. Validations ---
@@ -29,20 +29,25 @@ exports.createItemWithBoxes = async (req, res) => {
     if (isNaN(numBoxes) || numBoxes <= 0)
       return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
 
-    // Check duplicate itemNo
-    const existingItem = await MainItem.findOne({ itemNo });
-    if (existingItem) return res.status(409).json({ error: `Item '${itemNo}' already exists.` });
+    // ❌ REMOVE DUPLICATE ENTRY CHECK
+    // const existingItem = await MainItem.findOne({ itemNo });
+    // if (existingItem) return res.status(409).json({ error: `Item '${itemNo}' already exists.` });
 
-    // --- 2. Fetch Employees and upload image ---
-    const [helper, operator,mixture, productImageUpload] = await Promise.all([
+    // --- 2. Fetch Employees + Upload Image ---
+    const [helper, operator, mixture, productImageUpload] = await Promise.all([
       Employee.findById(helperId),
       Employee.findById(operatorId),
-       Employee.findById(mixtureId),
-      uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype)
+      Employee.findById(mixtureId),
+      uploadBufferToGCS(
+        req.file.buffer,
+        req.file.originalname,
+        'product-images',
+        req.file.mimetype
+      )
     ]);
 
-    if (!helper || !operator)
-      return res.status(400).json({ error: 'Invalid helperId or operatorId' });
+    if (!helper || !operator || !mixture)
+      return res.status(400).json({ error: 'Invalid helperId, operatorId, or mixtureId' });
 
     // --- 3. Generate Boxes ---
     const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
@@ -59,12 +64,11 @@ exports.createItemWithBoxes = async (req, res) => {
           noOfSticks,
           operator: operator.name,
           helper: helper.name,
-          mixture: mixture.name,  
+          mixture: mixture.name,
           shift,
           company,
           machineNumber: machineNumber || '',
           mixtureMachine: mixtureMachine || '',
-
           createdAt: new Date().toISOString()
         });
 
@@ -76,24 +80,29 @@ exports.createItemWithBoxes = async (req, res) => {
         });
 
         const qrCodeFileName = `qr-${itemNo}-${boxSerialNo}.png`;
-        const qrCodeUpload = await uploadBufferToGCS(qrCodeBuffer, qrCodeFileName, 'qr-codes', 'image/png');
+        const qrCodeUpload = await uploadBufferToGCS(
+          qrCodeBuffer,
+          qrCodeFileName,
+          'qr-codes',
+          'image/png'
+        );
 
         return { boxSerialNo, qrCodeUrl: qrCodeUpload.url };
       })
     );
 
-    // --- 4. Create MainItem ---
+    // --- 4. Create Main Item ---
     const newMainItem = await MainItem.create({
       itemNo,
       length,
       noOfSticks,
       helpers: [{ _id: helper._id, name: helper.name, eid: helper.eid }],
-      mixtures: [{_id: mixture._id,name: mixture.name,eid: mixture.eid}],
+      mixtures: [{ _id: mixture._id, name: mixture.name, eid: mixture.eid }],
       operators: [{ _id: operator._id, name: operator.name, eid: operator.eid }],
       shift,
       company,
       machineNumber: machineNumber ? String(machineNumber) : null,
-        mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
+      mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
       productImageUrl: productImageUpload.url,
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
@@ -107,6 +116,7 @@ exports.createItemWithBoxes = async (req, res) => {
     return res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
   }
 };
+
 
 exports.updateItemWithBoxes = async (req, res) => {
   try {
