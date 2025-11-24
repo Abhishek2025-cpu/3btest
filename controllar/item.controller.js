@@ -22,16 +22,17 @@ exports.createItemWithBoxes = async (req, res) => {
       mixtureMachine  
     } = req.body;
 
+    // === FIX: FORCE REMOVE EXTRA SPACES ===
+    const cleanItemNo = itemNo ? itemNo.trim() : "";
+    if (!cleanItemNo)
+      return res.status(400).json({ error: "Item No is required" });
+
     // --- 1. Validations ---
     if (!req.file) return res.status(400).json({ error: 'Product image is required' });
 
     const numBoxes = parseInt(noOfBoxes, 10);
     if (isNaN(numBoxes) || numBoxes <= 0)
       return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
-
-    // ❌ REMOVE DUPLICATE ENTRY CHECK
-    // const existingItem = await MainItem.findOne({ itemNo });
-    // if (existingItem) return res.status(409).json({ error: `Item '${itemNo}' already exists.` });
 
     // --- 2. Fetch Employees + Upload Image ---
     const [helper, operator, mixture, productImageUpload] = await Promise.all([
@@ -57,7 +58,7 @@ exports.createItemWithBoxes = async (req, res) => {
         const boxSerialNo = String(index).padStart(3, '0');
 
         const qrCodeData = JSON.stringify({
-          itemNo,
+          itemNo: cleanItemNo,
           boxSerialNo,
           totalBoxes: numBoxes,
           length,
@@ -79,7 +80,7 @@ exports.createItemWithBoxes = async (req, res) => {
           width: 500
         });
 
-        const qrCodeFileName = `qr-${itemNo}-${boxSerialNo}.png`;
+        const qrCodeFileName = `qr-${cleanItemNo}-${boxSerialNo}.png`;
         const qrCodeUpload = await uploadBufferToGCS(
           qrCodeBuffer,
           qrCodeFileName,
@@ -93,7 +94,7 @@ exports.createItemWithBoxes = async (req, res) => {
 
     // --- 4. Create Main Item ---
     const newMainItem = await MainItem.create({
-      itemNo,
+      itemNo: cleanItemNo,
       length,
       noOfSticks,
       helpers: [{ _id: helper._id, name: helper.name, eid: helper.eid }],

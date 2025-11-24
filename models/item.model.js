@@ -11,7 +11,8 @@ const boxSchema = new mongoose.Schema({
 }, { _id: true, timestamps: true });
 
 const mainItemSchema = new mongoose.Schema({
- itemNo: { type: String, required: true },
+ itemNo: { type: String, required: true, trim: true },
+
   length: { type: String, required: true },
   noOfSticks: { type: Number, required: true },
 
