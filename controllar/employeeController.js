@@ -5,240 +5,29 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 
 const Employee = require('../models/Employee');
 const axios = require('axios');
-
-const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042';
-
-// STEP 1: Send OTP for employee login
-// exports.employeeLoginSendOtp = async (req, res) => {
-//   const { mobile } = req.body;
-
-//   if (!mobile) {
-//     return res.status(400).json({
-//       status: false,
-//       message: 'Mobile number is required',
-//     });
-//   }
-
-//   try {
-//     const employee = await Employee.findOne({ mobile });
-//     if (!employee) {
-//       return res.status(404).json({
-//         status: false,
-//         message: 'Employee not found with provided mobile',
-//       });
-//     }
-
-//     const otpRes = await axios.get(
-//       `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
-//     );
-
-//     if (otpRes.data.Status === 'Success') {
-//       return res.status(200).json({
-//         status: true,
-//         message: 'OTP sent via SMS for employee login',
-//         sessionId: otpRes.data.Details,
-//         employeeId: employee._id,
-//       });
-//     } else {
-//       return res.status(400).json({
-//         status: false,
-//         message: 'Failed to send OTP',
-//         details: otpRes.data,
-//       });
-//     }
-//   } catch (error) {
-//     console.error('Employee Login OTP Error:', error.response?.data || error.message);
-//     return res.status(500).json({
-//       status: false,
-//       message: 'Error sending employee login OTP',
-//       error: error.response?.data || error.message,
-//     });
-//   }
-// };
-
-// // STEP 2: Verify OTP for employee login
-// exports.employeeLoginVerifyOtp = async (req, res) => {
-//   const { sessionId, otp, mobile } = req.body;
-
-//   if (!sessionId || !otp || !mobile) {
-//     return res.status(400).json({
-//       status: false,
-//       message: 'sessionId, otp, and mobile are required',
-//     });
-//   }
-
-//   try {
-//     const verifyRes = await axios.get(
-//       `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
-//     );
-
-//     if (verifyRes.data.Status !== 'Success' || verifyRes.data.Details !== 'OTP Matched') {
-//       return res.status(400).json({
-//         status: false,
-//         message: 'Invalid OTP',
-//         details: verifyRes.data,
-//       });
-//     }
-
-//     // Find employee by mobile instead of employeeId
-//     const employee = await Employee.findOne({ mobile });
-//     if (!employee) {
-//       return res.status(404).json({
-//         status: false,
-//         message: 'Employee not found',
-//       });
-//     }
-
-//     return res.status(200).json({
-//       status: true,
-//       message: 'Employee login successful',
-//       employee,
-//     });
-//   } catch (error) {
-//     console.error('Employee Login OTP VERIFY ERROR:', error.message);
-//     return res.status(500).json({
-//       status: false,
-//       message: 'Error during employee login OTP verification',
-//       error: error.response?.data || error.message,
-//     });
-//   }
-// };
-
-// STEP 1: Send OTP (Mocked)
-exports.employeeLoginSendOtp = async (req, res) => {
-  const { mobile } = req.body;
-
-  if (!mobile) {
-    return res.status(400).json({
-      status: false,
-      message: 'Mobile number is required',
-    });
-  }
-
-  try {
-    const employee = await Employee.findOne({ mobile });
-    if (!employee) {
-      return res.status(404).json({
-        status: false,
-        message: 'Employee not found with provided mobile',
-      });
-    }
-
-    // Commented out actual OTP sending
-    // const otpRes = await axios.get(
-    //   `https://2factor.in/API/V1/${API_KEY}/SMS/+91${employee.mobile}/AUTOGEN`
-    // );
-
-    // Mock response
-    return res.status(200).json({
-      status: true,
-      message: 'OTP sent via SMS for employee login',
-      sessionId: 'mock-session', // dummy sessionId
-      employeeId: employee._id,
-    });
-  } catch (error) {
-    console.error('Employee Login OTP Error:', error.message);
-    return res.status(500).json({
-      status: false,
-      message: 'Error sending employee login OTP',
-      error: error.message,
-    });
-  }
-};
-
-// STEP 2: Verify OTP (Mocked)
-// STEP 2: Verify OTP (Mocked with name and role)
-exports.employeeLoginVerifyOtp = async (req, res) => {
-  const { otp, mobile } = req.body;
-
-  if (!otp || !mobile) {
-    return res.status(400).json({
-      status: false,
-      message: 'OTP and mobile are required',
-    });
-  }
-
-  try {
-    const employee = await Employee.findOne({ mobile });
-    if (!employee) {
-      return res.status(404).json({
-        status: false,
-        message: 'Employee not found',
-      });
-    }
-
-    // Mock OTP verification
-    if (otp !== '123456') {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid OTP',
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: 'Employee login successful',
-      employeeId: employee._id,
-      name: employee.name,
-      role: employee.role
-    });
-  } catch (error) {
-    console.error('Employee Login OTP VERIFY ERROR:', error.message);
-    return res.status(500).json({
-      status: false,
-      message: 'Error during employee login OTP verification',
-      error: error.message,
-    });
-  }
-};
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 
 
 
-
-
-/**
- * Generates a robust Employee ID (EID).
- * If DOB is provided, it uses your original logic.
- * If DOB is missing, it uses the current date and adds a random part for uniqueness.
- */
-function generateEid(dob) {
-  const date = dob ? new Date(dob) : new Date(); // Use current date as a fallback
-  if (isNaN(date.getTime())) {
-    // If an invalid date string was passed, fallback to current date
-    date = new Date();
-  }
-  
-  const year = date.getFullYear() + (dob ? 1 : 0); // Only add +1 if DOB was provided
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const yearSuffix = year.toString().slice(-2);
-  
-  // If DOB was missing, add a random 2-digit number to avoid collisions
-  const randomPart = !dob ? Math.floor(10 + Math.random() * 90) : '';
-
-  return `${month}${yearSuffix}${randomPart}`;
+function generateEid() {
+  // EID = 3B + 4 random digits
+  const random4 = Math.floor(1000 + Math.random() * 9000);
+  return `3B${random4}`;
 }
 
-/**
- * Generates a robust password.
- * Uses the first 4 letters of the name.
- * Uses the last 4 digits of the Adhar number if it exists.
- * Otherwise, it uses the last 4 digits of the mobile number as a reliable fallback.
- */
-function generatePassword(name, adhar, mobile) {
-  const namePart = name.slice(0, 4).toLowerCase();
-  
-  // Use last 4 of Adhar if available, otherwise use last 4 of mobile
-  const numericPart = adhar ? adhar.slice(-4) : mobile.slice(-4);
-  
-  return `${namePart}${numericPart}`;
+function generatePassword(name, adhar) {
+  const namePart = (name || '').slice(0, 4).toLowerCase();
+  const adharPart = (adhar || '').slice(0, 4); // FIRST 4 digits
+
+  return `${namePart}${adharPart}`;
 }
 
 exports.createEmployee = async (req, res) => {
   try {
     const { name, mobile, role, dob, adharNumber } = req.body;
 
-    // --- Added stricter validation for required fields ---
     if (!name || !mobile || !role) {
       return res.status(400).json({ message: 'Name, Mobile, and Role are required.' });
     }
@@ -251,15 +40,14 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ message: 'Mobile number already exists.' });
     }
 
-    // --- Safely handle optional Date of Birth ---
     const dobDate = dob ? new Date(dob) : null;
     if (dob && isNaN(dobDate.getTime())) {
-        return res.status(400).json({ message: 'Invalid date of birth format.' });
+      return res.status(400).json({ message: 'Invalid date of birth format.' });
     }
 
-    // --- Generate credentials using robust functions ---
-    const eid = generateEid(dob);
-    const password = generatePassword(name, adharNumber, mobile); // Pass mobile as a fallback
+    // --- Generate new EID + Password ---
+    const eid = generateEid();
+    const password = generatePassword(name, adharNumber);
 
     const { url: adharImageUrl } = await uploadBufferToGCS(
       req.file.buffer,
@@ -268,19 +56,17 @@ exports.createEmployee = async (req, res) => {
       req.file.mimetype
     );
 
-    // --- Create employee with safe values ---
     const employee = await Employee.create({
       name,
       mobile,
       role,
-      dob: dobDate, // This will be null if not provided, which is safe
+      dob: dobDate,
       eid,
       password,
-      adharNumber: adharNumber || '', // Save as empty string if not provided
+      adharNumber: adharNumber || '',
       adharImageUrl,
     });
 
-    // --- Send a successful response with the password ---
     res.status(201).json({
       message: "Employee created successfully",
       password: employee.password,
@@ -288,11 +74,11 @@ exports.createEmployee = async (req, res) => {
     });
 
   } catch (error) {
-    // This block catches any other unexpected errors
     console.error('Create Employee Error:', error.message, error.stack);
     res.status(500).json({ message: 'Failed to create employee due to a server error.' });
   }
 };
+
 
 
 exports.updateEmployeeStatus = async (req, res) => {
@@ -463,59 +249,68 @@ exports.deleteEmployee = async (req, res) => {
 };
 
 
-/**
- * Login an employee using mobile number and password.
- * @route POST /api/employees/login
- */
-// exports.loginEmployee = async (req, res) => {
-//   try {
-//     const { mobile, password } = req.body;
 
-//     // 1. Validate input
-//     if (!mobile || !password) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Mobile number and password are required.',
-//       });
-//     }
+const JWT_SECRET = crypto.randomBytes(32).toString("hex");
 
-//     // 2. Find employee by mobile number
-//     const employee = await Employee.findOne({ mobile });
+exports.loginEmployee = async (req, res) => {
+  try {
+    const { mobile, password } = req.body;
 
-//     // 3. Check if employee exists and if the password is correct
-//     // NOTE: In a real-world application, passwords should be hashed using a library
-//     // like bcrypt. This is a simple string comparison based on your current setup.
-//     if (!employee || employee.password !== password) {
-//       return res.status(401).json({
-//         success: false,
-//         message: 'Invalid mobile number or password.',
-//       });
-//     }
+    if (!mobile || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number and password are required.',
+      });
+    }
 
-//     // 4. Check if the employee's account is active (based on your `updateEmployeeStatus` logic)
-//     if (employee.status === false) { // Explicitly check for false
-//       return res.status(403).json({ // 403 Forbidden is more appropriate here
-//         success: false,
-//         message: 'Your account is inactive. Please contact the administrator.',
-//       });
-//     }
+    const employee = await Employee.findOne({ mobile });
 
-//     // 5. Successful login: Return employee details
-//     // It's good practice to not send the password back in the response.
-//     const employeeData = employee.toObject();
-//     delete employeeData.password;
+    if (!employee || employee.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid mobile number or password.',
+      });
+    }
 
-//     res.status(200).json({
-//       success: true,
-//       message: 'Login successful',
-//       employee: employeeData, // This object contains all details, including the role
-//     });
+    if (employee.status === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is inactive. Please contact the administrator.',
+      });
+    }
 
-//   } catch (error) {
-//     console.error('Login Employee Error:', error.message, error.stack);
-//     res.status(500).json({
-//       success: false,
-//       message: 'An internal server error occurred during login.',
-//     });
-//   }
-// };
+    // FIXED: use JWT_SECRET instead of process.env.JWT_SECRET
+    const token = jwt.sign(
+      {
+        id: employee._id,
+        mobile: employee.mobile,
+        role: employee.role,
+      },
+      JWT_SECRET, 
+      { expiresIn: "7d" }
+    );
+
+    const employeeData = {
+      _id: employee._id,
+      name: employee.name,
+      role: employee.role,
+      mobile: employee.mobile,
+      eid: employee.eid
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token,
+      employee: employeeData
+    });
+
+  } catch (error) {
+    console.error('Login Employee Error:', error.message, error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'An internal server error occurred during login.',
+    });
+  }
+};
+
