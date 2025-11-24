@@ -339,54 +339,56 @@ exports.getAllItemsForList = async (req, res) => {
     const items = await MainItem.aggregate([
       { $match: matchStage },
       { $sort: { createdAt: -1 } },
+
+      // Add box count + trimmed/lower itemNo for accurate matching
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } },
-          // Add this to see the lowercased itemNo that goes into the lookup
-          debug_itemNoLower: { $toLower: "$itemNo" }
+          itemNoTrimLower: {
+            $toLower: { $trim: { input: "$itemNo" } }
+          }
         }
       },
+
+      // --- 🔍 FIXED LOOKUP: TRIM + LOWERCASE ON BOTH SIDES ---
       {
         $lookup: {
           from: "productuploads",
-          let: { itemNo: "$debug_itemNoLower" }, // Use the debug field
+          let: { itemNoClean: "$itemNoTrimLower" },
           pipeline: [
             {
               $addFields: {
-                nameLower: { $toLower: "$name" }
+                nameTrimLower: {
+                  $toLower: { $trim: { input: "$name" } }
+                }
               }
             },
-            // DEBUG: Project fields here before the match to see what's being compared
-            {
-                $project: {
-                    _id: 1,
-                    name: 1,
-                    description: 1,
-                    nameLower: 1,
-                    debug_itemNoFromOuter: "$$itemNo" // Bring in the itemNo from the outer pipeline
-                }
-            },
-            // The actual match stage
             {
               $match: {
                 $expr: {
-                  $eq: ["$nameLower", "$$itemNo"]
+                  $eq: ["$nameTrimLower", "$$itemNoClean"]
                 }
               }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                description: 1,
+                about: 1
+              }
             }
-            // No need for $project after match for debugging, we want the original fields
           ],
           as: "productDetails"
         }
       },
-      {
-        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true }
-      },
+
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+
       {
         $project: {
           boxes: 0,
-          // Keep debug fields if you want them in final output
-          debug_itemNoLower: 0 // Remove from final output
+          itemNoTrimLower: 0
         }
       }
     ]);
@@ -394,7 +396,7 @@ exports.getAllItemsForList = async (req, res) => {
     return res.status(200).json({
       success: true,
       statusCode: 200,
-      message: "Items fetched successfully (with debug)",
+      message: "Items fetched successfully",
       count: items.length,
       data: items.map(item => ({
         ...item,
@@ -402,12 +404,13 @@ exports.getAllItemsForList = async (req, res) => {
           ? {
               _id: item.productDetails._id,
               name: item.productDetails.name,
-              about: item.productDetails.about, // about might be missing in debug $project above
+              about: item.productDetails.about,
               description: item.productDetails.description
             }
           : null
       }))
     });
+
   } catch (error) {
     console.error("Error fetching items:", error);
     return res.status(500).json({
@@ -418,6 +421,7 @@ exports.getAllItemsForList = async (req, res) => {
     });
   }
 };
+
 
 
 
