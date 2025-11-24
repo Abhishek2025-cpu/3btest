@@ -4,6 +4,7 @@ const Machine = require('../models/Machine');
 const Item = require('../models/item.model'); 
 
 // Create a new worker entry
+// controller
 exports.createWorker = async (req, res) => {
   try {
     const { 
@@ -15,23 +16,15 @@ exports.createWorker = async (req, res) => {
       frameWeight, 
       description, 
       employeeId, 
-      machineId, 
-      itemId 
+      machineName, 
+      itemName 
     } = req.body;
 
     // Check if employee exists
     const employee = await Employee.findById(employeeId);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
-    // Check if machine exists
-    const machine = await Machine.findById(machineId);
-    if (!machine) return res.status(404).json({ message: 'Machine not found' });
-
-    // Check if item exists
-    const item = await Item.findById(itemId);
-    if (!item) return res.status(404).json({ message: 'Item not found' });
-
-    // Create worker entry
+    // Create worker entry with machine and item as strings
     const worker = new Worker({
       time,
       shift,
@@ -41,23 +34,19 @@ exports.createWorker = async (req, res) => {
       frameWeight,
       description,
       employee: employeeId,
-      machine: machineId,
-      item: itemId
+      machine: machineName,  // storing string
+      item: itemName         // storing string
     });
 
-    // Save and populate related fields
     const savedWorker = await worker.save();
 
-    const populatedWorker = await Worker.findById(savedWorker._id)
-      .populate('employee', 'name')
-      .populate('machine', 'name')
-      .populate('item', 'name');
-
-    res.status(201).json(populatedWorker);
+    res.status(201).json(savedWorker);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 exports.updateWorker = async (req, res) => {
   try {

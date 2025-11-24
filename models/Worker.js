@@ -6,15 +6,15 @@ const WorkerSchema = new mongoose.Schema(
     time: { type: [String], required: true },
     shift: { type: String, required: true },
     frameLength: { type: [Number], required: true },
-    numberOfBox: { type: String, required: true },
+    numberOfBox: { type: String },
     boxWeight: { type: String, required: true },
     frameWeight: { type: String, required: true },
     description: { type: String },
 
-    // 🔗 References
+    // References
     employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-    machine: { type: mongoose.Schema.Types.ObjectId, ref: "Machine", required: true },
-    item: { type: mongoose.Schema.Types.ObjectId, ref: "MainItem", required: true }
+    machine: { type: String, required: true }, // store machine name
+    item: { type: String, required: true }     // store item name
   },
   { timestamps: true }
 );
