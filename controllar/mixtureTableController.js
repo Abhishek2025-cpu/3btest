@@ -122,10 +122,9 @@ exports.getMixtureFormsByMixtureId = async (req, res) => {
       });
     }
 
-    const forms = await MixtureTable.find({ mixtureId: mixtureId })
+    const forms = await MixtureTable.find({ mixtureId })
       .sort({ createdAt: -1 })
-      .populate({ path: "itemId", select: "itemNo length productImageUrl" })
-      .populate({ path: "mixtureId", select: "name eid" });
+      .populate({ path: "mixtureId", select: "name eid" }); // only populate mixtureId
 
     if (!forms || forms.length === 0) {
       return res.status(404).json({
