@@ -163,7 +163,7 @@ exports.getEmployeeById = async (req, res) => {
 exports.updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, mobile, role, dob, adharNumber } = req.body;
+    const { name, mobile, role, dob, adharNumber, password } = req.body;
 
     // 1. Find the employee to update
     const employee = await Employee.findById(id);
@@ -171,8 +171,7 @@ exports.updateEmployee = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found.' });
     }
 
-    // 2. Validate inputs
-    // Check if the new mobile number is already taken by another employee
+    // 2. Validate mobile number (only if changed)
     if (mobile && mobile !== employee.mobile) {
       const existingEmployee = await Employee.findOne({ mobile, _id: { $ne: id } });
       if (existingEmployee) {
@@ -180,62 +179,61 @@ exports.updateEmployee = async (req, res) => {
       }
     }
 
-    // Safely handle optional Date of Birth
-    let dobDate = employee.dob; // Default to existing DOB
-    if (dob) { // If a new DOB is provided in the request
-        const parsedDate = new Date(dob);
-        if (isNaN(parsedDate.getTime())) {
-            return res.status(400).json({ message: 'Invalid date of birth format.' });
-        }
-        dobDate = parsedDate;
+    // 3. Handle DOB safely
+    let dobDate = employee.dob;
+    if (dob) {
+      const parsedDate = new Date(dob);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid date of birth format.' });
+      }
+      dobDate = parsedDate;
     }
 
-    // 3. Handle Adhar Image Upload (if a new file is provided)
-    let adharImageUrl = employee.adharImageUrl; // Default to the existing image URL
+    // 4. Handle Adhar Image Upload
+    let adharImageUrl = employee.adharImageUrl;
     if (req.file) {
       const { url } = await uploadBufferToGCS(
         req.file.buffer,
         req.file.originalname,
         'adhar-images',
-        req.file.mimetype // Pass mimetype for consistency
+        req.file.mimetype
       );
       adharImageUrl = url;
     }
 
-    // 4. Regenerate password with potentially updated information
-    // Use new data if provided, otherwise fall back to existing employee data
-    const updatedName = name || employee.name;
-    const updatedAdhar = adharNumber || employee.adharNumber;
-    const updatedMobile = mobile || employee.mobile;
-    const newPassword = generatePassword(updatedName, updatedAdhar, updatedMobile);
+    // 5. If password is provided, use it, else regenerate automatically
+    let finalPassword = password;
+    if (!password) {
+      const updatedName = name || employee.name;
+      const updatedAdhar = adharNumber || employee.adharNumber;
+      const updatedMobile = mobile || employee.mobile;
 
-    // 5. Update employee fields with new data, falling back to existing data
+      finalPassword = generatePassword(updatedName, updatedAdhar, updatedMobile);
+    }
+
+    // 6. Update fields
     employee.name = name || employee.name;
     employee.mobile = mobile || employee.mobile;
     employee.role = role || employee.role;
     employee.dob = dobDate;
     employee.adharNumber = adharNumber || employee.adharNumber;
     employee.adharImageUrl = adharImageUrl;
-    employee.password = newPassword; // Always update the password to reflect current details
-
-    // Note: EID is NOT updated, preserving it as a stable identifier.
+    employee.password = finalPassword; // <-- updating password manually if given
 
     await employee.save();
 
-    // 6. Send a successful response
     res.status(200).json({
       message: "Employee updated successfully",
-      // It's good practice to inform the admin of the new password
-      newPassword: employee.password, 
+      newPassword: employee.password,
       employee: employee,
     });
 
   } catch (error) {
-    // Consistent, robust error handling
     console.error('Update Employee Error:', error.message, error.stack);
     res.status(500).json({ message: 'Failed to update employee due to a server error.' });
   }
 };
+
 
 exports.deleteEmployee = async (req, res) => {
   try {

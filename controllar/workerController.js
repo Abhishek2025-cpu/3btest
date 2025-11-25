@@ -52,93 +52,52 @@ exports.updateWorker = async (req, res) => {
   try {
     const workerId = req.params.id;
 
-    const { 
-      time, 
-      shift, 
-      frameLength, 
-      numberOfBox, 
-      boxWeight, 
-      frameWeight, 
-      description, 
-      employeeId, 
-      machineId, 
-      itemId 
-    } = req.body;
+    const updateData = req.body;
 
-    // Check if worker exists
-    const existingWorker = await Worker.findById(workerId);
-    if (!existingWorker) {
-      return res.status(404).json({
-        success: false,
-        message: "Worker entry not found"
-      });
+    // Ensure updatedBy is applied
+    if (req.body.updatedBy) {
+      updateData.updatedBy = req.body.updatedBy;
     }
 
-    // Validate employee (if provided)
-   if (req.body.employeeId && req.body.employeeId.trim() === "") {
-   return res.status(400).json({ success: false, message: "Invalid employeeId" });
-}
+  const updatedWorker = await Worker.findOneAndUpdate(
+  { _id: workerId },   // <-- works with string IDs
+  updateData,
+  { new: true }
+)
+  .populate({
+    path: "updatedBy",
+    model: "Employee",
+    select: "name role _id"
+  })
+  .populate({
+    path: "employee",
+    model: "Employee",
+    select: "name role _id"
+  });
 
 
-    // Validate machine (if provided)
-    if (machineId) {
-      const machine = await Machine.findById(machineId);
-      if (!machine) {
-        return res.status(404).json({
-          success: false,
-          message: "Machine not found"
-        });
-      }
+    if (!updatedWorker) {
+      return res.status(404).json({ message: "Worker not found" });
     }
 
-    // Validate item (if provided)
-    if (itemId) {
-      const item = await Item.findById(itemId);
-      if (!item) {
-        return res.status(404).json({
-          success: false,
-          message: "Item not found"
-        });
-      }
-    }
-
-    // Build update object (only update provided fields)
-    const updateData = {
-      ...(time && { time }),
-      ...(shift && { shift }),
-      ...(frameLength && { frameLength }),
-      ...(numberOfBox && { numberOfBox }),
-      ...(boxWeight && { boxWeight }),
-      ...(frameWeight && { frameWeight }),
-      ...(description && { description }),
-      ...(employeeId && { employee: employeeId }),
-      ...(machineId && { machine: machineId }),
-      ...(itemId && { item: itemId })
-    };
-
-    // Update worker
-    const updatedWorker = await Worker.findByIdAndUpdate(
-      workerId,
-      updateData,
-      { new: true }
-    )
-      .populate("employee", "name")
-      .populate("machine", "name")
-      .populate("item", "name");
-
-    res.status(200).json({
-      success: true,
-      message: "Worker updated successfully",
-      data: updatedWorker
+    return res.status(200).json({
+      updatedBy: updatedWorker.updatedBy
+        ? {
+            _id: updatedWorker.updatedBy._id,
+            name: updatedWorker.updatedBy.name,
+            role: updatedWorker.updatedBy.role
+          }
+        : null,
+      worker: updatedWorker
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    return res.status(500).json({ message: error.message });
   }
 };
+
+
+
 
 
 

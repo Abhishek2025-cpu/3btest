@@ -10,6 +10,12 @@ const WorkerSchema = new mongoose.Schema(
     boxWeight: { type: String, required: true },
     frameWeight: { type: String, required: true },
     description: { type: String },
+    updatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Employee',
+  default: null
+}
+,
 
     // References
     employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
