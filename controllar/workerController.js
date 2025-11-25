@@ -3,6 +3,7 @@ const Employee = require('../models/Employee');
 const Machine = require('../models/Machine');
 const Item = require('../models/item.model'); 
 
+
 // Create a new worker entry
 // controller
 exports.createWorker = async (req, res) => {
@@ -47,59 +48,32 @@ exports.createWorker = async (req, res) => {
 };
 
 
-
 exports.updateWorker = async (req, res) => {
   try {
     const workerId = req.params.id;
-
     const updateData = req.body;
 
-    // Ensure updatedBy is applied
-    if (req.body.updatedBy) {
-      updateData.updatedBy = req.body.updatedBy;
-    }
-
-  const updatedWorker = await Worker.findOneAndUpdate(
-  { _id: workerId },   // <-- works with string IDs
-  updateData,
-  { new: true }
-)
-  .populate({
-    path: "updatedBy",
-    model: "Employee",
-    select: "name role _id"
-  })
-  .populate({
-    path: "employee",
-    model: "Employee",
-    select: "name role _id"
-  });
-
+    // 1. Update the worker
+    // 2. .populate() tells Mongoose: "Go to the Employee collection and replace these IDs with the actual data"
+    const updatedWorker = await Worker.findByIdAndUpdate(
+      workerId,
+      updateData,
+      { new: true } // Returns the updated document
+    )
+    .populate("updatedBy", "name role _id") // Changes 'updatedBy' ID -> Object { name, role }
+    .populate("employee", "name role _id"); // Changes 'employee' ID -> Object { name, role }
 
     if (!updatedWorker) {
       return res.status(404).json({ message: "Worker not found" });
     }
 
-    return res.status(200).json({
-      updatedBy: updatedWorker.updatedBy
-        ? {
-            _id: updatedWorker.updatedBy._id,
-            name: updatedWorker.updatedBy.name,
-            role: updatedWorker.updatedBy.role
-          }
-        : null,
-      worker: updatedWorker
-    });
+    // Now updatedWorker contains the full details inside it
+    return res.status(200).json(updatedWorker);
 
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
-
-
 
 
 

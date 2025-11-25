@@ -1,26 +1,30 @@
-// models/Worker.js
 const mongoose = require("mongoose");
 
 const WorkerSchema = new mongoose.Schema(
   {
-    time: { type: [String], required: true },
-    shift: { type: String, required: true },
-    frameLength: { type: [Number], required: true },
-    numberOfBox: { type: String },
-    boxWeight: { type: String, required: true },
-    frameWeight: { type: String, required: true },
-    description: { type: String },
-    updatedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'Employee',
-  default: null
-}
-,
+    time: [String],
+    shift: String,
+    frameLength: [Number],
+    numberOfBox: String,
+    boxWeight: String,
+    frameWeight: String,
+    description: String,
 
-    // References
-    employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-    machine: { type: String, required: true }, // store machine name
-    item: { type: String, required: true }     // store item name
+    // THIS MUST be ObjectId with ref
+    employee: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      required: true
+    },
+
+    machine: String,
+    item: String,
+
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null
+    }
   },
   { timestamps: true }
 );
