@@ -36,7 +36,7 @@ exports.addInventoryItem = async (req, res) => {
     });
 
     // QR code should open this URL when scanned
-    const qrLink = `https://your-domain.com/inventory/${newItem._id}`;
+    const qrLink = `https://threebapi-1067354145699.asia-south1.run.app/inventory/${newItem._id}`;
 
     const qrBuffer = await generateQRCode(qrLink);
 
