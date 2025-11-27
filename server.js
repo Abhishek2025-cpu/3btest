@@ -52,6 +52,8 @@ const notificationRoutes = require("./routes/TestnotificationRoutes");
 app.use("/api/notifications", notificationRoutes);
 const workerRoutes = require('./routes/workerRoutes');
 app.use('/api/workers', workerRoutes);
+const inventoryRoutes = require("./routes/inventoryRoutes");
+app.use("/api/inventory", inventoryRoutes);
 
 // Default route
 app.get('/', (req, res) => res.send('API is running...'));
