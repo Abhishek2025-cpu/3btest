@@ -1,19 +1,15 @@
 const InventoryItem = require("../models/InventoryItem");
-const bwipjs = require("bwip-js");
+const QRCode = require("qrcode");
 const { uploadBufferToGCS } = require("../utils/gcloud");
 
-// Generate barcode buffer
-async function generateBarcode(text) {
-  return await bwipjs.toBuffer({
-    bcid: "code128",
-    text,
-    scale: 3,
-    height: 12,
-    includetext: true,
+async function generateQRCode(text) {
+  return await QRCode.toBuffer(text, {
+    type: "png",
+    width: 300,
+    margin: 2
   });
 }
 
-// ➤ Add Item
 exports.addInventoryItem = async (req, res) => {
   try {
     const { productName, qty, numberOfBoxes, company, status } = req.body;
@@ -30,7 +26,6 @@ exports.addInventoryItem = async (req, res) => {
       req.file.mimetype
     );
 
-    // Create initial record (without barcode)
     const newItem = await InventoryItem.create({
       productName,
       qty,
@@ -40,22 +35,20 @@ exports.addInventoryItem = async (req, res) => {
       productImage: productImageUpload.url
     });
 
-    // Generate barcode link → opens stock page
-    const qrTargetUrl = `https://threebapi-1067354145699.asia-south1.run.app/inventory/${newItem._id}`;
+    // QR code should open this URL when scanned
+    const qrLink = `https://your-domain.com/inventory/${newItem._id}`;
 
-    const barcodeBuffer = await generateBarcode(qrTargetUrl);
+    const qrBuffer = await generateQRCode(qrLink);
 
-    // Upload barcode
-    const barcodeUpload = await uploadBufferToGCS(
-      barcodeBuffer,
-      `barcode-${newItem._id}.png`,
-      "inventory_barcodes",
+    const qrUpload = await uploadBufferToGCS(
+      qrBuffer,
+      `qrcode-${newItem._id}.png`,
+      "inventory_qrcodes",
       "image/png"
     );
 
-    // Update item with barcode
-    newItem.barcodeUrl = barcodeUpload.url;
-    newItem.barcodeId = barcodeUpload.id;
+    newItem.barcodeUrl = qrUpload.url;  // You can rename this field if needed
+    newItem.barcodeId = qrUpload.id;
     await newItem.save();
 
     res.status(201).json({
@@ -68,6 +61,7 @@ exports.addInventoryItem = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // ➤ Get All Items
 exports.getInventoryItems = async (req, res) => {
