@@ -175,55 +175,74 @@ exports.deleteInventoryItem = async (req, res) => {
 exports.moveInventoryStock = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type, toCompany, qty, numberOfBoxes } = req.body;
+    let { type, toCompany, qty, numberOfBoxes } = req.body;
 
-    // if (!type || !["in", "out"].includes(type) || !["IN", "OUT"].includes(type.toUpperCase())) {
-    //   return res.status(400).json({ message: "Movement type required: in/out" });
-    // }
+    // Normalize
+    type = type?.toLowerCase();
+
+    if (!type || (type !== "in" && type !== "out")) {
+      return res.status(400).json({ message: "Movement type must be IN or OUT" });
+    }
+
+    qty = Number(qty);
+    numberOfBoxes = Number(numberOfBoxes);
 
     if (!qty || !numberOfBoxes) {
       return res.status(400).json({ message: "qty and numberOfBoxes are required" });
     }
 
-    // 1️⃣ SOURCE
+    // 1️⃣ SOURCE ITEM
     const sourceItem = await InventoryItem.findById(id);
     if (!sourceItem) {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    // 🔥 OUT CASE (move from this company to another)
+    // Ensure trackingHistory exists
+    if (!sourceItem.trackingHistory) {
+      sourceItem.trackingHistory = [];
+    }
+
+    // =============================
+    // 🔥  OUT CASE
+    // =============================
     if (type === "out") {
-      if (!toCompany) return res.status(400).json({ message: "toCompany is required" });
+      if (!toCompany) {
+        return res.status(400).json({ message: "toCompany is required for OUT movement" });
+      }
 
-      // Validate stock
-      if (qty > sourceItem.qty)
+      // Validate available stock
+      if (qty > sourceItem.qty) {
         return res.status(400).json({ message: `Only ${sourceItem.qty} qty available` });
+      }
 
-      if (numberOfBoxes > sourceItem.numberOfBoxes)
+      if (numberOfBoxes > sourceItem.numberOfBoxes) {
         return res.status(400).json({ message: `Only ${sourceItem.numberOfBoxes} boxes available` });
+      }
 
-      // Deduct
+      // Deduct from source
       sourceItem.qty -= qty;
       sourceItem.numberOfBoxes -= numberOfBoxes;
 
-      // Log history
+      // Track movement
       sourceItem.trackingHistory.push({
         type: "out",
         qty,
         numberOfBoxes,
         fromCompany: sourceItem.company,
         toCompany,
+        time: new Date()
       });
 
       await sourceItem.save();
 
-      // Add to target company
+      // 2️⃣ ADD TO TARGET COMPANY
       let targetItem = await InventoryItem.findOne({
         productName: sourceItem.productName,
         company: toCompany
       });
 
       if (!targetItem) {
+        // Create new stock entry
         targetItem = await InventoryItem.create({
           productName: sourceItem.productName,
           productImage: sourceItem.productImage,
@@ -233,17 +252,19 @@ exports.moveInventoryStock = async (req, res) => {
           trackingHistory: []
         });
       } else {
+        // Increase stock
         targetItem.qty += qty;
         targetItem.numberOfBoxes += numberOfBoxes;
       }
 
-      // Log IN movement into target company
+      // Log IN movement into target item
       targetItem.trackingHistory.push({
         type: "in",
         qty,
         numberOfBoxes,
         fromCompany: sourceItem.company,
-        toCompany
+        toCompany,
+        time: new Date()
       });
 
       await targetItem.save();
@@ -255,7 +276,9 @@ exports.moveInventoryStock = async (req, res) => {
       });
     }
 
-    // 🔥 IN CASE (add stock to this company)
+    // =============================
+    // 🔥  IN CASE
+    // =============================
     if (type === "in") {
       sourceItem.qty += qty;
       sourceItem.numberOfBoxes += numberOfBoxes;
@@ -265,7 +288,8 @@ exports.moveInventoryStock = async (req, res) => {
         qty,
         numberOfBoxes,
         fromCompany: "external",
-        toCompany: sourceItem.company
+        toCompany: sourceItem.company,
+        time: new Date()
       });
 
       await sourceItem.save();
@@ -281,3 +305,4 @@ exports.moveInventoryStock = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
