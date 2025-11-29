@@ -10,6 +10,20 @@ const InventoryItemSchema = new mongoose.Schema(
     status: { type: String, default: "active" }, // not required
     barcodeUrl: { type: String }, 
     barcodeId: { type: String }, 
+    trackingHistory: [
+      {
+        type: {
+          type: String,
+          enum: ["in", "out"], // movement type
+          required: true
+        },
+        qty: Number,
+        numberOfBoxes: Number,
+        fromCompany: String,
+        toCompany: String,
+        timestamp: { type: Date, default: Date.now }
+      }
+    ],
   },
   { timestamps: true }
 );

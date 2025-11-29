@@ -167,3 +167,117 @@ exports.deleteInventoryItem = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
+
+
+
+
+exports.moveInventoryStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, toCompany, qty, numberOfBoxes } = req.body;
+
+    if (!type || !["in", "out"].includes(type)) {
+      return res.status(400).json({ message: "Movement type required: in/out" });
+    }
+
+    if (!qty || !numberOfBoxes) {
+      return res.status(400).json({ message: "qty and numberOfBoxes are required" });
+    }
+
+    // 1️⃣ SOURCE
+    const sourceItem = await InventoryItem.findById(id);
+    if (!sourceItem) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    // 🔥 OUT CASE (move from this company to another)
+    if (type === "out") {
+      if (!toCompany) return res.status(400).json({ message: "toCompany is required" });
+
+      // Validate stock
+      if (qty > sourceItem.qty)
+        return res.status(400).json({ message: `Only ${sourceItem.qty} qty available` });
+
+      if (numberOfBoxes > sourceItem.numberOfBoxes)
+        return res.status(400).json({ message: `Only ${sourceItem.numberOfBoxes} boxes available` });
+
+      // Deduct
+      sourceItem.qty -= qty;
+      sourceItem.numberOfBoxes -= numberOfBoxes;
+
+      // Log history
+      sourceItem.trackingHistory.push({
+        type: "out",
+        qty,
+        numberOfBoxes,
+        fromCompany: sourceItem.company,
+        toCompany,
+      });
+
+      await sourceItem.save();
+
+      // Add to target company
+      let targetItem = await InventoryItem.findOne({
+        productName: sourceItem.productName,
+        company: toCompany
+      });
+
+      if (!targetItem) {
+        targetItem = await InventoryItem.create({
+          productName: sourceItem.productName,
+          productImage: sourceItem.productImage,
+          qty,
+          numberOfBoxes,
+          company: toCompany,
+          trackingHistory: []
+        });
+      } else {
+        targetItem.qty += qty;
+        targetItem.numberOfBoxes += numberOfBoxes;
+      }
+
+      // Log IN movement into target company
+      targetItem.trackingHistory.push({
+        type: "in",
+        qty,
+        numberOfBoxes,
+        fromCompany: sourceItem.company,
+        toCompany
+      });
+
+      await targetItem.save();
+
+      return res.status(200).json({
+        message: "Stock moved successfully",
+        sourceItem,
+        targetItem
+      });
+    }
+
+    // 🔥 IN CASE (add stock to this company)
+    if (type === "in") {
+      sourceItem.qty += qty;
+      sourceItem.numberOfBoxes += numberOfBoxes;
+
+      sourceItem.trackingHistory.push({
+        type: "in",
+        qty,
+        numberOfBoxes,
+        fromCompany: "external",
+        toCompany: sourceItem.company
+      });
+
+      await sourceItem.save();
+
+      return res.status(200).json({
+        message: "Stock added into company",
+        item: sourceItem
+      });
+    }
+
+  } catch (err) {
+    console.error("Move stock error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
