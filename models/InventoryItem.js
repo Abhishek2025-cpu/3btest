@@ -14,7 +14,7 @@ const InventoryItemSchema = new mongoose.Schema(
       {
         type: {
           type: String,
-          enum: ["in", "out"], // movement type
+         
           required: true
         },
         qty: Number,
