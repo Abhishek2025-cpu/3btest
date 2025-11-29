@@ -177,9 +177,9 @@ exports.moveInventoryStock = async (req, res) => {
     const { id } = req.params;
     const { type, toCompany, qty, numberOfBoxes } = req.body;
 
-    if (!type || !["in", "out"].includes(type)) {
-      return res.status(400).json({ message: "Movement type required: in/out" });
-    }
+    // if (!type || !["in", "out"].includes(type) || !["IN", "OUT"].includes(type.toUpperCase())) {
+    //   return res.status(400).json({ message: "Movement type required: in/out" });
+    // }
 
     if (!qty || !numberOfBoxes) {
       return res.status(400).json({ message: "qty and numberOfBoxes are required" });
