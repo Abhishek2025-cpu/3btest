@@ -24,7 +24,7 @@ router.put(
 
 router.get("/single/:id", inventoryController.getInventoryItem);
 
-router.patch("/move/:id", inventoryController.getmoveInventoryStock);
+router.patch("/move/:id", inventoryController.moveInventoryStock);
 
 
 
