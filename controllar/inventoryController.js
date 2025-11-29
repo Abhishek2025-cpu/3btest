@@ -170,133 +170,142 @@ exports.deleteInventoryItem = async (req, res) => {
 
 
 
-
-
 exports.moveInventoryStock = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // The ID of the item passing the stock (Source)
     let { type, toCompany, qty, numberOfBoxes } = req.body;
 
-    // Normalize
+    // 1. Normalize Inputs
     type = type?.toLowerCase();
+    
+    // Ensure positive numbers to prevent math errors (e.g., subtracting a negative = adding)
+    qty = Math.abs(Number(qty));
+    numberOfBoxes = Math.abs(Number(numberOfBoxes));
+
+    if (!qty || !numberOfBoxes) {
+      return res.status(400).json({ message: "qty and numberOfBoxes are required and must be valid numbers" });
+    }
 
     if (!type || (type !== "in" && type !== "out")) {
       return res.status(400).json({ message: "Movement type must be IN or OUT" });
     }
 
-    qty = Number(qty);
-    numberOfBoxes = Number(numberOfBoxes);
-
-    if (!qty || !numberOfBoxes) {
-      return res.status(400).json({ message: "qty and numberOfBoxes are required" });
-    }
-
-    // 1️⃣ SOURCE ITEM
+    // 2. Fetch the SOURCE Item
     const sourceItem = await InventoryItem.findById(id);
     if (!sourceItem) {
-      return res.status(404).json({ message: "Item not found" });
+      return res.status(404).json({ message: "Source Item not found" });
     }
 
-    // Ensure trackingHistory exists
+    // Initialize tracking history if missing
     if (!sourceItem.trackingHistory) {
       sourceItem.trackingHistory = [];
     }
 
-    // =============================
-    // 🔥  OUT CASE
-    // =============================
+    // ============================================================
+    // 🔥 CASE: MOVING STOCK FROM SOURCE TO ANOTHER COMPANY (OUT)
+    // ACTION: SUBTRACT from Source, ADD to Target
+    // ============================================================
     if (type === "out") {
       if (!toCompany) {
-        return res.status(400).json({ message: "toCompany is required for OUT movement" });
+        return res.status(400).json({ message: "toCompany is required for moving stock (OUT)" });
       }
 
-      // Validate available stock
-      if (qty > sourceItem.qty) {
-        return res.status(400).json({ message: `Only ${sourceItem.qty} qty available` });
+      // Check if Source has enough stock
+      if (sourceItem.qty < qty) {
+        return res.status(400).json({ 
+          message: `Insufficient stock. Current Qty: ${sourceItem.qty}, Requested: ${qty}` 
+        });
       }
 
-      if (numberOfBoxes > sourceItem.numberOfBoxes) {
-        return res.status(400).json({ message: `Only ${sourceItem.numberOfBoxes} boxes available` });
+      if (sourceItem.numberOfBoxes < numberOfBoxes) {
+        return res.status(400).json({ 
+          message: `Insufficient boxes. Current Boxes: ${sourceItem.numberOfBoxes}, Requested: ${numberOfBoxes}` 
+        });
       }
 
-      // Deduct from source
-      sourceItem.qty -= qty;
-      sourceItem.numberOfBoxes -= numberOfBoxes;
+      // ✅ SUBTRACTION OPERATION (Critical Requirement)
+      sourceItem.qty = sourceItem.qty - qty;
+      sourceItem.numberOfBoxes = sourceItem.numberOfBoxes - numberOfBoxes;
 
-      // Track movement
+      // Log the movement in Source History
       sourceItem.trackingHistory.push({
         type: "out",
-        qty,
-        numberOfBoxes,
+        qty: qty,
+        numberOfBoxes: numberOfBoxes,
         fromCompany: sourceItem.company,
-        toCompany,
-        time: new Date()
+        toCompany: toCompany,
+        timestamp: new Date() // Using timestamp to match your API response format
       });
 
       await sourceItem.save();
 
-      // 2️⃣ ADD TO TARGET COMPANY
+      // 3. HANDLE TARGET COMPANY (Receiver)
       let targetItem = await InventoryItem.findOne({
         productName: sourceItem.productName,
         company: toCompany
       });
 
       if (!targetItem) {
-        // Create new stock entry
+        // Create new item for target company if it doesn't exist
         targetItem = await InventoryItem.create({
           productName: sourceItem.productName,
           productImage: sourceItem.productImage,
-          qty,
-          numberOfBoxes,
+          qty: qty, // Start with the moved amount
+          numberOfBoxes: numberOfBoxes,
           company: toCompany,
+          barcodeId: sourceItem.barcodeId, // Inherit barcode info if needed
+          barcodeUrl: sourceItem.barcodeUrl,
+          status: "active",
           trackingHistory: []
         });
       } else {
-        // Increase stock
-        targetItem.qty += qty;
-        targetItem.numberOfBoxes += numberOfBoxes;
+        // Add to existing target item
+        targetItem.qty = targetItem.qty + qty;
+        targetItem.numberOfBoxes = targetItem.numberOfBoxes + numberOfBoxes;
       }
 
-      // Log IN movement into target item
+      // Log the movement in Target History (It comes IN to them)
       targetItem.trackingHistory.push({
         type: "in",
-        qty,
-        numberOfBoxes,
+        qty: qty,
+        numberOfBoxes: numberOfBoxes,
         fromCompany: sourceItem.company,
-        toCompany,
-        time: new Date()
+        toCompany: toCompany,
+        timestamp: new Date()
       });
 
       await targetItem.save();
 
       return res.status(200).json({
-        message: "Stock moved successfully",
+        message: "Stock moved successfully (Subtracted from Source, Added to Target)",
         sourceItem,
         targetItem
       });
     }
 
-    // =============================
-    // 🔥  IN CASE
-    // =============================
+    // ============================================================
+    // 🔥 CASE: ADDING NEW STOCK (IN)
+    // ACTION: ADD to Source (Usually from external vendor)
+    // ============================================================
     if (type === "in") {
-      sourceItem.qty += qty;
-      sourceItem.numberOfBoxes += numberOfBoxes;
+      // ✅ ADDITION OPERATION
+      sourceItem.qty = sourceItem.qty + qty;
+      sourceItem.numberOfBoxes = sourceItem.numberOfBoxes + numberOfBoxes;
 
       sourceItem.trackingHistory.push({
         type: "in",
-        qty,
-        numberOfBoxes,
-        fromCompany: "external",
+        qty: qty,
+        numberOfBoxes: numberOfBoxes,
+        fromCompany: "external", // Assuming 'in' without move logic implies external source
         toCompany: sourceItem.company,
-        time: new Date()
+        timestamp: new Date()
       });
 
       await sourceItem.save();
 
       return res.status(200).json({
-        message: "Stock added into company",
-        item: sourceItem
+        message: "Stock added successfully",
+        data: sourceItem
       });
     }
 
