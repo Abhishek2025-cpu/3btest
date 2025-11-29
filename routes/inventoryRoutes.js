@@ -22,4 +22,7 @@ router.put(
   inventoryController.updateInventoryItem
 );
 
+
+router.delete("/delete/:id", inventoryController.deleteInventoryItem);
+
 module.exports = router;
