@@ -22,6 +22,9 @@ router.put(
   inventoryController.updateInventoryItem
 );
 
+router.get("/single/:id", inventoryController.getInventoryItem);
+
+
 
 router.delete("/delete/:id", inventoryController.deleteInventoryItem);
 

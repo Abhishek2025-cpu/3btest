@@ -74,6 +74,24 @@ exports.getInventoryItems = async (req, res) => {
   }
 };
 
+exports.getInventoryItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const item = await InventoryItem.findById(id);
+
+    if (!item) {
+      return res.status(404).json({ message: "Inventory item not found" });
+    }
+
+    res.status(200).json({ data: item });
+  } catch (err) {
+    console.error("Get single item error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+
 // ➤ Update Item
 exports.updateInventoryItem = async (req, res) => {
   try {
