@@ -492,6 +492,103 @@ exports.getAllProducts = async (req, res) => {
 };
 
 
+exports.getSingleProduct = async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    let product;
+
+    // 1️⃣ Try fetching by ObjectId (_id)
+    if (mongoose.isValidObjectId(productId)) {
+      product = await Product.findById(productId)
+        .populate("categoryId", "name")
+        .lean();
+    }
+
+    // 2️⃣ If not found, try fetching by custom productId field (string)
+    if (!product) {
+      product = await Product.findOne({ productId: productId })
+        .populate("categoryId", "name")
+        .lean();
+    }
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "❌ Product not found"
+      });
+    }
+
+    // 3️⃣ Fetch dimensions
+    const dimRes = await axios.get(
+      "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+    );
+    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+    const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+
+    // 4️⃣ Fetch all orders once
+    const allOrders = await Order.find()
+      .populate("userId", "name")
+      .lean();
+
+    // 5️⃣ Filter orders for this product
+    const productOrders = [];
+    allOrders.forEach(order => {
+      order.products.forEach(prod => {
+        if (prod.productId?.toString() === product._id.toString()) {
+          productOrders.push({
+            customerName: order.userId?.name || "Unknown",
+            qty: prod.quantity,
+            orderStatus: prod.currentStatus,
+            orderDate: order.createdAt,
+            companyName: prod.company || null
+          });
+        }
+      });
+    });
+
+    // 6️⃣ Translate fields
+    const translated = await translateResponse(
+      req,
+      [product],
+      productFieldsToTranslate
+    );
+    const p = translated[0];
+
+    const hasCategory =
+      p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
+
+    // 7️⃣ Final product response
+    const formattedProduct = {
+      ...p,
+      dimensions: Array.isArray(p.dimensions)
+        ? p.dimensions.map(id => dimMap.get(id?.toString()) || id)
+        : [],
+      orders: productOrders,
+      categoryName: hasCategory ? p.categoryId.name : null,
+      categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "✅ Product fetched successfully",
+      product: formattedProduct
+    });
+  } catch (err) {
+    console.error("❌ Error fetching product:", err);
+    return res.status(500).json({
+      success: false,
+      message: "❌ Failed to fetch product",
+      error: err.message
+    });
+  }
+};
+
+
+
+
+
+
 
 
 
