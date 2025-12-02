@@ -7,6 +7,8 @@ const { translateResponse } = require('../services/translation.service');
 const Category = require('../models/Category');
 const crypto = require('crypto');
 const Notification = require("../models/Notification");
+const Order = require("../models/Order");
+const User = require("../models/User");
 
 
 
@@ -270,7 +272,8 @@ exports.createProduct = async (req, res) => {
       pricePerPiece,
       totalPiecesPerBox,
       discountPercentage,
-      position // ← IMPORTANT: ensure this exists in req.body
+      position, // ← IMPORTANT: ensure this exists in req.body
+      companyName   
     } = req.body;
 
     // 1️⃣ PARSE POSITION & CLAMP + SHIFT
@@ -340,6 +343,7 @@ exports.createProduct = async (req, res) => {
       categoryId,
       name,
       about,
+      companyName, 
       description,
       dimensions: dimensions.split(',').map(d => d.trim()),
       quantity: parsedQty,
@@ -380,16 +384,18 @@ exports.createProduct = async (req, res) => {
 
 
 
+const axios = require("axios");
+
 exports.getAllProducts = async (req, res) => {
   try {
     // 1️⃣ Total count
     const totalProducts = await Product.countDocuments();
 
-    // 2️⃣ Calculate date 15 days ago
+    // 2️⃣ Date 15 days ago
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-    // 3️⃣ Fetch RECENT products only
+    // 3️⃣ Recent products
     const recentProductsDB = await Product.find({
       createdAt: { $gte: fifteenDaysAgo }
     })
@@ -397,41 +403,81 @@ exports.getAllProducts = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // 4️⃣ Fetch NON-RECENT products
+    // 4️⃣ Old products
     const oldProductsDB = await Product.find({
       createdAt: { $lt: fifteenDaysAgo }
     })
       .populate("categoryId", "name")
-      .sort({ position: 1 }) // sorted by position ASC
+      .sort({ position: 1 })
       .lean();
 
-    // 5️⃣ Combine (recent first)
+    // 5️⃣ Merge products
     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
 
-    // 6️⃣ For translation system
+    // 6️⃣ Fetch dimensions
+    const dimRes = await axios.get(
+      "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+    );
+
+    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+    const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+
+    // ⭐ 7️⃣ Fetch ALL orders once
+    const allOrders = await Order.find()
+      .populate("userId", "name")
+      .lean();
+
+    // 8️⃣ Translate
     const translatedProducts = await translateResponse(
       req,
       productsFromDB,
       productFieldsToTranslate
     );
 
-    // 7️⃣ Final formatting
+    // 9️⃣ Add dimensions + orders array
     const formattedProducts = translatedProducts.map(p => {
       const hasCategory =
         p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
 
+      // 🔍 Find all orders containing this product
+      const productOrders = [];
+
+      allOrders.forEach(order => {
+        order.products.forEach(prod => {
+          if (prod.productId?.toString() === p._id.toString()) {
+            productOrders.push({
+              customerName: order.userId?.name || "Unknown",
+              qty: prod.quantity,
+              orderStatus: prod.currentStatus,
+              orderDate: order.createdAt
+            });
+          }
+        });
+      });
+
       return {
         ...p,
+
+        // dimension mapping
+        dimensions: Array.isArray(p.dimensions)
+          ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
+          : [],
+
+        // ⭐ ADD THIS (your requirement)
+        orders: productOrders,
+
+        // category fixes
         categoryName: hasCategory ? p.categoryId.name : null,
-        categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId,
+        categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
       };
     });
 
+    // 🔟 Response
     res.status(200).json({
       success: true,
       message: "✅ Products fetched successfully",
       totalProducts,
-      recentProducts: recentProductsDB.length, // optional
+      recentProducts: recentProductsDB.length,
       products: formattedProducts
     });
 
@@ -444,6 +490,8 @@ exports.getAllProducts = async (req, res) => {
     });
   }
 };
+
+
 
 
 

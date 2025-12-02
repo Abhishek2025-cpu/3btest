@@ -7,11 +7,12 @@ const productSchema = new mongoose.Schema({
   // We also remove the 'ref' here because the link will be virtual.
   categoryId: { type: String, required: false },
   name: { type: String, required: true },
+  companyName: { type: String, required: false },
   about: { type: String },
-   description: { type: String },
-   position: { type: Number, default: null },
+  description: { type: String },
+  position: { type: Number, default: null },
+  dimensions: [{ type: String, required: false }],
 
-  dimensions: [String],
   quantity: { type: Number, default: 0 },
   pricePerPiece: { type: Number, required: true },
   totalPiecesPerBox: { type: Number, required: true },
