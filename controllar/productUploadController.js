@@ -491,95 +491,110 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-
 exports.getSingleProduct = async (req, res) => {
   try {
-    const productId = req.params.id;
+    // 1️⃣ Sanitize ID (Remove spaces/newlines)
+    const rawId = req.params.id;
+    const id = rawId ? rawId.trim() : null;
 
-    let product;
+    console.log(`🔍 Request ID: '${rawId}'`);
+    console.log(`🧼 Trimmed ID: '${id}'`);
 
-    // 1️⃣ Try fetching by ObjectId (_id)
-    if (mongoose.isValidObjectId(productId)) {
-      product = await Product.findById(productId)
-        .populate("categoryId", "name")
-        .lean();
-    }
-
-    // 2️⃣ If not found, try fetching by custom productId field (string)
-    if (!product) {
-      product = await Product.findOne({ productId: productId })
-        .populate("categoryId", "name")
-        .lean();
-    }
-
-    if (!product) {
-      return res.status(404).json({
+    // 2️⃣ Validate Object ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("❌ Invalid ID format");
+      return res.status(400).json({
         success: false,
-        message: "❌ Product not found"
+        message: "❌ Invalid Product ID format",
       });
     }
 
-    // 3️⃣ Fetch dimensions
+    // 3️⃣ Fetch the product
+    const productDB = await Product.findById(id)
+      .populate("categoryId", "name")
+      .lean();
+
+    if (!productDB) {
+      console.log("❌ Database returned null for this ID");
+      return res.status(404).json({
+        success: false,
+        message: "❌ Product not found",
+      });
+    }
+
+    // 4️⃣ Fetch dimensions (Same logic as getAllProducts)
+    // Note: In production, consider caching this call
     const dimRes = await axios.get(
       "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
     );
-    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
-    const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
 
-    // 4️⃣ Fetch all orders once
-    const allOrders = await Order.find()
+    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+    const dimMap = new Map(allDimensions.map((d) => [d._id.toString(), d.value]));
+
+    // 5️⃣ Fetch ONLY orders related to this product
+    const relatedOrders = await Order.find({ "products.productId": id })
       .populate("userId", "name")
       .lean();
 
-    // 5️⃣ Filter orders for this product
-    const productOrders = [];
-    allOrders.forEach(order => {
-      order.products.forEach(prod => {
-        if (prod.productId?.toString() === product._id.toString()) {
-          productOrders.push({
-            customerName: order.userId?.name || "Unknown",
-            qty: prod.quantity,
-            orderStatus: prod.currentStatus,
-            orderDate: order.createdAt,
-            companyName: prod.company || null
-          });
-        }
-      });
-    });
-
-    // 6️⃣ Translate fields
-    const translated = await translateResponse(
+    // 6️⃣ Translate (Wrap in array to reuse logic)
+    const translatedProducts = await translateResponse(
       req,
-      [product],
+      [productDB],
       productFieldsToTranslate
     );
-    const p = translated[0];
+    
+    const p = translatedProducts[0]; // Extract the single product
 
+    // 7️⃣ Format Logic
     const hasCategory =
       p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
 
-    // 7️⃣ Final product response
+    const productOrders = [];
+
+    // Filter orders specific to this product
+    relatedOrders.forEach((order) => {
+      const prodItem = order.products.find(
+        (prod) => prod.productId?.toString() === p._id.toString()
+      );
+
+      if (prodItem) {
+        productOrders.push({
+          customerName: order.userId?.name || "Unknown",
+          qty: prodItem.quantity,
+          orderStatus: prodItem.currentStatus,
+          orderDate: order.createdAt,
+        });
+      }
+    });
+
     const formattedProduct = {
       ...p,
+      // Map dimensions
       dimensions: Array.isArray(p.dimensions)
-        ? p.dimensions.map(id => dimMap.get(id?.toString()) || id)
+        ? p.dimensions.map((dId) => dimMap.get(dId?.toString()) || null)
         : [],
+      
+      // Add Orders
       orders: productOrders,
+
+      // Fix Category
       categoryName: hasCategory ? p.categoryId.name : null,
-      categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
+      categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId,
     };
 
-    return res.status(200).json({
+    // 8️⃣ Response
+    res.status(200).json({
       success: true,
       message: "✅ Product fetched successfully",
-      product: formattedProduct
+      product: formattedProduct,
     });
+
   } catch (err) {
-    console.error("❌ Error fetching product:", err);
-    return res.status(500).json({
+    console.error("❌ Error fetching single product:", err);
+    res.status(500).json({
       success: false,
       message: "❌ Failed to fetch product",
-      error: err.message
+      error: err.message,
     });
   }
 };
