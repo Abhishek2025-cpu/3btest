@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const workerController = require('../controllar/workerController');
+const { uploadProduct } = require("../middleware/upload");
 
 // CRUD routes
-router.post('/add-task', workerController.createWorker);
+router.post('/add-task', uploadProduct.single("selfie"), workerController.createWorker);
+
 router.get('/get-task', workerController.getAllWorkers);
 router.get('/employee-task/:id', workerController.getWorkersByEmployeeId);
 router.get('/:id', workerController.getWorkerById);

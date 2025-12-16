@@ -17,6 +17,11 @@ const WorkerSchema = new mongoose.Schema(
       required: true
     },
 
+     selfie: {
+      url: { type: String, default: null },
+      fileId: { type: String, default: null } // GCS path
+    },
+
     machine: String,
     item: String,
 
