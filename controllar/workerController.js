@@ -22,15 +22,30 @@ exports.createWorker = async (req, res) => {
       itemName
     } = req.body;
 
-    // ✅ Check employee
     const employee = await Employee.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    let selfieData = null;
+    // ✅ Parse frameLength JSON array
+    let frameLengthArray = [];
+    if (frameLength) {
+      try {
+        const parsed = JSON.parse(frameLength);
+        if (!Array.isArray(parsed)) {
+          return res.status(400).json({
+            message: "frameLength must be an array"
+          });
+        }
+        frameLengthArray = parsed.map(Number);
+      } catch (err) {
+        return res.status(400).json({
+          message: "Invalid frameLength format. Use [455,456,457]"
+        });
+      }
+    }
 
-    // ✅ Optional file upload
+    let selfieData = null;
     if (req.file) {
       const uploaded = await uploadBufferToGCS(
         req.file.buffer,
@@ -48,7 +63,7 @@ exports.createWorker = async (req, res) => {
     const worker = new Worker({
       time,
       shift,
-      frameLength,
+      frameLength: frameLengthArray,
       numberOfBox,
       boxWeight,
       frameWeight,
@@ -60,13 +75,14 @@ exports.createWorker = async (req, res) => {
     });
 
     const savedWorker = await worker.save();
-
     res.status(201).json(savedWorker);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.updateWorker = async (req, res) => {

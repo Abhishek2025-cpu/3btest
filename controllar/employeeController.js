@@ -24,37 +24,68 @@ function generatePassword(name, adhar) {
   return `${namePart}${adharPart}`;
 }
 
+
+
 exports.createEmployee = async (req, res) => {
   try {
     const { name, mobile, role, dob, adharNumber } = req.body;
 
     if (!name || !mobile || !role) {
-      return res.status(400).json({ message: 'Name, Mobile, and Role are required.' });
+      return res.status(400).json({
+        message: "Name, Mobile, and Role are required."
+      });
     }
-    if (!req.file) {
-      return res.status(400).json({ message: 'Adhar image is required.' });
+
+    // ✅ Required adhar image
+    if (!req.files || !req.files.adharImage) {
+      return res.status(400).json({
+        message: "Adhar image is required."
+      });
     }
 
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
-      return res.status(400).json({ message: 'Mobile number already exists.' });
+      return res.status(400).json({
+        message: "Mobile number already exists."
+      });
     }
 
     const dobDate = dob ? new Date(dob) : null;
     if (dob && isNaN(dobDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid date of birth format.' });
+      return res.status(400).json({
+        message: "Invalid date of birth format."
+      });
     }
 
-    // --- Generate new EID + Password ---
+    // --- Generate EID & Password ---
     const eid = generateEid();
     const password = generatePassword(name, adharNumber);
 
-    const { url: adharImageUrl } = await uploadBufferToGCS(
-      req.file.buffer,
-      req.file.originalname,
-      'adhar-images',
-      req.file.mimetype
+    // ✅ Upload Adhar Image
+    const adharFile = req.files.adharImage[0];
+    const adharUpload = await uploadBufferToGCS(
+      adharFile.buffer,
+      adharFile.originalname,
+      "adhar-images",
+      adharFile.mimetype
     );
+
+    // ✅ Optional Profile Pic
+    let profilePic = null;
+    if (req.files.profilePic) {
+      const profileFile = req.files.profilePic[0];
+      const profileUpload = await uploadBufferToGCS(
+        profileFile.buffer,
+        profileFile.originalname,
+        "employee/profile-pics",
+        profileFile.mimetype
+      );
+
+      profilePic = {
+        url: profileUpload.url,
+        fileId: profileUpload.id
+      };
+    }
 
     const employee = await Employee.create({
       name,
@@ -63,19 +94,22 @@ exports.createEmployee = async (req, res) => {
       dob: dobDate,
       eid,
       password,
-      adharNumber: adharNumber || '',
-      adharImageUrl,
+      adharNumber: adharNumber || "",
+      adharImageUrl: adharUpload.url,
+      profilePic
     });
 
     res.status(201).json({
       message: "Employee created successfully",
       password: employee.password,
-      employee: employee,
+      employee
     });
 
   } catch (error) {
-    console.error('Create Employee Error:', error.message, error.stack);
-    res.status(500).json({ message: 'Failed to create employee due to a server error.' });
+    console.error("Create Employee Error:", error);
+    res.status(500).json({
+      message: "Failed to create employee due to a server error."
+    });
   }
 };
 

@@ -10,6 +10,10 @@ const employeeSchema = new mongoose.Schema({
   password: String,
   adharNumber: String,
   adharImageUrl: String,
+    profilePic: {
+      url: { type: String, default: null },
+      fileId: { type: String, default: null }
+    },
   status: { type: Boolean, default: true },
   statusHistory: [
     {
