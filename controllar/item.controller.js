@@ -629,6 +629,32 @@ exports.getAllItems = async (req, res) => {
   }
 };
 
+// Get a single item by ID
+exports.getItemById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // findById automatically looks for the _id field
+    const item = await MainItem.findById(id);
+
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    res.status(200).json(item);
+  } catch (error) {
+    console.error("Error fetching item by ID:", error);
+
+    // Handle case where ID format is invalid (Mongoose CastError)
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid ID format' });
+    }
+
+    res.status(500).json({ error: 'Failed to fetch item' });
+  }
+};
+
+
 // You might want a new function to get a single item with its boxes
 exports.getItemByItemNo = async (req, res) => {
   try {
