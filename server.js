@@ -6,16 +6,36 @@ const connectDB = require('./config/db');
 dotenv.config();
 const app = express();
 
-// Middleware
+/* ===========================
+   🔥 GLOBAL NO-CACHE MIDDLEWARE
+   Fixes 304 issue on Cloud Run
+   =========================== */
+app.use((req, res, next) => {
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+});
+
+/* ===========================
+   MIDDLEWARE
+   =========================== */
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json({ limit: '1500mb' }));
 app.use(express.urlencoded({ limit: '1500mb', extended: true }));
 
-// Routes
+/* ===========================
+   ROUTES
+   =========================== */
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productUploadRoutes'));
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
@@ -44,43 +64,51 @@ app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
 app.use('/api/machines', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
+
 const mixtureTableRoutes = require("./routes/mixtureTableRoutes");
 app.use("/api/mixture-tables", mixtureTableRoutes);
-app.use('/api/task-transfers', require('./routes/taskTransferRoutes')); 
-app.use('/api',require('./routes/testRoute'));
+
+app.use('/api/task-transfers', require('./routes/taskTransferRoutes'));
+app.use('/api', require('./routes/testRoute'));
+
 const notificationRoutes = require("./routes/TestnotificationRoutes");
 app.use("/api/notifications", notificationRoutes);
+
 const workerRoutes = require('./routes/workerRoutes');
 app.use('/api/workers', workerRoutes);
+
 const inventoryRoutes = require("./routes/inventoryRoutes");
 app.use("/api/inventory", inventoryRoutes);
 
-// Default route
+/* ===========================
+   HEALTH & TEST ROUTES
+   =========================== */
 app.get('/', (req, res) => res.send('API is running...'));
 app.post('/api/test', (req, res) => res.send('Hello from API'));
 
-// Request logging middleware
+/* ===========================
+   REQUEST LOGGING
+   =========================== */
 app.use((req, res, next) => {
-  console.log(`[REQUEST] ${req.method} ${req.url} - Body:`, req.body);
+  console.log(`[REQUEST] ${req.method} ${req.url}`);
   next();
 });
 
-// Start server after DB connection
-
+/* ===========================
+   SERVER START
+   =========================== */
 const PORT = process.env.PORT || 8080;
 
 connectDB()
   .then(() => {
     console.log("✅ Database connected successfully");
- app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
-
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
   })
   .catch(err => {
     console.error("❌ DB connection failed:", err.message);
     process.exit(1);
   });
-
 
 console.log("TRANSLATION_API_KEY:", process.env.TRANSLATION_API_KEY);
