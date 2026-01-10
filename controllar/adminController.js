@@ -1,5 +1,6 @@
 const Admin = require('../models/Admin');
 const SubAdmin = require('../models/SubAdmin');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 
@@ -40,6 +41,8 @@ exports.register = async (req, res) => {
 
 // ✅ Admin Login (Plain password check)
 
+
+
 exports.login = async (req, res) => {
   try {
     const { number, password } = req.body;
@@ -52,7 +55,6 @@ exports.login = async (req, res) => {
     let role = 'admin';
 
     if (!user) {
-      // Try SubAdmin if not found in Admin
       user = await SubAdmin.findOne({ phone: number }).select('+password');
       role = 'subadmin';
     }
@@ -61,13 +63,11 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Check password
+    // Password validation
     let isMatch = false;
     if (role === 'admin') {
-      // Admin passwords are plain text in your schema
       isMatch = user.password === password;
     } else {
-      // SubAdmin passwords are hashed
       isMatch = await bcrypt.compare(password, user.password);
     }
 
@@ -75,7 +75,14 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Remove sensitive fields
+    // 🔑 Generate token ONLY at login
+    const token = crypto.randomBytes(32).toString('hex');
+
+    // (Optional) store token for record/logging only
+    user.lastLoginToken = token;
+    user.lastLoginAt = new Date();
+    await user.save();
+
     const userObject = user.toObject();
     delete userObject.password;
     delete userObject.otp;
@@ -83,15 +90,18 @@ exports.login = async (req, res) => {
 
     res.status(200).json({
       message: 'Login successful',
-      role,          // returns 'admin' or 'subadmin'
+      role,
+      token, // 🔥 generated only once at login
       user: userObject,
     });
 
   } catch (err) {
-    console.error("Login Error:", err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Login Error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
+
+
 
 // ✅ Update Profile Photo
 // exports.updateProfilePhoto = async (req, res) => {
