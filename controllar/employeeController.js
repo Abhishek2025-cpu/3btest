@@ -28,40 +28,30 @@ function generatePassword(name, adhar) {
 
 exports.createEmployee = async (req, res) => {
   try {
-    const { name, mobile, role, dob, adharNumber } = req.body;
+    const { name, mobile, dob, adharNumber, roles } = req.body;
 
-    if (!name || !mobile || !role) {
+    if (!name || !mobile || !roles || roles.length === 0) {
       return res.status(400).json({
-        message: "Name, Mobile, and Role are required."
+        message: "Name, Mobile and at least one role are required."
       });
     }
 
-    // ✅ Required adhar image
+    // Aadhaar required
     if (!req.files || !req.files.adharImage) {
-      return res.status(400).json({
-        message: "Adhar image is required."
-      });
+      return res.status(400).json({ message: "Adhar image is required." });
     }
 
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
-      return res.status(400).json({
-        message: "Mobile number already exists."
-      });
+      return res.status(400).json({ message: "Mobile number already exists." });
     }
 
     const dobDate = dob ? new Date(dob) : null;
     if (dob && isNaN(dobDate.getTime())) {
-      return res.status(400).json({
-        message: "Invalid date of birth format."
-      });
+      return res.status(400).json({ message: "Invalid DOB format." });
     }
 
-    // --- Generate EID & Password ---
-    const eid = generateEid();
-    const password = generatePassword(name, adharNumber);
-
-    // ✅ Upload Adhar Image
+    // Upload Aadhaar
     const adharFile = req.files.adharImage[0];
     const adharUpload = await uploadBufferToGCS(
       adharFile.buffer,
@@ -70,7 +60,7 @@ exports.createEmployee = async (req, res) => {
       adharFile.mimetype
     );
 
-    // ✅ Optional Profile Pic
+    // Optional profile pic
     let profilePic = null;
     if (req.files.profilePic) {
       const profileFile = req.files.profilePic[0];
@@ -87,21 +77,30 @@ exports.createEmployee = async (req, res) => {
       };
     }
 
+    // 🔐 Generate credentials for each role
+    const roleAccounts = roles.map(role => ({
+      role,
+      eid: generateEid(),
+      password: generatePassword(name, adharNumber)
+    }));
+
     const employee = await Employee.create({
       name,
       mobile,
-      role,
       dob: dobDate,
-      eid,
-      password,
       adharNumber: adharNumber || "",
       adharImageUrl: adharUpload.url,
-      profilePic
+      profilePic,
+      roles: roleAccounts
     });
 
     res.status(201).json({
       message: "Employee created successfully",
-      password: employee.password,
+      credentials: employee.roles.map(r => ({
+        role: r.role,
+        eid: r.eid,
+        password: r.password
+      })),
       employee
     });
 
@@ -112,6 +111,7 @@ exports.createEmployee = async (req, res) => {
     });
   }
 };
+
 
 
 
