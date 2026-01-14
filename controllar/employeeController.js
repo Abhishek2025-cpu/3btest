@@ -281,68 +281,86 @@ exports.deleteEmployee = async (req, res) => {
 };
 
 
-
 const JWT_SECRET = crypto.randomBytes(32).toString("hex");
+
 
 exports.loginEmployee = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    const { mobile, role, password } = req.body;
 
-    if (!mobile || !password) {
+    if (!mobile || !role || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Mobile number and password are required.',
+        message: "Mobile, role and password are required.",
       });
     }
 
-    const employee = await Employee.findOne({ mobile });
+    const employee = await Employee.findOne({ mobile: mobile.trim() });
 
-    if (!employee || employee.password !== password) {
+    if (!employee) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid mobile number or password.',
+        message: "Invalid mobile number or password.",
+      });
+    }
+
+    const roleAccount = employee.roles.find(
+      r => r.role.toLowerCase() === role.toLowerCase()
+    );
+
+    if (!roleAccount) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid role for this employee.",
+      });
+    }
+
+    if (roleAccount.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid mobile number or password.",
       });
     }
 
     if (employee.status === false) {
       return res.status(403).json({
         success: false,
-        message: 'Your account is inactive. Please contact the administrator.',
+        message: "Your account is inactive. Please contact administrator.",
       });
     }
 
-    // FIXED: use JWT_SECRET instead of process.env.JWT_SECRET
+    // ✅ USING PREVIOUS TOKEN GENERATION LIBRARY
     const token = jwt.sign(
       {
-        id: employee._id,
+        employeeId: employee._id,
+        role: roleAccount.role,
+        eid: roleAccount.eid,
         mobile: employee.mobile,
-        role: employee.role,
       },
-      JWT_SECRET, 
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    const employeeData = {
-      _id: employee._id,
-      name: employee.name,
-      role: employee.role,
-      mobile: employee.mobile,
-      eid: employee.eid
-    };
-
     res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       token,
-      employee: employeeData
+      employee: {
+        _id: employee._id,
+        name: employee.name,
+        mobile: employee.mobile,
+        role: roleAccount.role,
+        eid: roleAccount.eid,
+      },
     });
 
   } catch (error) {
-    console.error('Login Employee Error:', error.message, error.stack);
+    console.error("Login Employee Error:", error);
     res.status(500).json({
       success: false,
-      message: 'An internal server error occurred during login.',
+      message: "Internal server error during login.",
     });
   }
 };
+
 
