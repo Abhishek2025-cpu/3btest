@@ -600,7 +600,69 @@ exports.getSingleProduct = async (req, res) => {
 };
 
 
+exports.getProductByQr = async (req, res) => {
+  try {
+    const { productId } = req.params;
 
+    // ✅ USE Product (not ProductUpload)
+    const product = await Product.findById(productId)
+      .populate("category") // virtual populate
+      .lean();
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // 2️⃣ Orders containing this product
+    const orders = await Order.find({
+      "products.productId": productId
+    })
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 3️⃣ Build nested orders
+    const productOrders = [];
+
+    orders.forEach(order => {
+      order.products.forEach(p => {
+        if (p.productId?.toString() === productId) {
+          productOrders.push({
+            orderMongoId: order._id,
+            orderId: order.orderId,
+            customerName: order.userId?.name || "Unknown",
+            customerEmail: order.userId?.email || null,
+            quantity: p.quantity,
+            priceAtPurchase: p.priceAtPurchase,
+            color: p.color,
+            orderStatus: p.currentStatus,
+            orderDate: order.createdAt
+          });
+        }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      product: {
+        ...product,
+        categoryName: product.category?.name || null,
+        orders: productOrders
+      }
+    });
+
+  } catch (error) {
+    console.error("QR Scan Product Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product via QR",
+      error: error.message
+    });
+  }
+};
 
 
 

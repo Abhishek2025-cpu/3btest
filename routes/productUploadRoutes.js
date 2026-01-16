@@ -15,6 +15,7 @@ router.post('/add',
 
 
 router.get('/all', productController.getAllProducts);
+router.get('/scan/:productId', productController.getProductByQr);
 router.get('/:id', productController.getSingleProduct);
 
 router.put('/update/:productId', uploadProduct.fields([
