@@ -664,6 +664,76 @@ exports.getProductByQr = async (req, res) => {
   }
 };
 
+const ProductMovement = require("../models/ProductMovement");
+
+exports.createProductMovement = async (req, res) => {
+  try {
+    const {
+      productName,
+      productQty,
+      mrpPerBox,
+      filledBy,
+      toCompany = null,
+      toClient = null,
+      qtyByClient,
+      direction
+    } = req.body;
+
+    // uploaded files
+    const productImages = (req.files?.productImages || []).map(file => ({
+      id: file.filename,
+      url: file.path
+    }));
+
+    const colorImages = (req.files?.colorImages || []).map(file => ({
+      id: file.filename,
+      url: file.path
+    }));
+
+    // validation
+    if (
+      !productName ||
+      !productQty ||
+      !mrpPerBox ||
+      !filledBy ||
+      !qtyByClient ||
+      !direction
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
+
+    const movement = await ProductMovement.create({
+      productName,
+      productQty,
+      mrpPerBox,
+      productImages,
+      colorImages,
+      filledBy,
+      toCompany,
+      toClient,
+      qtyByClient,
+      direction
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Product movement saved successfully",
+      movement
+    });
+
+  } catch (error) {
+    console.error("Movement Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save product movement",
+      error: error.message
+    });
+  }
+};
+
 
 
 

@@ -29,4 +29,15 @@ router.delete(
 );
 router.get('/filter-sort', productController.filterAndSortProducts);
 
+router.post(
+  '/movement',
+  uploadProduct.fields([
+    { name: 'productImages', maxCount: 5 },
+    { name: 'colorImages', maxCount: 5 }
+  ]),
+  productController.createProductMovement
+);
+
+
+
 module.exports = router;
