@@ -13,7 +13,7 @@ router.post('/add',
   productController.createProduct
 );
 
-
+router.get('/get-movement', productController.getProductMovements);
 router.get('/all', productController.getAllProducts);
 router.get('/scan/:productId', productController.getProductByQr);
 router.get('/:id', productController.getSingleProduct);
@@ -37,6 +37,7 @@ router.post(
   ]),
   productController.createProductMovement
 );
+
 
 
 

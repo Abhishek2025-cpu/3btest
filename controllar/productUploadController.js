@@ -735,7 +735,61 @@ exports.createProductMovement = async (req, res) => {
 };
 
 
+exports.getProductMovements = async (req, res) => {
+  try {
+    const {
+      productName,
+      direction,
+      filledBy,
+      fromDate,
+      toDate,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
+    const filter = {};
+
+    // Optional filters
+    if (productName) {
+      filter.productName = { $regex: productName, $options: "i" };
+    }
+
+    if (direction) {
+      filter.direction = direction;
+    }
+
+    if (filledBy) {
+      filter.filledBy = { $regex: filledBy, $options: "i" };
+    }
+
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    const movements = await ProductMovement.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+    const total = await ProductMovement.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      movements,
+    });
+  } catch (error) {
+    console.error("Get movement error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product movements",
+    });
+  }
+};
 
 
 
