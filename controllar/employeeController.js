@@ -286,12 +286,12 @@ const JWT_SECRET = crypto.randomBytes(32).toString("hex");
 
 exports.loginEmployee = async (req, res) => {
   try {
-    const { mobile, role, password } = req.body;
+    const { mobile, password } = req.body;
 
-    if (!mobile || !role || !password) {
+    if (!mobile || !password) {
       return res.status(400).json({
         success: false,
-        message: "Mobile, role and password are required.",
+        message: "Mobile and password are required.",
       });
     }
 
@@ -304,37 +304,34 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    const roleAccount = employee.roles.find(
-      r => r.role.toLowerCase() === role.toLowerCase()
-    );
-
-    if (!roleAccount) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid role for this employee.",
-      });
-    }
-
-    if (roleAccount.password !== password) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid mobile number or password.",
-      });
-    }
-
-    if (employee.status === false) {
+    if (!employee.status) {
       return res.status(403).json({
         success: false,
         message: "Your account is inactive. Please contact administrator.",
       });
     }
 
-    // ✅ USING PREVIOUS TOKEN GENERATION LIBRARY
+    // ✅ Filter roles that match password & are active
+    const matchedRoles = employee.roles.filter(
+      r => r.password === password && r.status === true
+    );
+
+    if (matchedRoles.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid mobile number or password.",
+      });
+    }
+
+    // ✅ FIRST role will be logged in
+    const activeRole = matchedRoles[0];
+
+    // ✅ Generate token with first role
     const token = jwt.sign(
       {
         employeeId: employee._id,
-        role: roleAccount.role,
-        eid: roleAccount.eid,
+        role: activeRole.role,
+        eid: activeRole.eid,
         mobile: employee.mobile,
       },
       JWT_SECRET,
@@ -345,12 +342,24 @@ exports.loginEmployee = async (req, res) => {
       success: true,
       message: "Login successful",
       token,
+
       employee: {
         _id: employee._id,
         name: employee.name,
         mobile: employee.mobile,
-        role: roleAccount.role,
-        eid: roleAccount.eid,
+
+        // 👇 active login role
+        activeRole: {
+          role: activeRole.role,
+          eid: activeRole.eid,
+        },
+
+        // 👇 all available roles
+        roles: employee.roles.map(r => ({
+          role: r.role,
+          eid: r.eid,
+          status: r.status,
+        })),
       },
     });
 
@@ -362,5 +371,6 @@ exports.loginEmployee = async (req, res) => {
     });
   }
 };
+
 
 
