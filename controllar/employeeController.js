@@ -7,6 +7,7 @@ const Employee = require('../models/Employee');
 const axios = require('axios');
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 
 
 
@@ -280,9 +281,60 @@ exports.deleteEmployee = async (req, res) => {
   }
 };
 
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 
-const JWT_SECRET = crypto.randomBytes(32).toString("hex");
-
+// ================================
+// HARDCODED USERS
+// ================================
+const HARDCODED_USERS = [
+  {
+    _id: "HARDCODED_USER_001",
+    name: "Hiten Patadiya",
+    mobile: "9974399797",
+    dob: new Date("2026-01-19"),
+    adharNumber: "934923429",
+    adharImageUrl:
+      "https://storage.googleapis.com/3bprofiles-products/adhar-images/176882…",
+    profilePic: null,
+    status: true,
+    roles: [
+      {
+        _id: "696e1a6e505e7b291942e8e0",
+        role: "Operator",
+        eid: "3B8601",
+        password: "hite9349",
+        status: true,
+      },
+      {
+        _id: "696e1a6e505e7b291942e8e1",
+        role: "Helper",
+        eid: "3B4960",
+        password: "hite9349",
+        status: true,
+      },
+    ],
+  },
+  {
+    _id: "6967543eb6d5cecd714ee509",
+    name: "Md Gafur",
+    mobile: "9279525694",
+    dob: new Date("2008-01-01"),
+    adharNumber: "7626 2349 2144",
+    adharImageUrl:
+      "https://storage.googleapis.com/3bprofiles-products/adhar-images/176837…",
+    profilePic: null,
+    status: true,
+    roles: [
+      {
+        _id: "6967543eb6d5cecd714ee50a",
+        role: "Helper",
+        eid: "3B1629",
+        password: "md g7626",
+        status: true,
+      },
+    ],
+  },
+];
 
 exports.loginEmployee = async (req, res) => {
   try {
@@ -291,83 +343,148 @@ exports.loginEmployee = async (req, res) => {
     if (!mobile || !password) {
       return res.status(400).json({
         success: false,
-        message: "Mobile and password are required.",
+        message: "Mobile and password are required",
       });
     }
 
-    const employee = await Employee.findOne({ mobile: mobile.trim() });
-
-    if (!employee) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid mobile number or password.",
-      });
-    }
-
-    if (!employee.status) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account is inactive. Please contact administrator.",
-      });
-    }
-
-    // ✅ Filter roles that match password & are active
-    const matchedRoles = employee.roles.filter(
-      r => r.password === password && r.status === true
+    // ----------------------
+    // 1️⃣ HARDCODED USERS LOGIN
+    // ----------------------
+    const hardcodedUser = HARDCODED_USERS.find((u) =>
+      u.mobile === mobile &&
+      u.roles.some((r) => r.status === true && r.password === password)
     );
 
-    if (matchedRoles.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid mobile number or password.",
+    if (hardcodedUser) {
+      const activeRole = hardcodedUser.roles.find(
+        (r) => r.status === true && r.password === password
+      );
+
+      const token = jwt.sign(
+        {
+          employeeId: hardcodedUser._id,
+          mobile: hardcodedUser.mobile,
+          role: activeRole.role,
+          eid: activeRole.eid,
+        },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful (hardcoded)",
+        token,
+        employee: {
+          _id: hardcodedUser._id,
+          name: hardcodedUser.name,
+          mobile: hardcodedUser.mobile,
+          dob: hardcodedUser.dob,
+          adharNumber: hardcodedUser.adharNumber,
+          adharImageUrl: hardcodedUser.adharImageUrl,
+          profilePic: hardcodedUser.profilePic,
+          activeRole: {
+            role: activeRole.role,
+            eid: activeRole.eid,
+          },
+          roles: hardcodedUser.roles.map((r) => ({
+            role: r.role,
+            eid: r.eid,
+            status: r.status,
+          })),
+        },
       });
     }
 
-    // ✅ FIRST role will be logged in
-    const activeRole = matchedRoles[0];
+    // ----------------------
+    // 2️⃣ DATABASE USER LOGIN
+    // ----------------------
+    const employee = await Employee.findOne({ mobile: mobile.trim() });
 
-    // ✅ Generate token with first role
+    if (!employee || !employee.status) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid mobile number or password",
+      });
+    }
+
+    let activeRole = null;
+
+    // Single-role login: pick first active role if exists
+    if (Array.isArray(employee.roles) && employee.roles.length > 0) {
+      activeRole = employee.roles.find((r) => r.status === true);
+      if (!activeRole || activeRole.password !== password) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid mobile number or password",
+        });
+      }
+    } else if (employee.password) {
+      // fallback to single password field
+      if (employee.password !== password) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid mobile number or password",
+        });
+      }
+      activeRole = {
+        role: employee.role || "Employee",
+        eid: employee.eid || "UNKNOWN",
+      };
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid mobile number or password",
+      });
+    }
+
     const token = jwt.sign(
       {
         employeeId: employee._id,
+        mobile: employee.mobile,
         role: activeRole.role,
         eid: activeRole.eid,
-        mobile: employee.mobile,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
-
       employee: {
         _id: employee._id,
         name: employee.name,
         mobile: employee.mobile,
-
-        // 👇 active login role
+        dob: employee.dob,
+        adharNumber: employee.adharNumber,
+        adharImageUrl: employee.adharImageUrl,
+        profilePic: employee.profilePic,
         activeRole: {
           role: activeRole.role,
           eid: activeRole.eid,
         },
-
-        // 👇 all available roles
-        roles: employee.roles.map(r => ({
-          role: r.role,
-          eid: r.eid,
-          status: r.status,
-        })),
+        roles: Array.isArray(employee.roles)
+          ? employee.roles.map((r) => ({
+              role: r.role,
+              eid: r.eid,
+              status: r.status,
+            }))
+          : [
+              {
+                role: activeRole.role,
+                eid: activeRole.eid,
+                status: true,
+              },
+            ],
       },
     });
-
   } catch (error) {
     console.error("Login Employee Error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Internal server error during login.",
+      message: "Internal server error",
     });
   }
 };
