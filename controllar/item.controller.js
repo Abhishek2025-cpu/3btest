@@ -6,6 +6,8 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 
 // ADVANCED CREATE FUNCTION
+const axios = require('axios');
+
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const { 
@@ -19,7 +21,8 @@ exports.createItemWithBoxes = async (req, res) => {
       company,
       noOfBoxes,
       machineNumber,
-      mixtureMachine  
+      mixtureMachine,
+      productImageUrl // ✅ image URL from frontend
     } = req.body;
 
     // === FIX: FORCE REMOVE EXTRA SPACES ===
@@ -28,29 +31,55 @@ exports.createItemWithBoxes = async (req, res) => {
       return res.status(400).json({ error: "Item No is required" });
 
     // --- 1. Validations ---
-    if (!req.file) return res.status(400).json({ error: 'Product image is required' });
-
     const numBoxes = parseInt(noOfBoxes, 10);
     if (isNaN(numBoxes) || numBoxes <= 0)
       return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
 
-    // --- 2. Fetch Employees + Upload Image ---
-    const [helper, operator, mixture, productImageUpload] = await Promise.all([
+    if (!req.file && !productImageUrl) {
+      return res.status(400).json({ error: 'Product image is required' });
+    }
+
+    // --- 2. Fetch Employees ---
+    const [helper, operator, mixture] = await Promise.all([
       Employee.findById(helperId),
       Employee.findById(operatorId),
-      Employee.findById(mixtureId),
-      uploadBufferToGCS(
-        req.file.buffer,
-        req.file.originalname,
-        'product-images',
-        req.file.mimetype
-      )
+      Employee.findById(mixtureId)
     ]);
 
     if (!helper || !operator || !mixture)
       return res.status(400).json({ error: 'Invalid helperId, operatorId, or mixtureId' });
 
-    // --- 3. Generate Boxes ---
+    // --- 3. Handle Image Upload (FILE or URL) ---
+    let productImageUpload;
+
+    if (req.file) {
+      // ✅ OLD FLOW (local upload)
+      productImageUpload = await uploadBufferToGCS(
+        req.file.buffer,
+        req.file.originalname,
+        'product-images',
+        req.file.mimetype
+      );
+    } else {
+      // ✅ NEW FLOW (image URL)
+      const imageResponse = await axios.get(productImageUrl, {
+        responseType: 'arraybuffer'
+      });
+
+      const imageBuffer = Buffer.from(imageResponse.data);
+      const contentType = imageResponse.headers['content-type'] || 'image/jpeg';
+
+      const fileName = `product-${cleanItemNo}-${Date.now()}.jpg`;
+
+      productImageUpload = await uploadBufferToGCS(
+        imageBuffer,
+        fileName,
+        'product-images',
+        contentType
+      );
+    }
+
+    // --- 4. Generate Boxes ---
     const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
 
     const generatedBoxes = await Promise.all(
@@ -92,7 +121,7 @@ exports.createItemWithBoxes = async (req, res) => {
       })
     );
 
-    // --- 4. Create Main Item ---
+    // --- 5. Create Main Item ---
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
@@ -117,6 +146,118 @@ exports.createItemWithBoxes = async (req, res) => {
     return res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
   }
 };
+
+// exports.createItemWithBoxes = async (req, res) => {
+//   try {
+//     const { 
+//       itemNo, 
+//       length, 
+//       noOfSticks,
+//       mixtureId,     
+//       helperId, 
+//       operatorId, 
+//       shift, 
+//       company,
+//       noOfBoxes,
+//       machineNumber,
+//       mixtureMachine  
+//     } = req.body;
+
+//     // === FIX: FORCE REMOVE EXTRA SPACES ===
+//     const cleanItemNo = itemNo ? itemNo.trim() : "";
+//     if (!cleanItemNo)
+//       return res.status(400).json({ error: "Item No is required" });
+
+//     // --- 1. Validations ---
+//     if (!req.file) return res.status(400).json({ error: 'Product image is required' });
+
+//     const numBoxes = parseInt(noOfBoxes, 10);
+//     if (isNaN(numBoxes) || numBoxes <= 0)
+//       return res.status(400).json({ error: 'A valid, positive number of boxes is required.' });
+
+//     // --- 2. Fetch Employees + Upload Image ---
+//     const [helper, operator, mixture, productImageUpload] = await Promise.all([
+//       Employee.findById(helperId),
+//       Employee.findById(operatorId),
+//       Employee.findById(mixtureId),
+//       uploadBufferToGCS(
+//         req.file.buffer,
+//         req.file.originalname,
+//         'product-images',
+//         req.file.mimetype
+//       )
+//     ]);
+
+//     if (!helper || !operator || !mixture)
+//       return res.status(400).json({ error: 'Invalid helperId, operatorId, or mixtureId' });
+
+//     // --- 3. Generate Boxes ---
+//     const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
+
+//     const generatedBoxes = await Promise.all(
+//       boxIndexes.map(async (index) => {
+//         const boxSerialNo = String(index).padStart(3, '0');
+
+//         const qrCodeData = JSON.stringify({
+//           itemNo: cleanItemNo,
+//           boxSerialNo,
+//           totalBoxes: numBoxes,
+//           length,
+//           noOfSticks,
+//           operator: operator.name,
+//           helper: helper.name,
+//           mixture: mixture.name,
+//           shift,
+//           company,
+//           machineNumber: machineNumber || '',
+//           mixtureMachine: mixtureMachine || '',
+//           createdAt: new Date().toISOString()
+//         });
+
+//         const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
+//           type: 'png',
+//           errorCorrectionLevel: 'H',
+//           margin: 1,
+//           width: 500
+//         });
+
+//         const qrCodeFileName = `qr-${cleanItemNo}-${boxSerialNo}.png`;
+//         const qrCodeUpload = await uploadBufferToGCS(
+//           qrCodeBuffer,
+//           qrCodeFileName,
+//           'qr-codes',
+//           'image/png'
+//         );
+
+//         return { boxSerialNo, qrCodeUrl: qrCodeUpload.url };
+//       })
+//     );
+
+//     // --- 4. Create Main Item ---
+//     const newMainItem = await MainItem.create({
+//       itemNo: cleanItemNo,
+//       length,
+//       noOfSticks,
+//       helpers: [{ _id: helper._id, name: helper.name, eid: helper.eid }],
+//       mixtures: [{ _id: mixture._id, name: mixture.name, eid: mixture.eid }],
+//       operators: [{ _id: operator._id, name: operator.name, eid: operator.eid }],
+//       shift,
+//       company,
+//       machineNumber: machineNumber ? String(machineNumber) : null,
+//       mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
+//       productImageUrl: productImageUpload.url,
+//       boxes: generatedBoxes,
+//       pendingBoxes: numBoxes,
+//       completedBoxes: 0
+//     });
+
+//     return res.status(201).json(newMainItem);
+
+//   } catch (error) {
+//     console.error('Create Item with Boxes Error:', error.message, error.stack);
+//     return res.status(500).json({ error: error.message || 'Failed to create item and its boxes' });
+//   }
+// };
 
 
 exports.updateItemWithBoxes = async (req, res) => {
