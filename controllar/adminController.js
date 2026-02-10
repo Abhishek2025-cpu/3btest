@@ -42,7 +42,6 @@ exports.register = async (req, res) => {
 // ✅ Admin Login (Plain password check)
 
 
-
 exports.login = async (req, res) => {
   try {
     const { number, password } = req.body;
