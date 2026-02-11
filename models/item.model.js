@@ -10,50 +10,45 @@ const boxSchema = new mongoose.Schema({
   },
 }, { _id: true, timestamps: true });
 
+const employeeRefSchema = {
+  employeeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee',
+    required: true,
+  },
+  role: {
+    type: String,
+    required: true, // helper / operator / mixture
+  },
+  roleEid: {
+    type: String,
+    required: true, // eid from employee.roles[]
+  }
+};
+
 const mainItemSchema = new mongoose.Schema({
- itemNo: { type: String, required: true, trim: true },
+
+  itemNo: { type: String, required: true, trim: true },
 
   length: { type: String, required: true },
   noOfSticks: { type: Number, required: true },
 
-  helpers: [
-    {
-      _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-      name: { type: String, required: true },
-      eid: { type: String, required: true },
-    }
-  ],
-  operators: [
-    {
-      _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-      name: { type: String, required: true },
-      eid: { type: String, required: true },
-    }
-  ],
-
-  mixtures: [
-  {
-    _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-    name: { type: String, required: true },
-    eid: { type: String, required: true },
-  }
-],
-
+  helpers: [employeeRefSchema],
+  operators: [employeeRefSchema],
+  mixtures: [employeeRefSchema],
 
   shift: { type: String, enum: ['Day', 'Night'], required: true },
   company: { type: String, enum: ['B', 'BI'], required: true },
+
   productImageUrl: { type: String, required: true },
 
   boxes: [boxSchema],
 
-  // ✅ new counters
   pendingBoxes: { type: Number, required: true },
   completedBoxes: { type: Number, default: 0 },
 
-  // ✅ new optional key
-  machineNumber: { type: String }, // not required
-  mixtureMachine: { type: String }, // optional
-
+  machineNumber: { type: String },
+  mixtureMachine: { type: String },
 
 }, { timestamps: true });
 
