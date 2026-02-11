@@ -8,6 +8,15 @@ const Product = require('../models/ProductUpload');
 // ADVANCED CREATE FUNCTION
 const axios = require('axios');
 
+/* ---------- helper to extract role eid ---------- */
+function getRoleEid(employee, roleName) {
+  const roleObj = employee.roles.find(r => r.role === roleName);
+  if (!roleObj) {
+    throw new Error(`${employee.name} does not have role ${roleName}`);
+  }
+  return roleObj.eid;
+}
+
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const {
@@ -23,30 +32,28 @@ exports.createItemWithBoxes = async (req, res) => {
       machineNumber,
       mixtureMachine,
       productImageUrl,
-      image // ✅ alias from frontend
+      image
     } = req.body;
 
-    // ================== BASIC VALIDATION ==================
-    const cleanItemNo = itemNo ? itemNo.trim() : '';
+    /* ================== BASIC VALIDATION ================== */
+    const cleanItemNo = itemNo?.trim();
     if (!cleanItemNo) {
       return res.status(400).json({ error: 'Item No is required' });
     }
 
     const numBoxes = parseInt(noOfBoxes, 10);
-    if (isNaN(numBoxes) || numBoxes <= 0) {
-      return res
-        .status(400)
-        .json({ error: 'A valid, positive number of boxes is required.' });
+    if (!numBoxes || numBoxes <= 0) {
+      return res.status(400).json({
+        error: 'A valid, positive number of boxes is required.'
+      });
     }
 
-    // ✅ normalize image url
     const finalImageUrl = productImageUrl || image;
-
     if (!req.file && !finalImageUrl) {
       return res.status(400).json({ error: 'Product image is required' });
     }
 
-    // ================== FETCH EMPLOYEES ==================
+    /* ================== FETCH EMPLOYEES ================== */
     const [helper, operator, mixture] = await Promise.all([
       Employee.findById(helperId),
       Employee.findById(operatorId),
@@ -59,11 +66,10 @@ exports.createItemWithBoxes = async (req, res) => {
       });
     }
 
-    // ================== IMAGE HANDLING ==================
+    /* ================== IMAGE HANDLING ================== */
     let productImageUpload;
 
     if (req.file) {
-      // FILE UPLOAD FLOW
       productImageUpload = await uploadBufferToGCS(
         req.file.buffer,
         req.file.originalname,
@@ -71,41 +77,29 @@ exports.createItemWithBoxes = async (req, res) => {
         req.file.mimetype
       );
     } else {
-      // URL UPLOAD FLOW
       const imageResponse = await axios.get(finalImageUrl, {
         responseType: 'arraybuffer'
       });
 
-      const imageBuffer = Buffer.from(imageResponse.data);
-      const contentType =
-        imageResponse.headers['content-type'] || 'image/jpeg';
-
-      const fileName = `product-${cleanItemNo}-${Date.now()}.jpg`;
-
       productImageUpload = await uploadBufferToGCS(
-        imageBuffer,
-        fileName,
+        Buffer.from(imageResponse.data),
+        `product-${cleanItemNo}-${Date.now()}.jpg`,
         'product-images',
-        contentType
+        imageResponse.headers['content-type'] || 'image/jpeg'
       );
     }
 
-    // ================== GENERATE BOXES ==================
-    const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
-
+    /* ================== GENERATE BOXES ================== */
     const generatedBoxes = await Promise.all(
-      boxIndexes.map(async (index) => {
-        const boxSerialNo = String(index).padStart(3, '0');
+      Array.from({ length: numBoxes }, async (_, i) => {
+        const boxSerialNo = String(i + 1).padStart(3, '0');
 
-        const qrCodeData = JSON.stringify({
+        const qrData = JSON.stringify({
           itemNo: cleanItemNo,
           boxSerialNo,
           totalBoxes: numBoxes,
           length,
           noOfSticks,
-          operator: operator.name,
-          helper: helper.name,
-          mixture: mixture.name,
           shift,
           company,
           machineNumber: machineNumber || '',
@@ -113,47 +107,54 @@ exports.createItemWithBoxes = async (req, res) => {
           createdAt: new Date().toISOString()
         });
 
-        const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
-          type: 'png',
-          errorCorrectionLevel: 'H',
-          margin: 1,
-          width: 500
-        });
+        const qrBuffer = await QRCode.toBuffer(qrData, { width: 500 });
 
-        const qrCodeFileName = `qr-${cleanItemNo}-${boxSerialNo}.png`;
-
-        const qrCodeUpload = await uploadBufferToGCS(
-          qrCodeBuffer,
-          qrCodeFileName,
+        const qrUpload = await uploadBufferToGCS(
+          qrBuffer,
+          `qr-${cleanItemNo}-${boxSerialNo}.png`,
           'qr-codes',
           'image/png'
         );
 
         return {
           boxSerialNo,
-          qrCodeUrl: qrCodeUpload.url
+          qrCodeUrl: qrUpload.url
         };
       })
     );
 
-    // ================== CREATE ITEM ==================
+    /* ================== CREATE ITEM ================== */
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
       noOfSticks,
+
       helpers: [
-        { _id: helper._id, name: helper.name, eid: helper.eid }
-      ],
-      mixtures: [
-        { _id: mixture._id, name: mixture.name, eid: mixture.eid }
+        {
+          employeeId: helper._id,
+          role: 'helper',
+          roleEid: getRoleEid(helper, 'helper')
+        }
       ],
       operators: [
-        { _id: operator._id, name: operator.name, eid: operator.eid }
+        {
+          employeeId: operator._id,
+          role: 'operator',
+          roleEid: getRoleEid(operator, 'operator')
+        }
       ],
+      mixtures: [
+        {
+          employeeId: mixture._id,
+          role: 'mixture',
+          roleEid: getRoleEid(mixture, 'mixture')
+        }
+      ],
+
       shift,
       company,
-      machineNumber: machineNumber ? String(machineNumber) : null,
-      mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
+      machineNumber: machineNumber || null,
+      mixtureMachine: mixtureMachine || null,
       productImageUrl: productImageUpload.url,
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
@@ -163,11 +164,7 @@ exports.createItemWithBoxes = async (req, res) => {
     return res.status(201).json(newMainItem);
 
   } catch (error) {
-    console.error(
-      'Create Item with Boxes Error:',
-      error.message,
-      error.stack
-    );
+    console.error('Create Item with Boxes Error:', error.message);
     return res.status(500).json({
       error: error.message || 'Failed to create item and its boxes'
     });
