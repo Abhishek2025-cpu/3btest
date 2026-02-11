@@ -10,12 +10,29 @@ const axios = require('axios');
 
 /* ---------- helper to extract role eid ---------- */
 function getRoleEid(employee, roleName) {
-  const roleObj = employee.roles.find(r => r.role === roleName);
-  if (!roleObj) {
-    throw new Error(`${employee.name} does not have role ${roleName}`);
+  // ✅ NEW MULTI-ROLE SYSTEM
+  if (Array.isArray(employee.roles) && employee.roles.length > 0) {
+    const roleObj = employee.roles.find(
+      r => r.role.toLowerCase() === roleName.toLowerCase()
+    );
+    if (roleObj) {
+      return roleObj.eid;
+    }
   }
-  return roleObj.eid;
+
+  // ✅ OLD SINGLE-ROLE SYSTEM (BACKWARD COMPATIBILITY)
+  if (
+    employee.role &&
+    employee.eid &&
+    employee.role.toLowerCase() === roleName.toLowerCase()
+  ) {
+    return employee.eid;
+  }
+
+  // ❌ ROLE NOT FOUND
+  throw new Error(`${employee.name} does not have role ${roleName}`);
 }
+
 
 exports.createItemWithBoxes = async (req, res) => {
   try {
