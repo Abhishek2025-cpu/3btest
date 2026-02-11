@@ -19,11 +19,24 @@ function generateEid() {
 }
 
 function generatePassword(name, adhar) {
-  const namePart = (name || '').slice(0, 4).toLowerCase();
+  name = (name || '').toLowerCase();
+
+  let namePart = '';
+  let i = 0;
+
+  // Collect first 4 non-space characters
+  while (namePart.length < 4 && i < name.length) {
+    if (name[i] !== ' ') {
+      namePart += name[i];
+    }
+    i++;
+  }
+
   const adharPart = (adhar || '').slice(0, 4); // FIRST 4 digits
 
   return `${namePart}${adharPart}`;
 }
+
 
 
 
