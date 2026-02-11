@@ -492,20 +492,21 @@ const axios = require("axios");
 // };
 exports.getAllProducts = async (req, res) => {
   try {
+    const page = parseInt(req.query.page); // Get page number, remains null/undefined if not present
+    const limit = 10; // Requirement: 10 products per page
+    const showAll = req.query.all === 'true'; // New check for 'all' parameter
 
-    // ✅ pagination
-    const page = parseInt(req.query.page) || 1;
-    const limit = 5;
-    const skip = (page - 1) * limit;
+    let skip = 0;
+    let paginatedProducts = [];
 
-    // 1️⃣ Total count
+    // 1️ Total count
     const totalProducts = await Product.countDocuments();
 
-    // 2️⃣ Date 15 days ago
+    // 2️ Date 15 days ago
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-    // 3️⃣ Recent products
+    // 3️ Recent products
     const recentProductsDB = await Product.find({
       createdAt: { $gte: fifteenDaysAgo }
     })
@@ -513,7 +514,7 @@ exports.getAllProducts = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // 4️⃣ Old products
+    // 4️ Old products
     const oldProductsDB = await Product.find({
       createdAt: { $lt: fifteenDaysAgo }
     })
@@ -521,13 +522,23 @@ exports.getAllProducts = async (req, res) => {
       .sort({ position: 1 })
       .lean();
 
-    // 5️⃣ Merge products
+    // 5️ Merge products
     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
 
-    // ✅ apply pagination AFTER merge
-    const paginatedProducts = productsFromDB.slice(skip, skip + limit);
+    if (showAll) {
+      // If 'all=true' is sent, use all merged products
+      paginatedProducts = productsFromDB;
+    } else if (page && !isNaN(page) && page >= 1) {
+      // Apply pagination if a valid page number is provided
+      skip = (page - 1) * limit;
+      paginatedProducts = productsFromDB.slice(skip, skip + limit);
+    } else {
+      // If no 'page' or 'all=true' is sent, default to page 1 with limit 10
+      skip = (1 - 1) * limit; // skip = 0
+      paginatedProducts = productsFromDB.slice(skip, skip + limit);
+    }
 
-    // 6️⃣ Fetch dimensions
+    // 6️Fetch dimensions
     const dimRes = await axios.get(
       "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
     );
@@ -535,19 +546,19 @@ exports.getAllProducts = async (req, res) => {
     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
 
-    // ⭐ 7️⃣ Fetch ALL orders once
+    //  Fetch ALL orders once
     const allOrders = await Order.find()
       .populate("userId", "name")
       .lean();
 
-    // 8️⃣ Translate (use paginatedProducts)
+    // 8️ Translate (use paginatedProducts)
     const translatedProducts = await translateResponse(
       req,
       paginatedProducts,
       productFieldsToTranslate
     );
 
-    // 9️⃣ Add dimensions + orders array
+    // 9️ Add dimensions + orders array
     const formattedProducts = translatedProducts.map(p => {
       const hasCategory =
         p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
@@ -581,14 +592,19 @@ exports.getAllProducts = async (req, res) => {
       };
     });
 
+    // Calculate pagination metadata based on whether 'all' was requested or not
+    const totalPages = showAll ? 1 : Math.ceil(productsFromDB.length / limit);
+    const currentPage = showAll ? 1 : (page && !isNaN(page) && page >= 1 ? page : 1);
+
+
     res.status(200).json({
       success: true,
       message: "✅ Products fetched successfully",
       totalProducts,
       recentProducts: recentProductsDB.length,
-      page,
-      limit,
-      totalPages: Math.ceil(productsFromDB.length / limit),
+      page: currentPage, // Use calculated current page
+      limit: showAll ? productsFromDB.length : limit, // Show total count if all, otherwise limit
+      totalPages: totalPages,
       products: formattedProducts
     });
 
