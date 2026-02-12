@@ -143,6 +143,16 @@ exports.createItemWithBoxes = async (req, res) => {
     );
 
     /* ================== CREATE ITEM ================== */
+    const ensureHasEid = (emp, label) => {
+  if (!emp.roles || emp.roles.length === 0) {
+    throw new Error(`${label} "${emp.name}" has no roles assigned`);
+  }
+};
+
+ensureHasEid(helper, 'Helper');
+ensureHasEid(operator, 'Operator');
+ensureHasEid(mixture, 'Mixture');
+
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
