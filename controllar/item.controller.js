@@ -1,39 +1,32 @@
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const MainItem = require('../models/item.model'); // IMPORTANT: Use the new MainItem model
+const axios = require('axios');
+
+const MainItem = require('../models/item.model');
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 
-// ADVANCED CREATE FUNCTION
-const axios = require('axios');
-
-/* ---------- helper to extract role eid ---------- */
-function getRoleEid(employee, roleName) {
-  // ✅ NEW MULTI-ROLE SYSTEM
+/* =========================================================
+   HELPER: GET ANY VALID EID (NEW + OLD SYSTEM COMPATIBLE)
+   ========================================================= */
+function getAnyEid(employee) {
+  // ✅ New multi-role system
   if (Array.isArray(employee.roles) && employee.roles.length > 0) {
-    const roleObj = employee.roles.find(
-      r => r.role.toLowerCase() === roleName.toLowerCase()
-    );
-    if (roleObj) {
-      return roleObj.eid;
-    }
+    return employee.roles[0].eid;
   }
 
-  // ✅ OLD SINGLE-ROLE SYSTEM (BACKWARD COMPATIBILITY)
-  if (
-    employee.role &&
-    employee.eid &&
-    employee.role.toLowerCase() === roleName.toLowerCase()
-  ) {
+  // ✅ Old single-role system
+  if (employee.eid) {
     return employee.eid;
   }
 
-  // ❌ ROLE NOT FOUND
-  throw new Error(`${employee.name} does not have role ${roleName}`);
+  throw new Error(`${employee.name} has no EID`);
 }
 
-
+/* =========================================================
+   CREATE ITEM WITH BOXES
+   ========================================================= */
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const {
@@ -59,7 +52,7 @@ exports.createItemWithBoxes = async (req, res) => {
     }
 
     const numBoxes = parseInt(noOfBoxes, 10);
-    if (!numBoxes || numBoxes <= 0) {
+    if (isNaN(numBoxes) || numBoxes <= 0) {
       return res.status(400).json({
         error: 'A valid, positive number of boxes is required.'
       });
@@ -124,7 +117,11 @@ exports.createItemWithBoxes = async (req, res) => {
           createdAt: new Date().toISOString()
         });
 
-        const qrBuffer = await QRCode.toBuffer(qrData, { width: 500 });
+        const qrBuffer = await QRCode.toBuffer(qrData, {
+          type: 'png',
+          width: 500,
+          errorCorrectionLevel: 'H'
+        });
 
         const qrUpload = await uploadBufferToGCS(
           qrBuffer,
@@ -150,21 +147,23 @@ exports.createItemWithBoxes = async (req, res) => {
         {
           employeeId: helper._id,
           role: 'helper',
-          roleEid: getRoleEid(helper, 'helper')
+          roleEid: getAnyEid(helper)
         }
       ],
+
       operators: [
         {
           employeeId: operator._id,
           role: 'operator',
-          roleEid: getRoleEid(operator, 'operator')
+          roleEid: getAnyEid(operator)
         }
       ],
+
       mixtures: [
         {
           employeeId: mixture._id,
           role: 'mixture',
-          roleEid: getRoleEid(mixture, 'mixture')
+          roleEid: getAnyEid(mixture)
         }
       ],
 
@@ -173,6 +172,7 @@ exports.createItemWithBoxes = async (req, res) => {
       machineNumber: machineNumber || null,
       mixtureMachine: mixtureMachine || null,
       productImageUrl: productImageUpload.url,
+
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
       completedBoxes: 0
@@ -181,12 +181,13 @@ exports.createItemWithBoxes = async (req, res) => {
     return res.status(201).json(newMainItem);
 
   } catch (error) {
-    console.error('Create Item with Boxes Error:', error.message);
+    console.error('Create Item with Boxes Error:', error);
     return res.status(500).json({
       error: error.message || 'Failed to create item and its boxes'
     });
   }
 };
+
 
 // exports.createItemWithBoxes = async (req, res) => {
 //   try {
