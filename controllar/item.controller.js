@@ -11,18 +11,23 @@ const Product = require('../models/ProductUpload');
    HELPER: GET ANY VALID EID (NEW + OLD SYSTEM COMPATIBLE)
    ========================================================= */
 function getAnyEid(employee) {
-  // ✅ New multi-role system
+  // New multi-role system
   if (Array.isArray(employee.roles) && employee.roles.length > 0) {
-    return employee.roles[0].eid;
+    const roleWithEid = employee.roles.find(r => r.eid);
+    if (roleWithEid) return roleWithEid.eid;
   }
 
-  // ✅ Old single-role system
+  // Old single-role system
   if (employee.eid) {
     return employee.eid;
   }
 
-  throw new Error(`${employee.name} has no EID`);
+  // ❌ HARD FAIL (correct behavior)
+  throw new Error(
+    `Employee "${employee.name}" is missing EID. Please assign a role to this employee first.`
+  );
 }
+
 
 /* =========================================================
    CREATE ITEM WITH BOXES
