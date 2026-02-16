@@ -2,6 +2,55 @@ const admin = require("../firebase");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 
+async function sendNotification(userId, tokens, title, body, data = {}) {
+  try {
+    console.log("DEBUG PARAMS:");
+    console.log("userId:", userId);
+    console.log("tokens:", tokens);
+    console.log("title:", title);
+    console.log("body:", body);
+
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      console.log("⚠️ No valid tokens provided");
+      return;
+    }
+
+    for (const token of tokens) {
+      try {
+        await admin.messaging().send({
+          token,
+          notification: {
+            title: String(title),
+            body: String(body),
+          },
+          data: Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, String(v)])
+          ),
+        });
+      } catch (err) {
+        console.warn("❌ FCM send failed:", err.message);
+      }
+    }
+
+    await Notification.create({
+      userId,
+      fcmTokens: tokens,
+      title: String(title),
+      body: String(body),
+      data
+    });
+
+    console.log("✅ Notification saved successfully");
+
+  } catch (err) {
+    console.error("❌ sendNotification error:", err);
+    throw err;
+  }
+}
+
+
+
+
 /**
  * Register a user's FCM token
  */
@@ -57,4 +106,4 @@ async function sendGlobalNotification(title, body, data = {}) {
   }
 }
 
-module.exports = { registerUserToken, sendGlobalNotification };
+module.exports = { registerUserToken, sendGlobalNotification,sendNotification };
