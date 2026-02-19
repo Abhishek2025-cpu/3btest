@@ -7,29 +7,7 @@ const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 
 /* =========================================================
-   HELPER: GET ANY VALID EID (NEW + OLD SYSTEM COMPATIBLE)
-   ========================================================= */
-function getAnyEid(employee) {
-  // New multi-role system
-  if (Array.isArray(employee.roles) && employee.roles.length > 0) {
-    const roleWithEid = employee.roles.find(r => r.eid);
-    if (roleWithEid) return roleWithEid.eid;
-  }
-
-  // Old single-role system
-  if (employee.eid) {
-    return employee.eid;
-  }
-
-  // ❌ HARD FAIL (correct behavior)
-  throw new Error(
-    `Employee "${employee.name}" is missing EID. Please assign a role to this employee first.`
-  );
-}
-
-
-/* =========================================================
-   CREATE ITEM WITH BOXES
+   CREATE ITEM WITH BOXES (Single Role System)
    ========================================================= */
 exports.createItemWithBoxes = async (req, res) => {
   try {
@@ -58,7 +36,7 @@ exports.createItemWithBoxes = async (req, res) => {
     const numBoxes = parseInt(noOfBoxes, 10);
     if (isNaN(numBoxes) || numBoxes <= 0) {
       return res.status(400).json({
-        error: 'A valid, positive number of boxes is required.'
+        error: 'A valid positive number of boxes is required.'
       });
     }
 
@@ -79,6 +57,23 @@ exports.createItemWithBoxes = async (req, res) => {
         error: 'Invalid helperId, operatorId, or mixtureId'
       });
     }
+
+    /* ================== ROLE VALIDATION ================== */
+    const validateEmployee = (emp, label, expectedRole) => {
+      if (!emp.eid) {
+        throw new Error(`${label} "${emp.name}" has no EID assigned`);
+      }
+
+      if (emp.role !== expectedRole) {
+        throw new Error(
+          `${label} "${emp.name}" must have role "${expectedRole}"`
+        );
+      }
+    };
+
+    validateEmployee(helper, 'Helper', 'helper');
+    validateEmployee(operator, 'Operator', 'operator');
+    validateEmployee(mixture, 'Mixture', 'mixture');
 
     /* ================== IMAGE HANDLING ================== */
     let productImageUpload;
@@ -141,17 +136,7 @@ exports.createItemWithBoxes = async (req, res) => {
       })
     );
 
-    /* ================== CREATE ITEM ================== */
-    const ensureHasEid = (emp, label) => {
-  if (!emp.roles || emp.roles.length === 0) {
-    throw new Error(`${label} "${emp.name}" has no roles assigned`);
-  }
-};
-
-ensureHasEid(helper, 'Helper');
-ensureHasEid(operator, 'Operator');
-ensureHasEid(mixture, 'Mixture');
-
+    /* ================== CREATE MAIN ITEM ================== */
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
@@ -160,24 +145,24 @@ ensureHasEid(mixture, 'Mixture');
       helpers: [
         {
           employeeId: helper._id,
-          role: 'helper',
-          roleEid: getAnyEid(helper)
+          role: helper.role,
+          roleEid: helper.eid
         }
       ],
 
       operators: [
         {
           employeeId: operator._id,
-          role: 'operator',
-          roleEid: getAnyEid(operator)
+          role: operator.role,
+          roleEid: operator.eid
         }
       ],
 
       mixtures: [
         {
           employeeId: mixture._id,
-          role: 'mixture',
-          roleEid: getAnyEid(mixture)
+          role: mixture.role,
+          roleEid: mixture.eid
         }
       ],
 
@@ -192,12 +177,18 @@ ensureHasEid(mixture, 'Mixture');
       completedBoxes: 0
     });
 
-    return res.status(201).json(newMainItem);
+    return res.status(201).json({
+      success: true,
+      message: 'Item created successfully',
+      data: newMainItem
+    });
 
   } catch (error) {
     console.error('Create Item with Boxes Error:', error);
+
     return res.status(500).json({
-      error: error.message || 'Failed to create item and its boxes'
+      success: false,
+      error: error.message || 'Failed to create item and boxes'
     });
   }
 };

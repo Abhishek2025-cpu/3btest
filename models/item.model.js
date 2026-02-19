@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+/* ================== BOX SCHEMA ================== */
 const boxSchema = new mongoose.Schema({
   boxSerialNo: { type: String, required: true },
   qrCodeUrl: { type: String, required: true },
@@ -10,7 +11,8 @@ const boxSchema = new mongoose.Schema({
   },
 }, { _id: true, timestamps: true });
 
-const employeeRefSchema = {
+/* ================== EMPLOYEE REF SCHEMA ================== */
+const employeeRefSchema = new mongoose.Schema({
   employeeId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
@@ -22,10 +24,11 @@ const employeeRefSchema = {
   },
   roleEid: {
     type: String,
-    required: true, // eid from employee.roles[]
+    required: true, // eid from Employee
   }
-};
+}, { _id: false }); // prevents extra _id inside helpers/operators arrays
 
+/* ================== MAIN ITEM SCHEMA ================== */
 const mainItemSchema = new mongoose.Schema({
 
   itemNo: { type: String, required: true, trim: true },
@@ -52,6 +55,7 @@ const mainItemSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+/* ================== INDEX ================== */
 mainItemSchema.index({ 'boxes.boxSerialNo': 1 });
 
 module.exports = mongoose.model('MainItem', mainItemSchema);
