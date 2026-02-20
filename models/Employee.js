@@ -11,6 +11,11 @@ const employeeSchema = new mongoose.Schema(
       unique: true,
     },
 
+  eid: {
+  type: String,
+  unique: true,
+},
+
     status: {
       type: Boolean,
       default: true,

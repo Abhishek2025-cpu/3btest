@@ -24,6 +24,15 @@ function generatePassword(name, adhar) {
   return `${namePart}${adharPart}`;
 }
 
+
+async function generateEID() {
+  const count = await Employee.countDocuments();
+  const nextNumber = count + 1;
+
+  return `EMP${String(nextNumber).padStart(3, "0")}`;
+}
+
+
 exports.createEmployee = async (req, res) => {
   try {
     let { name, mobile, dob, adharNumber, role } = req.body;
@@ -85,6 +94,7 @@ exports.createEmployee = async (req, res) => {
         fileId: profileUpload.id,
       };
     }
+    const eid = await generateEID();
 
     /* -------------------- PASSWORD GENERATION -------------------- */
     const password = generatePassword(name, adharNumber);
@@ -98,7 +108,8 @@ exports.createEmployee = async (req, res) => {
       adharImageUrl: adharUpload.url,
       profilePic,
       role,
-      password, // will be hashed automatically
+      password,
+      eid,  // will be hashed automatically
     });
 
     /* -------------------- RESPONSE -------------------- */
