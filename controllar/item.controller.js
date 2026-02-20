@@ -6,13 +6,7 @@ const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 
-/* =========================================================
-   CREATE ITEM WITH BOXES (Single Role System)
-   ========================================================= */
-   const generateEid = async (role) => {
-  const count = await Employee.countDocuments({ role });
-  return `${role[0].toUpperCase()}${String(count + 1).padStart(3, '0')}`;
-};
+
 
 exports.createItemWithBoxes = async (req, res) => {
   try {
@@ -63,22 +57,22 @@ exports.createItemWithBoxes = async (req, res) => {
       });
     }
 
-    /* ================== ROLE VALIDATION ================== */
+    /* ================== ROLE + EID VALIDATION ================== */
     const validateEmployee = (emp, label, expectedRole) => {
       if (!emp.eid) {
         throw new Error(`${label} "${emp.name}" has no EID assigned`);
       }
 
-      if (emp.role !== expectedRole) {
+      if (emp.role.toLowerCase() !== expectedRole.toLowerCase()) {
         throw new Error(
           `${label} "${emp.name}" must have role "${expectedRole}"`
         );
       }
     };
 
-    validateEmployee(helper, 'Helper', 'helper');
-    validateEmployee(operator, 'Operator', 'operator');
-    validateEmployee(mixture, 'Mixture', 'mixture');
+    validateEmployee(helper, 'Helper', 'Helper');
+    validateEmployee(operator, 'Operator', 'Operator');
+    validateEmployee(mixture, 'Mixture', 'Mixture');
 
     /* ================== IMAGE HANDLING ================== */
     let productImageUpload;
@@ -112,6 +106,12 @@ exports.createItemWithBoxes = async (req, res) => {
           itemNo: cleanItemNo,
           boxSerialNo,
           totalBoxes: numBoxes,
+
+          // 🔥 ADD EIDs
+          helperEid: helper.eid,
+          operatorEid: operator.eid,
+          mixtureEid: mixture.eid,
+
           length,
           noOfSticks,
           shift,
@@ -182,10 +182,22 @@ exports.createItemWithBoxes = async (req, res) => {
       completedBoxes: 0
     });
 
+    /* ================== RESPONSE ================== */
     return res.status(201).json({
       success: true,
       message: 'Item created successfully',
-      data: newMainItem
+      data: {
+        _id: newMainItem._id,
+        itemNo: newMainItem.itemNo,
+
+        // 🔥 RETURN EIDs ALSO
+        helperEid: helper.eid,
+        operatorEid: operator.eid,
+        mixtureEid: mixture.eid,
+
+        totalBoxes: numBoxes,
+        productImageUrl: newMainItem.productImageUrl
+      }
     });
 
   } catch (error) {
