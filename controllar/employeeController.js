@@ -194,23 +194,13 @@ exports.updateEmployeeStatus = async (req, res) => {
 
 
 
-
 exports.getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select(
-      "name mobile role status eid password"
-    );
+    const employees = await Employee.find().select("-roles +password");
 
-    res.status(200).json({
-      success: true,
-      count: employees.length,
-      data: employees
-    });
-
+    res.status(200).json(employees);
   } catch (error) {
-    res.status(500).json({
-      error: 'Failed to fetch employees'
-    });
+    res.status(500).json({ error: 'Failed to fetch employees' });
   }
 };
 
