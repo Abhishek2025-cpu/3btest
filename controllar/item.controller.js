@@ -556,37 +556,137 @@ exports.getAllItemsForList = async (req, res) => {
       },
 
       // --- 🔍 FIXED LOOKUP: TRIM + LOWERCASE ON BOTH SIDES ---
-      {
-        $lookup: {
-          from: "productuploads",
-          let: { itemNoClean: "$itemNoTrimLower" },
-          pipeline: [
-            {
-              $addFields: {
-                nameTrimLower: {
-                  $toLower: { $trim: { input: "$name" } }
+    // ================== HELPER LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "helpers.employeeId",
+    foreignField: "_id",
+    as: "helperDetails"
+  }
+},
+{
+  $addFields: {
+    helpers: {
+      $map: {
+        input: "$helpers",
+        as: "h",
+        in: {
+          employeeId: "$$h.employeeId",
+          role: "$$h.role",
+          roleEid: "$$h.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$helperDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$h.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
                 }
-              }
-            },
-            {
-              $match: {
-                $expr: {
-                  $eq: ["$nameTrimLower", "$$itemNoClean"]
-                }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                description: 1,
-                about: 1
-              }
+              },
+              in: "$$emp.name"
             }
-          ],
-          as: "productDetails"
+          }
         }
-      },
+      }
+    }
+  }
+},
+
+// ================== OPERATOR LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "operators.employeeId",
+    foreignField: "_id",
+    as: "operatorDetails"
+  }
+},
+{
+  $addFields: {
+    operators: {
+      $map: {
+        input: "$operators",
+        as: "o",
+        in: {
+          employeeId: "$$o.employeeId",
+          role: "$$o.role",
+          roleEid: "$$o.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$operatorDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$o.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
+                }
+              },
+              in: "$$emp.name"
+            }
+          }
+        }
+      }
+    }
+  }
+},
+
+// ================== MIXTURE LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "mixtures.employeeId",
+    foreignField: "_id",
+    as: "mixtureDetails"
+  }
+},
+{
+  $addFields: {
+    mixtures: {
+      $map: {
+        input: "$mixtures",
+        as: "m",
+        in: {
+          employeeId: "$$m.employeeId",
+          role: "$$m.role",
+          roleEid: "$$m.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$mixtureDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$m.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
+                }
+              },
+              in: "$$emp.name"
+            }
+          }
+        }
+      }
+    }
+  }
+},
 
       { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
 
