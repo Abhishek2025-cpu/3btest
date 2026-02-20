@@ -9,6 +9,11 @@ const Product = require('../models/ProductUpload');
 /* =========================================================
    CREATE ITEM WITH BOXES (Single Role System)
    ========================================================= */
+   const generateEid = async (role) => {
+  const count = await Employee.countDocuments({ role });
+  return `${role[0].toUpperCase()}${String(count + 1).padStart(3, '0')}`;
+};
+
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const {
