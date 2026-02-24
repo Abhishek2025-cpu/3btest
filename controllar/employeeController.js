@@ -8,20 +8,22 @@ const bcrypt = require("bcryptjs");
 
 
 function generatePassword(name, adhar) {
-  name = (name || "").toLowerCase();
+  // keep only alphabets from name
+  const cleanName = (name || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, ""); // removes space, dot, special chars
 
-  let namePart = "";
-  let i = 0;
+  // take first 4 valid letters
+  const namePart = cleanName.slice(0, 4);
 
-  while (namePart.length < 4 && i < name.length) {
-    if (name[i] !== " ") {
-      namePart += name[i];
-    }
-    i++;
-  }
+  // keep only digits from adhar
+  const cleanAdhar = (adhar || "").replace(/\D/g, "");
 
-  const adharPart = (adhar || "").slice(0, 4);
-  return `${namePart}${adharPart}`;
+  // take first 4 digits
+  const adharPart = cleanAdhar.slice(0, 4);
+
+  // combine and ensure 8 characters
+  return (namePart + adharPart).padEnd(8, "0");
 }
 
 
@@ -373,108 +375,47 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // ----------------------
-    // 1️⃣ HARDCODED USERS LOGIN
-    // ----------------------
-    const hardcodedUser = HARDCODED_USERS.find((u) =>
-      u.mobile === mobile &&
-      u.roles.some((r) => r.status === true && r.password === password)
-    );
-
-    if (hardcodedUser) {
-      const activeRole = hardcodedUser.roles.find(
-        (r) => r.status === true && r.password === password
-      );
-
-      const token = jwt.sign(
-        {
-          employeeId: hardcodedUser._id,
-          mobile: hardcodedUser.mobile,
-          role: activeRole.role,
-          eid: activeRole.eid,
-        },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: "Login successful (hardcoded)",
-        token,
-        employee: {
-          _id: hardcodedUser._id,
-          name: hardcodedUser.name,
-          mobile: hardcodedUser.mobile,
-          dob: hardcodedUser.dob,
-          adharNumber: hardcodedUser.adharNumber,
-          adharImageUrl: hardcodedUser.adharImageUrl,
-          profilePic: hardcodedUser.profilePic,
-          activeRole: {
-            role: activeRole.role,
-            eid: activeRole.eid,
-          },
-          roles: hardcodedUser.roles.map((r) => ({
-            role: r.role,
-            eid: r.eid,
-            status: r.status,
-          })),
-        },
-      });
-    }
-
-    // ----------------------
-    // 2️⃣ DATABASE USER LOGIN
-    // ----------------------
+    // 1️⃣ Find employee
     const employee = await Employee.findOne({ mobile: mobile.trim() });
 
     if (!employee || !employee.status) {
       return res.status(401).json({
         success: false,
-        message: "Invalid mobile number or password",
+        message: "Invalid mobile or password",
       });
     }
 
-    let activeRole = null;
+    // 2️⃣ Check password (plain OR bcrypt based)
+    let isMatch = false;
 
-    // Single-role login: pick first active role if exists
-    if (Array.isArray(employee.roles) && employee.roles.length > 0) {
-      activeRole = employee.roles.find((r) => r.status === true);
-      if (!activeRole || activeRole.password !== password) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid mobile number or password",
-        });
-      }
-    } else if (employee.password) {
-      // fallback to single password field
-      if (employee.password !== password) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid mobile number or password",
-        });
-      }
-      activeRole = {
-        role: employee.role || "Employee",
-        eid: employee.eid || "UNKNOWN",
-      };
+    // If you are hashing password → use this
+    if (employee.password && employee.password.startsWith("$2")) {
+      isMatch = await bcrypt.compare(password, employee.password);
     } else {
+      // current system (plain password)
+      isMatch = employee.password === password;
+    }
+
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: "Invalid mobile number or password",
+        message: "Invalid mobile or password",
       });
     }
 
+    // 3️⃣ Generate token
     const token = jwt.sign(
       {
         employeeId: employee._id,
         mobile: employee.mobile,
-        role: activeRole.role,
-        eid: activeRole.eid,
+        role: employee.role,
+        eid: employee.eid,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
+    // 4️⃣ Response
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -487,25 +428,12 @@ exports.loginEmployee = async (req, res) => {
         adharNumber: employee.adharNumber,
         adharImageUrl: employee.adharImageUrl,
         profilePic: employee.profilePic,
-        activeRole: {
-          role: activeRole.role,
-          eid: activeRole.eid,
-        },
-        roles: Array.isArray(employee.roles)
-          ? employee.roles.map((r) => ({
-              role: r.role,
-              eid: r.eid,
-              status: r.status,
-            }))
-          : [
-              {
-                role: activeRole.role,
-                eid: activeRole.eid,
-                status: true,
-              },
-            ],
+        role: employee.role,
+        eid: employee.eid,
+        status: employee.status,
       },
     });
+
   } catch (error) {
     console.error("Login Employee Error:", error);
     return res.status(500).json({
@@ -514,6 +442,5 @@ exports.loginEmployee = async (req, res) => {
     });
   }
 };
-
 
 
