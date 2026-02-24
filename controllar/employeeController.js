@@ -40,11 +40,7 @@ exports.createEmployee = async (req, res) => {
     let { name, mobile, dob, adharNumber, role } = req.body;
 
     /* -------------------- VALIDATION -------------------- */
-    if (!name || !mobile || !role) {
-      return res.status(400).json({
-        message: "Name, Mobile and Role are required.",
-      });
-    }
+ 
 
     /* -------------------- DUPLICATE CHECK -------------------- */
     const existingEmployee = await Employee.findOne({ mobile });
