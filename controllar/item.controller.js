@@ -8,7 +8,6 @@ const Product = require('../models/ProductUpload');
 
 
 
-const StaffNotification = require('../models/StaffNotification'); // Import the new model
 
 exports.createItemWithBoxes = async (req, res) => {
   try {
@@ -629,17 +628,20 @@ exports.getAllItemsForList = async (req, res) => {
 
 // ... your existing exports.getAllItemsForList function ...
 
+const StaffNotification = require('../models/StaffNotification');
+
 exports.getEmployeeAssignedProducts = async (req, res) => {
   try {
     const { employeeId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({ success: false, message: "Invalid ID format." });
+      return res.status(400).json({ success: false, message: "Invalid Employee ID format." });
     }
 
     const targetId = new mongoose.Types.ObjectId(employeeId);
 
-    /* ================== 1. GET NOTIFICATION STATS ================== */
+    /* ================== 1. FETCH NOTIFICATIONS ================== */
+    // Look for unread notifications for this specific employee
     const unreadNotifications = await StaffNotification.find({ 
       recipientId: targetId, 
       isRead: false 
@@ -647,10 +649,12 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
     const notificationSummary = {
       count: unreadNotifications.length,
-      latestMessage: unreadNotifications.length > 0 ? unreadNotifications[0].message : "No new assignments"
+      latestMessage: unreadNotifications.length > 0 
+        ? unreadNotifications[0].message 
+        : "No new assignments"
     };
 
-    /* ================== 2. GET ASSIGNED ITEMS (AGGREGATE) ================== */
+    /* ================== 2. FETCH ASSIGNMENTS ================== */
     const items = await MainItem.aggregate([
       {
         $match: {
@@ -664,21 +668,21 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       { $sort: { createdAt: -1 } },
       { $addFields: { boxCount: { $size: { $ifNull: ["$boxes", []] } } } },
 
-      // Lookup Staff Names for each role
-      { $lookup: { from: "employees", localField: "helpers.employeeId", foreignField: "_id", as: "hDetails" } },
-      { $lookup: { from: "employees", localField: "operators.employeeId", foreignField: "_id", as: "oDetails" } },
-      { $lookup: { from: "employees", localField: "mixtures.employeeId", foreignField: "_id", as: "mDetails" } },
+      // Staff Lookups
+      { $lookup: { from: "employees", localField: "helpers.employeeId", foreignField: "_id", as: "hDet" } },
+      { $lookup: { from: "employees", localField: "operators.employeeId", foreignField: "_id", as: "oDet" } },
+      { $lookup: { from: "employees", localField: "mixtures.employeeId", foreignField: "_id", as: "mDet" } },
 
       // Product Lookup
       {
         $lookup: {
           from: "productuploads",
-          let: { itemNoLower: { $toLower: { $trim: { input: "$itemNo" } } } },
+          let: { iNo: { $toLower: { $trim: { input: "$itemNo" } } } },
           pipeline: [
-            { $addFields: { nameLower: { $toLower: { $trim: { input: "$name" } } } } },
-            { $match: { $expr: { $eq: ["$nameLower", "$$itemNoLower"] } } }
+            { $addFields: { nLow: { $toLower: { $trim: { input: "$name" } } } } },
+            { $match: { $expr: { $eq: ["$nLow", "$$iNo"] } } }
           ],
-          as: "productDetails"
+          as: "pDet"
         }
       },
 
@@ -686,13 +690,12 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         $project: {
           itemNo: 1, length: 1, noOfSticks: 1, shift: 1, company: 1,
           pendingBoxes: 1, completedBoxes: 1, boxCount: 1, productImageUrl: 1,
-          
           helpers: {
             $map: {
               input: "$helpers", as: "h",
               in: { 
                 employeeId: "$$h.employeeId", role: "$$h.role", roleEid: "$$h.roleEid",
-                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$hDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$h.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$hDet", as: "s", cond: { $eq: ["$$s._id", "$$h.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
             }
           },
@@ -701,7 +704,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
               input: "$operators", as: "o",
               in: { 
                 employeeId: "$$o.employeeId", role: "$$o.role", roleEid: "$$o.roleEid",
-                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$oDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$o.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$oDet", as: "s", cond: { $eq: ["$$s._id", "$$o.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
             }
           },
@@ -710,18 +713,18 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
               input: "$mixtures", as: "m",
               in: { 
                 employeeId: "$$m.employeeId", role: "$$m.role", roleEid: "$$m.roleEid",
-                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$mDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$m.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$mDet", as: "s", cond: { $eq: ["$$s._id", "$$m.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
             }
           },
-          product: { $arrayElemAt: ["$productDetails", 0] }
+          product: { $arrayElemAt: ["$pDet", 0] }
         }
       }
     ]);
 
     res.status(200).json({
       success: true,
-      notification: notificationSummary,
+      notification: notificationSummary, // This will now show the count
       count: items.length,
       data: items
     });
