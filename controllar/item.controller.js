@@ -8,40 +8,23 @@ const Product = require('../models/ProductUpload');
 
 
 
+const StaffNotification = require('../models/StaffNotification'); // Import the new model
+
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const {
-      itemNo,
-      length,
-      noOfSticks,
-      mixtureId,
-      helperId,
-      operatorId,
-      shift,
-      company,
-      noOfBoxes,
-      machineNumber,
-      mixtureMachine,
-      productImageUrl,
-      image
+      itemNo, length, noOfSticks, mixtureId, helperId, operatorId,
+      shift, company, noOfBoxes, machineNumber, mixtureMachine,
+      productImageUrl, image
     } = req.body;
 
     /* ================== BASIC VALIDATION ================== */
     const cleanItemNo = itemNo?.trim();
-    if (!cleanItemNo) {
-      return res.status(400).json({ error: 'Item No is required' });
-    }
+    if (!cleanItemNo) return res.status(400).json({ error: 'Item No is required' });
 
     const numBoxes = parseInt(noOfBoxes, 10);
     if (isNaN(numBoxes) || numBoxes <= 0) {
-      return res.status(400).json({
-        error: 'A valid positive number of boxes is required.'
-      });
-    }
-
-    const finalImageUrl = productImageUrl || image;
-    if (!req.file && !finalImageUrl) {
-      return res.status(400).json({ error: 'Product image is required' });
+      return res.status(400).json({ error: 'A valid positive number of boxes is required.' });
     }
 
     /* ================== FETCH EMPLOYEES ================== */
@@ -52,92 +35,34 @@ exports.createItemWithBoxes = async (req, res) => {
     ]);
 
     if (!helper || !operator || !mixture) {
-      return res.status(400).json({
-        error: 'Invalid helperId, operatorId, or mixtureId'
-      });
+      return res.status(400).json({ error: 'Invalid helperId, operatorId, or mixtureId' });
     }
-
-    /* ================== ROLE + EID VALIDATION ================== */
-    const validateEmployee = (emp, label, expectedRole) => {
-      if (!emp.eid) {
-        throw new Error(`${label} "${emp.name}" has no EID assigned`);
-      }
-
-      if (emp.role.toLowerCase() !== expectedRole.toLowerCase()) {
-        throw new Error(
-          `${label} "${emp.name}" must have role "${expectedRole}"`
-        );
-      }
-    };
-
-    validateEmployee(helper, 'Helper', 'Helper');
-    validateEmployee(operator, 'Operator', 'Operator');
-    validateEmployee(mixture, 'Mixture', 'Mixture');
 
     /* ================== IMAGE HANDLING ================== */
     let productImageUpload;
+    const finalImageUrl = productImageUrl || image;
 
     if (req.file) {
-      productImageUpload = await uploadBufferToGCS(
-        req.file.buffer,
-        req.file.originalname,
-        'product-images',
-        req.file.mimetype
-      );
+      productImageUpload = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype);
     } else {
-      const imageResponse = await axios.get(finalImageUrl, {
-        responseType: 'arraybuffer'
-      });
-
-      productImageUpload = await uploadBufferToGCS(
-        Buffer.from(imageResponse.data),
-        `product-${cleanItemNo}-${Date.now()}.jpg`,
-        'product-images',
-        imageResponse.headers['content-type'] || 'image/jpeg'
-      );
+      const imageResponse = await axios.get(finalImageUrl, { responseType: 'arraybuffer' });
+      productImageUpload = await uploadBufferToGCS(Buffer.from(imageResponse.data), `product-${cleanItemNo}-${Date.now()}.jpg`, 'product-images', imageResponse.headers['content-type'] || 'image/jpeg');
     }
 
-    /* ================== GENERATE BOXES ================== */
+    /* ================== GENERATE BOXES & QR ================== */
     const generatedBoxes = await Promise.all(
       Array.from({ length: numBoxes }, async (_, i) => {
         const boxSerialNo = String(i + 1).padStart(3, '0');
-
         const qrData = JSON.stringify({
-          itemNo: cleanItemNo,
-          boxSerialNo,
-          totalBoxes: numBoxes,
-
-          // 🔥 ADD EIDs
-          helperEid: helper.eid,
-          operatorEid: operator.eid,
-          mixtureEid: mixture.eid,
-
-          length,
-          noOfSticks,
-          shift,
-          company,
-          machineNumber: machineNumber || '',
-          mixtureMachine: mixtureMachine || '',
-          createdAt: new Date().toISOString()
+          itemNo: cleanItemNo, boxSerialNo, totalBoxes: numBoxes,
+          helperEid: helper.eid, operatorEid: operator.eid, mixtureEid: mixture.eid,
+          shift, company, machineNumber, mixtureMachine, createdAt: new Date().toISOString()
         });
 
-        const qrBuffer = await QRCode.toBuffer(qrData, {
-          type: 'png',
-          width: 500,
-          errorCorrectionLevel: 'H'
-        });
+        const qrBuffer = await QRCode.toBuffer(qrData, { type: 'png', width: 500 });
+        const qrUpload = await uploadBufferToGCS(qrBuffer, `qr-${cleanItemNo}-${boxSerialNo}.png`, 'qr-codes', 'image/png');
 
-        const qrUpload = await uploadBufferToGCS(
-          qrBuffer,
-          `qr-${cleanItemNo}-${boxSerialNo}.png`,
-          'qr-codes',
-          'image/png'
-        );
-
-        return {
-          boxSerialNo,
-          qrCodeUrl: qrUpload.url
-        };
+        return { boxSerialNo, qrCodeUrl: qrUpload.url };
       })
     );
 
@@ -146,67 +71,39 @@ exports.createItemWithBoxes = async (req, res) => {
       itemNo: cleanItemNo,
       length,
       noOfSticks,
-
-      helpers: [
-        {
-          employeeId: helper._id,
-          role: helper.role,
-          roleEid: helper.eid
-        }
-      ],
-
-      operators: [
-        {
-          employeeId: operator._id,
-          role: operator.role,
-          roleEid: operator.eid
-        }
-      ],
-
-      mixtures: [
-        {
-          employeeId: mixture._id,
-          role: mixture.role,
-          roleEid: mixture.eid
-        }
-      ],
-
+      helpers: [{ employeeId: helper._id, role: helper.role, roleEid: helper.eid }],
+      operators: [{ employeeId: operator._id, role: operator.role, roleEid: operator.eid }],
+      mixtures: [{ employeeId: mixture._id, role: mixture.role, roleEid: mixture.eid }],
       shift,
       company,
-      machineNumber: machineNumber || null,
-      mixtureMachine: mixtureMachine || null,
+      machineNumber,
+      mixtureMachine,
       productImageUrl: productImageUpload.url,
-
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
       completedBoxes: 0
     });
 
-    /* ================== RESPONSE ================== */
+    /* ================== TRIGGER NOTIFICATIONS ================== */
+    const notificationMsg = `New Assignment: ${cleanItemNo} assigned to you for ${shift} shift. Total boxes: ${numBoxes}`;
+    const staffIds = [helperId, operatorId, mixtureId];
+
+    const notifications = staffIds.map(id => ({
+      recipientId: id,
+      message: notificationMsg
+    }));
+
+    await StaffNotification.insertMany(notifications);
+
     return res.status(201).json({
       success: true,
-      message: 'Item created successfully',
-      data: {
-        _id: newMainItem._id,
-        itemNo: newMainItem.itemNo,
-
-        // 🔥 RETURN EIDs ALSO
-        helperEid: helper.eid,
-        operatorEid: operator.eid,
-        mixtureEid: mixture.eid,
-
-        totalBoxes: numBoxes,
-        productImageUrl: newMainItem.productImageUrl
-      }
+      message: 'Item created and staff notified successfully',
+      data: { _id: newMainItem._id, itemNo: newMainItem.itemNo }
     });
 
   } catch (error) {
-    console.error('Create Item with Boxes Error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to create item and boxes'
-    });
+    console.error('Creation Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -737,16 +634,24 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     const { employeeId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Employee ID format."
-      });
+      return res.status(400).json({ success: false, message: "Invalid ID format." });
     }
 
     const targetId = new mongoose.Types.ObjectId(employeeId);
 
+    /* ================== 1. GET NOTIFICATION STATS ================== */
+    const unreadNotifications = await StaffNotification.find({ 
+      recipientId: targetId, 
+      isRead: false 
+    }).sort({ createdAt: -1 });
+
+    const notificationSummary = {
+      count: unreadNotifications.length,
+      latestMessage: unreadNotifications.length > 0 ? unreadNotifications[0].message : "No new assignments"
+    };
+
+    /* ================== 2. GET ASSIGNED ITEMS (AGGREGATE) ================== */
     const items = await MainItem.aggregate([
-      // 1. Match the employee in any of the three roles
       {
         $match: {
           $or: [
@@ -756,210 +661,73 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           ]
         }
       },
-
       { $sort: { createdAt: -1 } },
+      { $addFields: { boxCount: { $size: { $ifNull: ["$boxes", []] } } } },
 
-      // 2. Add boxCount
-      {
-        $addFields: {
-          boxCount: { $size: { $ifNull: ["$boxes", []] } }
-        }
-      },
+      // Lookup Staff Names for each role
+      { $lookup: { from: "employees", localField: "helpers.employeeId", foreignField: "_id", as: "hDetails" } },
+      { $lookup: { from: "employees", localField: "operators.employeeId", foreignField: "_id", as: "oDetails" } },
+      { $lookup: { from: "employees", localField: "mixtures.employeeId", foreignField: "_id", as: "mDetails" } },
 
-      /* ================== LOOKUPS FOR STAFF NAMES ================== */
-      {
-        $lookup: {
-          from: "employees", // Ensure this matches your actual collection name
-          localField: "helpers.employeeId",
-          foreignField: "_id",
-          as: "helperStaffDetails"
-        }
-      },
-      {
-        $lookup: {
-          from: "employees",
-          localField: "operators.employeeId",
-          foreignField: "_id",
-          as: "operatorStaffDetails"
-        }
-      },
-      {
-        $lookup: {
-          from: "employees",
-          localField: "mixtures.employeeId",
-          foreignField: "_id",
-          as: "mixtureStaffDetails"
-        }
-      },
-
-      /* ================== EXISTING LOOKUPS ================== */
+      // Product Lookup
       {
         $lookup: {
           from: "productuploads",
           let: { itemNoLower: { $toLower: { $trim: { input: "$itemNo" } } } },
           pipeline: [
             { $addFields: { nameLower: { $toLower: { $trim: { input: "$name" } } } } },
-            { $match: { $expr: { $eq: ["$nameLower", "$$itemNoLower"] } } },
-            { $project: { _id: 1, name: 1, about: 1, description: 1, productImageUrl: 1 } }
+            { $match: { $expr: { $eq: ["$nameLower", "$$itemNoLower"] } } }
           ],
           as: "productDetails"
         }
       },
-      {
-        $lookup: {
-          from: "machines",
-          let: { machineNum: { $trim: { input: "$machineNumber" } } },
-          pipeline: [
-            { $match: { $expr: { $regexMatch: { input: { $toLower: "$name" }, regex: { $toLower: "$$machineNum" } } } } },
-            { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
-          ],
-          as: "machineDetails"
-        }
-      },
-      {
-        $lookup: {
-          from: "machines",
-          let: { mixMachineNum: { $trim: { input: "$mixtureMachine" } } },
-          pipeline: [
-            { $match: { $expr: { $regexMatch: { input: { $toLower: "$name" }, regex: { $toLower: "$$mixMachineNum" } } } } },
-            { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
-          ],
-          as: "mixtureMachineDetails"
-        }
-      },
 
-      /* ================== FINAL PROJECTION ================== */
       {
         $project: {
-          _id: 1,
-          mainItemId: "$_id",
-          itemNo: 1,
-          length: 1,
-          noOfSticks: 1,
-          shift: 1,
-          company: 1,
-          productImageUrl: 1,
-          pendingBoxes: 1,
-          completedBoxes: 1,
-          machineNumber: 1,
-          mixtureMachine: 1,
-          boxCount: 1,
-          createdAt: 1,
-
-          // Map through the arrays to inject the name from the lookup results
+          itemNo: 1, length: 1, noOfSticks: 1, shift: 1, company: 1,
+          pendingBoxes: 1, completedBoxes: 1, boxCount: 1, productImageUrl: 1,
+          
           helpers: {
             $map: {
-              input: "$helpers",
-              as: "h",
-              in: {
-                employeeId: "$$h.employeeId",
-                role: "$$h.role",
-                roleEid: "$$h.roleEid",
-                name: {
-                  $arrayElemAt: [
-                    {
-                      $map: {
-                        input: { $filter: { input: "$helperStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$h.employeeId"] } } },
-                        as: "matched",
-                        in: "$$matched.name"
-                      }
-                    }, 0
-                  ]
-                }
+              input: "$helpers", as: "h",
+              in: { 
+                employeeId: "$$h.employeeId", role: "$$h.role", roleEid: "$$h.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$hDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$h.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
               }
             }
           },
           operators: {
             $map: {
-              input: "$operators",
-              as: "o",
-              in: {
-                employeeId: "$$o.employeeId",
-                role: "$$o.role",
-                roleEid: "$$o.roleEid",
-                name: {
-                  $arrayElemAt: [
-                    {
-                      $map: {
-                        input: { $filter: { input: "$operatorStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$o.employeeId"] } } },
-                        as: "matched",
-                        in: "$$matched.name"
-                      }
-                    }, 0
-                  ]
-                }
+              input: "$operators", as: "o",
+              in: { 
+                employeeId: "$$o.employeeId", role: "$$o.role", roleEid: "$$o.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$oDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$o.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
               }
             }
           },
           mixtures: {
             $map: {
-              input: "$mixtures",
-              as: "m",
-              in: {
-                employeeId: "$$m.employeeId",
-                role: "$$m.role",
-                roleEid: "$$m.roleEid",
-                name: {
-                  $arrayElemAt: [
-                    {
-                      $map: {
-                        input: { $filter: { input: "$mixtureStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$m.employeeId"] } } },
-                        as: "matched",
-                        in: "$$matched.name"
-                      }
-                    }, 0
-                  ]
-                }
+              input: "$mixtures", as: "m",
+              in: { 
+                employeeId: "$$m.employeeId", role: "$$m.role", roleEid: "$$m.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$mDetails", as: "sd", cond: { $eq: ["$$sd._id", "$$m.employeeId"] } } }, as: "res", in: "$$res.name" } }, 0] }
               }
             }
           },
-
-          product: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$productDetails.name", 0] }, "N/A"] },
-            about: { $ifNull: [{ $arrayElemAt: ["$productDetails.about", 0] }, "N/A"] },
-            description: { $ifNull: [{ $arrayElemAt: ["$productDetails.description", 0] }, "N/A"] },
-            productImageUrl: { $ifNull: [{ $arrayElemAt: ["$productDetails.productImageUrl", 0] }, null] }
-          },
-
-          machine: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$machineDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$machineDetails.name", 0] }, "N/A"] },
-            companyName: { $ifNull: [{ $arrayElemAt: ["$machineDetails.companyName", 0] }, "N/A"] },
-            type: { $ifNull: [{ $arrayElemAt: ["$machineDetails.type", 0] }, "N/A"] }
-          },
-
-          mixtureMachineDetails: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.name", 0] }, "N/A"] },
-            companyName: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.companyName", 0] }, "N/A"] },
-            type: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.type", 0] }, "N/A"] }
-          }
+          product: { $arrayElemAt: ["$productDetails", 0] }
         }
       }
     ]);
 
-    if (!items.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No items found for this employee."
-      });
-    }
-
     res.status(200).json({
       success: true,
+      notification: notificationSummary,
       count: items.length,
-      message: "Items assigned to employee fetched successfully",
       data: items
     });
 
   } catch (error) {
-    console.error("Error fetching assigned products for employee:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch assigned products",
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
