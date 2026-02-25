@@ -743,14 +743,16 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       });
     }
 
+    const targetId = new mongoose.Types.ObjectId(employeeId);
+
     const items = await MainItem.aggregate([
-      // Match MainItems that include the employee
+      // FIXED: Match against 'employeeId' field as defined in the Create API
       {
         $match: {
           $or: [
-            { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
-            { "operators._id": new mongoose.Types.ObjectId(employeeId) },
-            { "mixtures._id": new mongoose.Types.ObjectId(employeeId) }
+            { "helpers.employeeId": targetId },
+            { "operators.employeeId": targetId },
+            { "mixtures.employeeId": targetId }
           ]
         }
       },
@@ -768,17 +770,11 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       {
         $lookup: {
           from: "productuploads",
-          let: {
-            itemNoLower: {
-              $toLower: { $trim: { input: "$itemNo" } }
-            }
-          },
+          let: { itemNoLower: { $toLower: { $trim: { input: "$itemNo" } } } },
           pipeline: [
             {
               $addFields: {
-                nameLower: {
-                  $toLower: { $trim: { input: "$name" } }
-                }
+                nameLower: { $toLower: { $trim: { input: "$name" } } }
               }
             },
             {
@@ -816,9 +812,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
                 }
               }
             },
-            {
-              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
-            }
+            { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
           ],
           as: "machineDetails"
         }
@@ -840,15 +834,13 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
                 }
               }
             },
-            {
-              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
-            }
+            { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
           ],
           as: "mixtureMachineDetails"
         }
       },
 
-      // Ensure final shape is safe for React UI
+      // Final projection
       {
         $project: {
           _id: 1,
@@ -867,6 +859,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           machineNumber: 1,
           mixtureMachine: 1,
           boxCount: 1,
+          createdAt: 1,
 
           product: {
             _id: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
