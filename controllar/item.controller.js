@@ -746,7 +746,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
     const targetId = new mongoose.Types.ObjectId(employeeId);
 
     const items = await MainItem.aggregate([
-      // FIXED: Match against 'employeeId' field as defined in the Create API
+      // 1. Match the employee in any of the three roles
       {
         $match: {
           $or: [
@@ -759,88 +759,76 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
       { $sort: { createdAt: -1 } },
 
-      // Add boxCount
+      // 2. Add boxCount
       {
         $addFields: {
           boxCount: { $size: { $ifNull: ["$boxes", []] } }
         }
       },
 
-      // Lookup product by itemNo = product.name (case-insensitive)
+      /* ================== LOOKUPS FOR STAFF NAMES ================== */
+      {
+        $lookup: {
+          from: "employees", // Ensure this matches your actual collection name
+          localField: "helpers.employeeId",
+          foreignField: "_id",
+          as: "helperStaffDetails"
+        }
+      },
+      {
+        $lookup: {
+          from: "employees",
+          localField: "operators.employeeId",
+          foreignField: "_id",
+          as: "operatorStaffDetails"
+        }
+      },
+      {
+        $lookup: {
+          from: "employees",
+          localField: "mixtures.employeeId",
+          foreignField: "_id",
+          as: "mixtureStaffDetails"
+        }
+      },
+
+      /* ================== EXISTING LOOKUPS ================== */
       {
         $lookup: {
           from: "productuploads",
           let: { itemNoLower: { $toLower: { $trim: { input: "$itemNo" } } } },
           pipeline: [
-            {
-              $addFields: {
-                nameLower: { $toLower: { $trim: { input: "$name" } } }
-              }
-            },
-            {
-              $match: {
-                $expr: { $eq: ["$nameLower", "$$itemNoLower"] }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                about: 1,
-                description: 1,
-                productImageUrl: 1
-              }
-            }
+            { $addFields: { nameLower: { $toLower: { $trim: { input: "$name" } } } } },
+            { $match: { $expr: { $eq: ["$nameLower", "$$itemNoLower"] } } },
+            { $project: { _id: 1, name: 1, about: 1, description: 1, productImageUrl: 1 } }
           ],
           as: "productDetails"
         }
       },
-
-      // Lookup operator machine
       {
         $lookup: {
           from: "machines",
           let: { machineNum: { $trim: { input: "$machineNumber" } } },
           pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $regexMatch: {
-                    input: { $toLower: "$name" },
-                    regex: { $toLower: "$$machineNum" }
-                  }
-                }
-              }
-            },
+            { $match: { $expr: { $regexMatch: { input: { $toLower: "$name" }, regex: { $toLower: "$$machineNum" } } } } },
             { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
           ],
           as: "machineDetails"
         }
       },
-
-      // Lookup mixture machine
       {
         $lookup: {
           from: "machines",
           let: { mixMachineNum: { $trim: { input: "$mixtureMachine" } } },
           pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $regexMatch: {
-                    input: { $toLower: "$name" },
-                    regex: { $toLower: "$$mixMachineNum" }
-                  }
-                }
-              }
-            },
+            { $match: { $expr: { $regexMatch: { input: { $toLower: "$name" }, regex: { $toLower: "$$mixMachineNum" } } } } },
             { $project: { _id: 1, name: 1, companyName: 1, type: 1 } }
           ],
           as: "mixtureMachineDetails"
         }
       },
 
-      // Final projection
+      /* ================== FINAL PROJECTION ================== */
       {
         $project: {
           _id: 1,
@@ -848,9 +836,6 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           itemNo: 1,
           length: 1,
           noOfSticks: 1,
-          helpers: 1,
-          operators: 1,
-          mixtures: 1,
           shift: 1,
           company: 1,
           productImageUrl: 1,
@@ -860,6 +845,74 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           mixtureMachine: 1,
           boxCount: 1,
           createdAt: 1,
+
+          // Map through the arrays to inject the name from the lookup results
+          helpers: {
+            $map: {
+              input: "$helpers",
+              as: "h",
+              in: {
+                employeeId: "$$h.employeeId",
+                role: "$$h.role",
+                roleEid: "$$h.roleEid",
+                name: {
+                  $arrayElemAt: [
+                    {
+                      $map: {
+                        input: { $filter: { input: "$helperStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$h.employeeId"] } } },
+                        as: "matched",
+                        in: "$$matched.name"
+                      }
+                    }, 0
+                  ]
+                }
+              }
+            }
+          },
+          operators: {
+            $map: {
+              input: "$operators",
+              as: "o",
+              in: {
+                employeeId: "$$o.employeeId",
+                role: "$$o.role",
+                roleEid: "$$o.roleEid",
+                name: {
+                  $arrayElemAt: [
+                    {
+                      $map: {
+                        input: { $filter: { input: "$operatorStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$o.employeeId"] } } },
+                        as: "matched",
+                        in: "$$matched.name"
+                      }
+                    }, 0
+                  ]
+                }
+              }
+            }
+          },
+          mixtures: {
+            $map: {
+              input: "$mixtures",
+              as: "m",
+              in: {
+                employeeId: "$$m.employeeId",
+                role: "$$m.role",
+                roleEid: "$$m.roleEid",
+                name: {
+                  $arrayElemAt: [
+                    {
+                      $map: {
+                        input: { $filter: { input: "$mixtureStaffDetails", as: "s", cond: { $eq: ["$$s._id", "$$m.employeeId"] } } },
+                        as: "matched",
+                        in: "$$matched.name"
+                      }
+                    }, 0
+                  ]
+                }
+              }
+            }
+          },
 
           product: {
             _id: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
