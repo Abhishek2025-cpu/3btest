@@ -8,7 +8,8 @@ const {
   updateEmployee,
   deleteEmployee,
   updateEmployeeStatus,
-  loginEmployee
+  loginEmployee,
+  getEmployeesByFilter
 } = require('../controllar/employeeController');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -24,6 +25,7 @@ router.post(
   createEmployee
 );
 router.get('/get-employees', getAllEmployees);
+router.get("/get-role-base-employee-data", getEmployeesByFilter);
 router.patch('/employees/:id/status', updateEmployeeStatus);
 
 router.get('/employees/:id', getEmployeeById);

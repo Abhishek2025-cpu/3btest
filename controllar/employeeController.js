@@ -37,7 +37,7 @@ async function generateEID() {
 
 exports.createEmployee = async (req, res) => {
   try {
-    let { name, mobile, dob, adharNumber, role } = req.body;
+    let { name, mobile, dob, adharNumber, role, otherRoles } = req.body;
 
     /* -------------------- VALIDATION -------------------- */
  
@@ -96,10 +96,14 @@ exports.createEmployee = async (req, res) => {
 
     /* -------------------- PASSWORD GENERATION -------------------- */
     const password = generatePassword(name, adharNumber);
-    if (typeof role === 'string') {
-    role = role.split(',').map(r => r.trim());
+    if (role !== 'Other') {
+  otherRoles = []; 
+} else {
+  // Agar frontend se otherRoles string mein aa raha hai toh use array bana do
+  if (typeof otherRoles === 'string') {
+    otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
+  }
 }
-
     /* -------------------- CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({
       name,
@@ -110,7 +114,8 @@ exports.createEmployee = async (req, res) => {
       profilePic,
       role,
       password,
-      eid,  // will be hashed automatically
+      eid, 
+      otherRoles // will be hashed automatically
     });
 
     /* -------------------- RESPONSE -------------------- */
@@ -126,6 +131,7 @@ exports.createEmployee = async (req, res) => {
         mobile: employee.mobile,
         role: employee.role,
         status: employee.status,
+        
       },
     });
   } catch (error) {
@@ -217,6 +223,36 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+exports.getEmployeesByFilter = async (req, res) => {
+  try {
+    // Frontend se 'role' query parameter mein aayega 
+    // Example: ?selectedRole=Helper ya ?selectedRole=Electrician
+    const { selectedRole } = req.query; 
+
+    if (!selectedRole) {
+      return res.status(400).json({ error: "Please provide a role to filter." });
+    }
+
+    // MongoDB Query: 
+    // Hum check karenge ki selectedRole 'role' field mein hai YA 'otherRoles' array ke andar hai
+    const employees = await Employee.find({
+      $or: [
+        { role: selectedRole },             // Case 1: Helper, Operator, Mixture
+        { otherRoles: selectedRole }       // Case 2: Electrician, Admin, etc. (Array search)
+      ]
+    });
+
+    if (employees.length === 0) {
+      return res.status(404).json({ message: "No employees found for this role." });
+    }
+
+    res.status(200).json(employees);
+  } catch (error) {
+    console.error("Filter Error:", error);
+    res.status(500).json({ error: "Failed to fetch employees" });
+  }
+};
+
 /**
  * Updates an existing employee's details.
  * EID is considered immutable and is not changed.
@@ -225,7 +261,7 @@ exports.getEmployeeById = async (req, res) => {
 exports.updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, mobile, role, dob, adharNumber, password } = req.body;
+    let { name, mobile, role, dob, adharNumber, password } = req.body;
 
     // 1. Find the employee to update
     const employee = await Employee.findById(id);
@@ -233,6 +269,13 @@ exports.updateEmployee = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found.' });
     }
 
+      if (role) {
+      if (typeof role === 'string') {
+        role = role.split(',').map(r => r.trim());
+      }
+    } else {
+      role = employee.role; // Agar role nahi bheja to purana wala hi rahega
+    }
     // 2. Validate mobile number (only if changed)
     if (mobile && mobile !== employee.mobile) {
       const existingEmployee = await Employee.findOne({ mobile, _id: { $ne: id } });
