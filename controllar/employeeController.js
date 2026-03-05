@@ -96,6 +96,9 @@ exports.createEmployee = async (req, res) => {
 
     /* -------------------- PASSWORD GENERATION -------------------- */
     const password = generatePassword(name, adharNumber);
+    if (typeof role === 'string') {
+    role = role.split(',').map(r => r.trim());
+}
 
     /* -------------------- CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({

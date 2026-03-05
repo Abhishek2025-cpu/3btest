@@ -32,8 +32,9 @@ const employeeSchema = new mongoose.Schema(
 
     // ✅ SINGLE ROLE
     role: {
-      type: String,
+      type: [String],
       required: true,
+      default: [],
     },
 
     // ✅ SINGLE PASSWORD (HASHED)
