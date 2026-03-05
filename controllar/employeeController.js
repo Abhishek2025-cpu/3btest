@@ -39,10 +39,30 @@ exports.createEmployee = async (req, res) => {
   try {
     let { name, mobile, dob, adharNumber, role, otherRoles } = req.body;
 
-    /* -------------------- VALIDATION -------------------- */
- 
+    /* -------------------- 1. ROLE & OTHER ROLES PARSING -------------------- */
+    // Role ko array mein convert karein (Kyunki multipart/form-data se string aata hai)
+    if (role) {
+      if (typeof role === 'string') {
+        role = role.split(',').map(r => r.trim());
+      }
+    } else {
+      return res.status(400).json({ message: "Role is required." });
+    }
 
-    /* -------------------- DUPLICATE CHECK -------------------- */
+    // "Other" roles ka logic
+    if (role.includes('Other')) {
+      if (typeof otherRoles === 'string') {
+        // "electrician, plumber" -> ["electrician", "plumber"]
+        otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
+      } else if (!otherRoles) {
+        otherRoles = [];
+      }
+    } else {
+      // Agar role mein 'Other' nahi hai, toh any otherRoles data ko empty kar do
+      otherRoles = [];
+    }
+
+    /* -------------------- 2. DUPLICATE CHECK -------------------- */
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
       return res.status(400).json({
@@ -50,18 +70,16 @@ exports.createEmployee = async (req, res) => {
       });
     }
 
-    /* -------------------- DOB -------------------- */
+    /* -------------------- 3. DOB HANDLING -------------------- */
     let dobDate = null;
     if (dob) {
       dobDate = new Date(dob);
       if (isNaN(dobDate.getTime())) {
-        return res.status(400).json({
-          message: "Invalid DOB format.",
-        });
+        return res.status(400).json({ message: "Invalid DOB format." });
       }
     }
 
-    /* -------------------- FILE UPLOAD -------------------- */
+    /* -------------------- 4. FILE UPLOAD (ADHAR) -------------------- */
     if (!req.files?.adharImage?.length) {
       return res.status(400).json({
         message: "Adhar image is required.",
@@ -76,8 +94,8 @@ exports.createEmployee = async (req, res) => {
       adharFile.mimetype
     );
 
-    /* -------------------- PROFILE PIC -------------------- */
-    let profilePic = null;
+    /* -------------------- 5. FILE UPLOAD (PROFILE PIC) -------------------- */
+    let profilePic = { url: null, fileId: null };
     if (req.files?.profilePic?.length) {
       const profileFile = req.files.profilePic[0];
       const profileUpload = await uploadBufferToGCS(
@@ -92,19 +110,12 @@ exports.createEmployee = async (req, res) => {
         fileId: profileUpload.id,
       };
     }
-    const eid = await generateEID();
 
-    /* -------------------- PASSWORD GENERATION -------------------- */
+    /* -------------------- 6. GENERATE EID & PASSWORD -------------------- */
+    const eid = await generateEID();
     const password = generatePassword(name, adharNumber);
-    if (role !== 'Other') {
-  otherRoles = []; 
-} else {
-  // Agar frontend se otherRoles string mein aa raha hai toh use array bana do
-  if (typeof otherRoles === 'string') {
-    otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
-  }
-}
-    /* -------------------- CREATE EMPLOYEE -------------------- */
+
+    /* -------------------- 7. CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({
       name,
       mobile,
@@ -112,33 +123,36 @@ exports.createEmployee = async (req, res) => {
       adharNumber: adharNumber || "",
       adharImageUrl: adharUpload.url,
       profilePic,
-      role,
-      password,
+      role,         // Array format: ["Other"] or ["Helper", "Other"]
+      otherRoles,   // Array format: ["electrician"]
+      password,     // Mongoose schema pre-save hook handles hashing
       eid, 
-      otherRoles // will be hashed automatically
     });
 
-    /* -------------------- RESPONSE -------------------- */
+    /* -------------------- 8. RESPONSE -------------------- */
     res.status(201).json({
       message: "Employee created successfully",
       credentials: {
         mobile: employee.mobile,
-        password: password, // send only once
+        password: password, // Send plain password only once
       },
       employee: {
         _id: employee._id,
+        eid: employee.eid,
         name: employee.name,
         mobile: employee.mobile,
-        role: employee.role,
+        role: employee.role,             // Ab yahan ["Other"] dikhega
+        otherRoles: employee.otherRoles, // Ab yahan ["electrician"] dikhega
         status: employee.status,
-        
+        dob: employee.dob,
+        profilePic: employee.profilePic
       },
     });
+
   } catch (error) {
     console.error("Create Employee Error:", error);
     res.status(500).json({
-      message:
-        error.message || "Failed to create employee due to a server error.",
+      message: error.message || "Failed to create employee due to a server error.",
     });
   }
 };
