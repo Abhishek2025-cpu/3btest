@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const Notification = require("../models/Notification");
 const Order = require("../models/Order");
 const User = require("../models/User");
-
+const axios = require("axios");
 
 
 // In your productUploadController.js file
@@ -103,9 +103,6 @@ async function adjustPositionsForUpdate(oldPosition, newPosition, excludedProduc
 
   return clamped;
 }
-
-
-
 
 
 // exports.createProduct = async (req, res) => {
@@ -382,20 +379,23 @@ exports.createProduct = async (req, res) => {
 };
 
 
-
-
-const axios = require("axios");
-
 // exports.getAllProducts = async (req, res) => {
 //   try {
-//     // 1️⃣ Total count
+//     const page = parseInt(req.query.page);
+//     const limit = 10; 
+//     const showAll = req.query.all === 'true'; 
+
+//     let skip = 0;
+//     let paginatedProducts = [];
+
+//     // 1️ Total count
 //     const totalProducts = await Product.countDocuments();
 
-//     // 2️⃣ Date 15 days ago
+//     // 2️ Date 15 days ago
 //     const fifteenDaysAgo = new Date();
 //     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-//     // 3️⃣ Recent products
+//     // 3️ Recent products
 //     const recentProductsDB = await Product.find({
 //       createdAt: { $gte: fifteenDaysAgo }
 //     })
@@ -403,7 +403,7 @@ const axios = require("axios");
 //       .sort({ createdAt: -1 })
 //       .lean();
 
-//     // 4️⃣ Old products
+//     // 4️ Old products
 //     const oldProductsDB = await Product.find({
 //       createdAt: { $lt: fifteenDaysAgo }
 //     })
@@ -411,10 +411,23 @@ const axios = require("axios");
 //       .sort({ position: 1 })
 //       .lean();
 
-//     // 5️⃣ Merge products
+//     // 5️ Merge products
 //     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
 
-//     // 6️⃣ Fetch dimensions
+//     if (showAll) {
+//       // If 'all=true' is sent, use all merged products
+//       paginatedProducts = productsFromDB;
+//     } else if (page && !isNaN(page) && page >= 1) {
+//       // Apply pagination if a valid page number is provided
+//       skip = (page - 1) * limit;
+//       paginatedProducts = productsFromDB.slice(skip, skip + limit);
+//     } else {
+//       // If no 'page' or 'all=true' is sent, default to page 1 with limit 10
+//       skip = (1 - 1) * limit; // skip = 0
+//       paginatedProducts = productsFromDB.slice(skip, skip + limit);
+//     }
+
+//     // 6️Fetch dimensions
 //     const dimRes = await axios.get(
 //       "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
 //     );
@@ -422,24 +435,23 @@ const axios = require("axios");
 //     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
 //     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
 
-//     // ⭐ 7️⃣ Fetch ALL orders once
+//     //  Fetch ALL orders once
 //     const allOrders = await Order.find()
 //       .populate("userId", "name")
 //       .lean();
 
-//     // 8️⃣ Translate
+//     // 8️ Translate (use paginatedProducts)
 //     const translatedProducts = await translateResponse(
 //       req,
-//       productsFromDB,
+//       paginatedProducts,
 //       productFieldsToTranslate
 //     );
 
-//     // 9️⃣ Add dimensions + orders array
+//     // 9️ Add dimensions + orders array
 //     const formattedProducts = translatedProducts.map(p => {
 //       const hasCategory =
 //         p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
 
-//       // 🔍 Find all orders containing this product
 //       const productOrders = [];
 
 //       allOrders.forEach(order => {
@@ -458,26 +470,30 @@ const axios = require("axios");
 //       return {
 //         ...p,
 
-//         // dimension mapping
 //         dimensions: Array.isArray(p.dimensions)
 //           ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
 //           : [],
 
-//         // ⭐ ADD THIS (your requirement)
 //         orders: productOrders,
 
-//         // category fixes
 //         categoryName: hasCategory ? p.categoryId.name : null,
 //         categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
 //       };
 //     });
 
-//     // 🔟 Response
+//     // Calculate pagination metadata based on whether 'all' was requested or not
+//     const totalPages = showAll ? 1 : Math.ceil(productsFromDB.length / limit);
+//     const currentPage = showAll ? 1 : (page && !isNaN(page) && page >= 1 ? page : 1);
+
+
 //     res.status(200).json({
 //       success: true,
 //       message: "✅ Products fetched successfully",
 //       totalProducts,
 //       recentProducts: recentProductsDB.length,
+//       page: currentPage, // Use calculated current page
+//       limit: showAll ? productsFromDB.length : limit, // Show total count if all, otherwise limit
+//       totalPages: totalPages,
 //       products: formattedProducts
 //     });
 
@@ -490,72 +506,58 @@ const axios = require("axios");
 //     });
 //   }
 // };
+
 exports.getAllProducts = async (req, res) => {
   try {
-
-    // ✅ pagination
+    // 1. Params handle karein
     const page = parseInt(req.query.page) || 1;
-    const limit = 5;
-    const skip = (page - 1) * limit;
+    const limit = req.query.limit ? parseInt(req.query.limit) : 10; 
+    const showAll = req.query.all === 'true'; 
 
-    // 1️⃣ Total count
-    const totalProducts = await Product.countDocuments();
-
-    // 2️⃣ Date 15 days ago
+    // 2. Date 15 days ago
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-    // 3️⃣ Recent products
-    const recentProductsDB = await Product.find({
-      createdAt: { $gte: fifteenDaysAgo }
-    })
-      .populate("categoryId", "name")
-      .sort({ createdAt: -1 })
-      .lean();
+    // 3. Parallel Fetching (Speed badhane ke liye)
+    const [recentProductsDB, oldProductsDB, dimRes, allOrders] = await Promise.all([
+      Product.find({ createdAt: { $gte: fifteenDaysAgo } }).populate("categoryId", "name").sort({ createdAt: -1 }).lean(),
+      Product.find({ createdAt: { $lt: fifteenDaysAgo } }).populate("categoryId", "name").sort({ position: 1 }).lean(),
+      axios.get("https://threebappbackend.onrender.com/api/dimensions/get-dimensions").catch(() => ({ data: [] })),
+      Order.find().lean() // Note: Agar orders bahut zyada hain toh ye slow ho sakta hai
+    ]);
 
-    // 4️⃣ Old products
-    const oldProductsDB = await Product.find({
-      createdAt: { $lt: fifteenDaysAgo }
-    })
-      .populate("categoryId", "name")
-      .sort({ position: 1 })
-      .lean();
-
-    // 5️⃣ Merge products
+    // 4. Merge Products
     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
+    const totalProducts = productsFromDB.length;
 
-    // ✅ apply pagination AFTER merge
-    const paginatedProducts = productsFromDB.slice(skip, skip + limit);
+    // 5. Pagination Logic
+    let paginatedProducts = [];
+    if (showAll) {
+      paginatedProducts = productsFromDB;
+    } else {
+      const skip = (page - 1) * limit;
+      paginatedProducts = productsFromDB.slice(skip, skip + limit);
+    }
 
-    // 6️⃣ Fetch dimensions
-    const dimRes = await axios.get(
-      "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
-    );
-
+    // 6. Dimensions Map
     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
 
-    // ⭐ 7️⃣ Fetch ALL orders once
-    const allOrders = await Order.find()
-      .populate("userId", "name")
-      .lean();
-
-    // 8️⃣ Translate (use paginatedProducts)
+    // 7. Translation (Only for paginated items to save API cost/time)
     const translatedProducts = await translateResponse(
       req,
       paginatedProducts,
       productFieldsToTranslate
     );
 
-    // 9️⃣ Add dimensions + orders array
+    // 8. Format Data
     const formattedProducts = translatedProducts.map(p => {
-      const hasCategory =
-        p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
-
+      const hasCategory = p.categoryId && typeof p.categoryId === "object";
+      
+      // Order filtering logic
       const productOrders = [];
-
       allOrders.forEach(order => {
-        order.products.forEach(prod => {
+        order.products?.forEach(prod => {
           if (prod.productId?.toString() === p._id.toString()) {
             productOrders.push({
               customerName: order.userId?.name || "Unknown",
@@ -569,13 +571,10 @@ exports.getAllProducts = async (req, res) => {
 
       return {
         ...p,
-
         dimensions: Array.isArray(p.dimensions)
           ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
           : [],
-
         orders: productOrders,
-
         categoryName: hasCategory ? p.categoryId.name : null,
         categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
       };
@@ -585,132 +584,20 @@ exports.getAllProducts = async (req, res) => {
       success: true,
       message: "✅ Products fetched successfully",
       totalProducts,
-      recentProducts: recentProductsDB.length,
-      page,
-      limit,
-      totalPages: Math.ceil(productsFromDB.length / limit),
+      page: showAll ? 1 : page,
+      limit: showAll ? totalProducts : limit,
+      totalPages: showAll ? 1 : Math.ceil(totalProducts / limit),
       products: formattedProducts
     });
 
   } catch (err) {
-    console.error("❌ Error fetching products:", err);
-    res.status(500).json({
-      success: false,
-      message: "❌ Failed to fetch products",
-      error: err.message
-    });
+    console.error("❌ Error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 
-<<<<<<< HEAD
-// exports.getAllProducts = async (req, res) => {
-//   try {
-//     // 1️⃣ Total count
-//     const totalProducts = await Product.countDocuments();
 
-//     // 2️⃣ Date 15 days ago
-//     const fifteenDaysAgo = new Date();
-//     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-
-//     // 3️⃣ Recent products
-//     const recentProductsDB = await Product.find({
-//       createdAt: { $gte: fifteenDaysAgo }
-//     })
-//       .populate("categoryId", "name")
-//       .sort({ createdAt: -1 })
-//       .lean();
-
-//     // 4️⃣ Old products
-//     const oldProductsDB = await Product.find({
-//       createdAt: { $lt: fifteenDaysAgo }
-//     })
-//       .populate("categoryId", "name")
-//       .sort({ position: 1 })
-//       .lean();
-
-//     // 5️⃣ Merge products
-//     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
-
-//     // 6️⃣ Fetch dimensions
-//     const dimRes = await axios.get(
-//       "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
-//     );
-
-//     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
-//     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
-
-//     // ⭐ 7️⃣ Fetch ALL orders once
-//     const allOrders = await Order.find()
-//       .populate("userId", "name")
-//       .lean();
-
-//     // 8️⃣ Translate
-//     const translatedProducts = await translateResponse(
-//       req,
-//       productsFromDB,
-//       productFieldsToTranslate
-//     );
-
-//     // 9️⃣ Add dimensions + orders array
-//     const formattedProducts = translatedProducts.map(p => {
-//       const hasCategory =
-//         p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
-
-//       // 🔍 Find all orders containing this product
-//       const productOrders = [];
-
-//       allOrders.forEach(order => {
-//         order.products.forEach(prod => {
-//           if (prod.productId?.toString() === p._id.toString()) {
-//             productOrders.push({
-//               customerName: order.userId?.name || "Unknown",
-//               qty: prod.quantity,
-//               orderStatus: prod.currentStatus,
-//               orderDate: order.createdAt
-//             });
-//           }
-//         });
-//       });
-
-//       return {
-//         ...p,
-
-//         // dimension mapping
-//         dimensions: Array.isArray(p.dimensions)
-//           ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
-//           : [],
-
-//         // ⭐ ADD THIS (your requirement)
-//         orders: productOrders,
-
-//         // category fixes
-//         categoryName: hasCategory ? p.categoryId.name : null,
-//         categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
-//       };
-//     });
-
-//     // 🔟 Response
-//     res.status(200).json({
-//       success: true,
-//       message: "✅ Products fetched successfully",
-//       totalProducts,
-//       recentProducts: recentProductsDB.length,
-//       products: formattedProducts
-//     });
-
-//   } catch (err) {
-//     console.error("❌ Error fetching products:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "❌ Failed to fetch products",
-//       error: err.message
-//     });
-//   }
-// };
-
-=======
->>>>>>> c2661a915e559c892f4912754f7a907c2a492508
 exports.getSingleProduct = async (req, res) => {
   try {
     // 1️⃣ Sanitize ID (Remove spaces/newlines)

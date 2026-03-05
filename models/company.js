@@ -12,12 +12,17 @@ const companySchema = new Schema(
     logo: {
       id: {
         type: String,
-        required: true, // GCS object path / ID
+        required: true,
       },
       url: {
         type: String,
-        required: true, // Public URL
+        required: true,
       },
+    },
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category', // must match your Category model name
+      required: true,  // optional, based on your logic
     },
   },
   {

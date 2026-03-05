@@ -1,8 +1,4 @@
-
 const { uploadBufferToGCS } = require('../utils/gcloud');
-
-
-
 const Employee = require('../models/Employee');
 const axios = require('axios');
 const jwt = require("jsonwebtoken");
@@ -11,82 +7,67 @@ const bcrypt = require("bcryptjs");
 
 
 
-
-function generateEid() {
-  // Safer EID (low collision)
-  return `3B${Date.now().toString().slice(-4)}`;
-}
-
 function generatePassword(name, adhar) {
-  name = (name || '').toLowerCase();
+  // keep only alphabets from name
+  const cleanName = (name || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, ""); // removes space, dot, special chars
 
-  let namePart = '';
-  let i = 0;
+  // take first 4 valid letters
+  const namePart = cleanName.slice(0, 4);
 
-  while (namePart.length < 4 && i < name.length) {
-    if (name[i] !== ' ') {
-      namePart += name[i];
-    }
-    i++;
-  }
+  // keep only digits from adhar
+  const cleanAdhar = (adhar || "").replace(/\D/g, "");
 
-  const adharPart = (adhar || '').slice(0, 4);
-  return `${namePart}${adharPart}`;
+  // take first 4 digits
+  const adharPart = cleanAdhar.slice(0, 4);
+
+  // combine and ensure 8 characters
+  return (namePart + adharPart).padEnd(8, "0");
 }
+
+
+async function generateEID() {
+  const count = await Employee.countDocuments();
+  const nextNumber = count + 1;
+
+  return `EMP${String(nextNumber).padStart(3, "0")}`;
+}
+
 
 exports.createEmployee = async (req, res) => {
   try {
-    let { name, mobile, dob, adharNumber, roles } = req.body;
+    let { name, mobile, dob, adharNumber, role } = req.body;
 
-    /* -------------------- BASIC VALIDATION -------------------- */
-    if (!name || !mobile || !roles) {
-      return res.status(400).json({
-        message: "Name, Mobile and Roles are required."
-      });
-    }
-
-    /* -------------------- ROLES PARSING -------------------- */
-    if (typeof roles === "string") {
-      try {
-        roles = JSON.parse(roles);
-      } catch {
-        roles = [roles];
-      }
-    }
-
-    if (!Array.isArray(roles) || roles.length === 0) {
-      return res.status(400).json({
-        message: "Roles must be a non-empty array."
-      });
-    }
-
-    /* -------------------- FILE VALIDATION -------------------- */
-    if (!req.files?.adharImage?.length) {
-      return res.status(400).json({
-        message: "Adhar image is required."
-      });
-    }
+    /* -------------------- VALIDATION -------------------- */
+ 
 
     /* -------------------- DUPLICATE CHECK -------------------- */
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
       return res.status(400).json({
-        message: "Mobile number already exists."
+        message: "Mobile number already exists.",
       });
     }
 
-    /* -------------------- DOB VALIDATION -------------------- */
+    /* -------------------- DOB -------------------- */
     let dobDate = null;
     if (dob) {
       dobDate = new Date(dob);
       if (isNaN(dobDate.getTime())) {
         return res.status(400).json({
-          message: "Invalid DOB format."
+          message: "Invalid DOB format.",
         });
       }
     }
 
-    /* -------------------- UPLOAD ADHAR -------------------- */
+    /* -------------------- FILE UPLOAD -------------------- */
+    if (!req.files?.adharImage?.length) {
+      return res.status(400).json({
+        message: "Adhar image is required.",
+      });
+    }
+
     const adharFile = req.files.adharImage[0];
     const adharUpload = await uploadBufferToGCS(
       adharFile.buffer,
@@ -95,7 +76,7 @@ exports.createEmployee = async (req, res) => {
       adharFile.mimetype
     );
 
-    /* -------------------- UPLOAD PROFILE PIC -------------------- */
+    /* -------------------- PROFILE PIC -------------------- */
     let profilePic = null;
     if (req.files?.profilePic?.length) {
       const profileFile = req.files.profilePic[0];
@@ -108,16 +89,13 @@ exports.createEmployee = async (req, res) => {
 
       profilePic = {
         url: profileUpload.url,
-        fileId: profileUpload.id
+        fileId: profileUpload.id,
       };
     }
+    const eid = await generateEID();
 
-    /* -------------------- CREATE ROLE ACCOUNTS -------------------- */
-    const roleAccounts = roles.map(role => ({
-      role,
-      eid: generateEid(),
-      password: generatePassword(name, adharNumber)
-    }));
+    /* -------------------- PASSWORD GENERATION -------------------- */
+    const password = generatePassword(name, adharNumber);
 
     /* -------------------- CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({
@@ -127,24 +105,31 @@ exports.createEmployee = async (req, res) => {
       adharNumber: adharNumber || "",
       adharImageUrl: adharUpload.url,
       profilePic,
-      roles: roleAccounts
+      role,
+      password,
+      eid,  // will be hashed automatically
     });
 
     /* -------------------- RESPONSE -------------------- */
     res.status(201).json({
       message: "Employee created successfully",
-      credentials: employee.roles.map(r => ({
-        role: r.role,
-        eid: r.eid,
-        password: r.password
-      })),
-      employee
+      credentials: {
+        mobile: employee.mobile,
+        password: password, // send only once
+      },
+      employee: {
+        _id: employee._id,
+        name: employee.name,
+        mobile: employee.mobile,
+        role: employee.role,
+        status: employee.status,
+      },
     });
-
   } catch (error) {
     console.error("Create Employee Error:", error);
     res.status(500).json({
-      message: error.message || "Failed to create employee due to a server error."
+      message:
+        error.message || "Failed to create employee due to a server error.",
     });
   }
 };
@@ -207,15 +192,17 @@ exports.updateEmployeeStatus = async (req, res) => {
 
 
 
-
 exports.getAllEmployees = async (req, res) => {
   try {
     const employees = await Employee.find();
+
     res.status(200).json(employees);
   } catch (error) {
+    console.error("GET EMPLOYEES ERROR:", error);
     res.status(500).json({ error: 'Failed to fetch employees' });
   }
 };
+
 
 exports.getEmployeeById = async (req, res) => {
   try {
@@ -384,108 +371,47 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // ----------------------
-    // 1️⃣ HARDCODED USERS LOGIN
-    // ----------------------
-    const hardcodedUser = HARDCODED_USERS.find((u) =>
-      u.mobile === mobile &&
-      u.roles.some((r) => r.status === true && r.password === password)
-    );
-
-    if (hardcodedUser) {
-      const activeRole = hardcodedUser.roles.find(
-        (r) => r.status === true && r.password === password
-      );
-
-      const token = jwt.sign(
-        {
-          employeeId: hardcodedUser._id,
-          mobile: hardcodedUser.mobile,
-          role: activeRole.role,
-          eid: activeRole.eid,
-        },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: "Login successful (hardcoded)",
-        token,
-        employee: {
-          _id: hardcodedUser._id,
-          name: hardcodedUser.name,
-          mobile: hardcodedUser.mobile,
-          dob: hardcodedUser.dob,
-          adharNumber: hardcodedUser.adharNumber,
-          adharImageUrl: hardcodedUser.adharImageUrl,
-          profilePic: hardcodedUser.profilePic,
-          activeRole: {
-            role: activeRole.role,
-            eid: activeRole.eid,
-          },
-          roles: hardcodedUser.roles.map((r) => ({
-            role: r.role,
-            eid: r.eid,
-            status: r.status,
-          })),
-        },
-      });
-    }
-
-    // ----------------------
-    // 2️⃣ DATABASE USER LOGIN
-    // ----------------------
+    // 1️⃣ Find employee
     const employee = await Employee.findOne({ mobile: mobile.trim() });
 
     if (!employee || !employee.status) {
       return res.status(401).json({
         success: false,
-        message: "Invalid mobile number or password",
+        message: "Invalid mobile or password",
       });
     }
 
-    let activeRole = null;
+    // 2️⃣ Check password (plain OR bcrypt based)
+    let isMatch = false;
 
-    // Single-role login: pick first active role if exists
-    if (Array.isArray(employee.roles) && employee.roles.length > 0) {
-      activeRole = employee.roles.find((r) => r.status === true);
-      if (!activeRole || activeRole.password !== password) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid mobile number or password",
-        });
-      }
-    } else if (employee.password) {
-      // fallback to single password field
-      if (employee.password !== password) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid mobile number or password",
-        });
-      }
-      activeRole = {
-        role: employee.role || "Employee",
-        eid: employee.eid || "UNKNOWN",
-      };
+    // If you are hashing password → use this
+    if (employee.password && employee.password.startsWith("$2")) {
+      isMatch = await bcrypt.compare(password, employee.password);
     } else {
+      // current system (plain password)
+      isMatch = employee.password === password;
+    }
+
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: "Invalid mobile number or password",
+        message: "Invalid mobile or password",
       });
     }
 
+    // 3️⃣ Generate token
     const token = jwt.sign(
       {
         employeeId: employee._id,
         mobile: employee.mobile,
-        role: activeRole.role,
-        eid: activeRole.eid,
+        role: employee.role,
+        eid: employee.eid,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
+    // 4️⃣ Response
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -498,25 +424,12 @@ exports.loginEmployee = async (req, res) => {
         adharNumber: employee.adharNumber,
         adharImageUrl: employee.adharImageUrl,
         profilePic: employee.profilePic,
-        activeRole: {
-          role: activeRole.role,
-          eid: activeRole.eid,
-        },
-        roles: Array.isArray(employee.roles)
-          ? employee.roles.map((r) => ({
-              role: r.role,
-              eid: r.eid,
-              status: r.status,
-            }))
-          : [
-              {
-                role: activeRole.role,
-                eid: activeRole.eid,
-                status: true,
-              },
-            ],
+        role: employee.role,
+        eid: employee.eid,
+        status: employee.status,
       },
     });
+
   } catch (error) {
     console.error("Login Employee Error:", error);
     return res.status(500).json({
@@ -525,6 +438,5 @@ exports.loginEmployee = async (req, res) => {
     });
   }
 };
-
 
 

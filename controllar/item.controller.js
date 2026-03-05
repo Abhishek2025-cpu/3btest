@@ -1,52 +1,32 @@
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
-const MainItem = require('../models/item.model'); // IMPORTANT: Use the new MainItem model
+const axios = require('axios');
+const MainItem = require('../models/item.model');
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 
-// ADVANCED CREATE FUNCTION
-const axios = require('axios');
+
+
 
 exports.createItemWithBoxes = async (req, res) => {
   try {
     const {
-      itemNo,
-      length,
-      noOfSticks,
-      mixtureId,
-      helperId,
-      operatorId,
-      shift,
-      company,
-      noOfBoxes,
-      machineNumber,
-      mixtureMachine,
-      productImageUrl,
-      image // ✅ alias from frontend
+      itemNo, length, noOfSticks, mixtureId, helperId, operatorId,
+      shift, company, noOfBoxes, machineNumber, mixtureMachine,
+      productImageUrl, image
     } = req.body;
 
-    // ================== BASIC VALIDATION ==================
-    const cleanItemNo = itemNo ? itemNo.trim() : '';
-    if (!cleanItemNo) {
-      return res.status(400).json({ error: 'Item No is required' });
-    }
+    /* ================== BASIC VALIDATION ================== */
+    const cleanItemNo = itemNo?.trim();
+    if (!cleanItemNo) return res.status(400).json({ error: 'Item No is required' });
 
     const numBoxes = parseInt(noOfBoxes, 10);
     if (isNaN(numBoxes) || numBoxes <= 0) {
-      return res
-        .status(400)
-        .json({ error: 'A valid, positive number of boxes is required.' });
+      return res.status(400).json({ error: 'A valid positive number of boxes is required.' });
     }
 
-    // ✅ normalize image url
-    const finalImageUrl = productImageUrl || image;
-
-    if (!req.file && !finalImageUrl) {
-      return res.status(400).json({ error: 'Product image is required' });
-    }
-
-    // ================== FETCH EMPLOYEES ==================
+    /* ================== FETCH EMPLOYEES ================== */
     const [helper, operator, mixture] = await Promise.all([
       Employee.findById(helperId),
       Employee.findById(operatorId),
@@ -54,125 +34,78 @@ exports.createItemWithBoxes = async (req, res) => {
     ]);
 
     if (!helper || !operator || !mixture) {
-      return res.status(400).json({
-        error: 'Invalid helperId, operatorId, or mixtureId'
-      });
+      return res.status(400).json({ error: 'Invalid helperId, operatorId, or mixtureId' });
     }
 
-    // ================== IMAGE HANDLING ==================
+    /* ================== IMAGE HANDLING ================== */
     let productImageUpload;
+    const finalImageUrl = productImageUrl || image;
 
     if (req.file) {
-      // FILE UPLOAD FLOW
-      productImageUpload = await uploadBufferToGCS(
-        req.file.buffer,
-        req.file.originalname,
-        'product-images',
-        req.file.mimetype
-      );
+      productImageUpload = await uploadBufferToGCS(req.file.buffer, req.file.originalname, 'product-images', req.file.mimetype);
     } else {
-      // URL UPLOAD FLOW
-      const imageResponse = await axios.get(finalImageUrl, {
-        responseType: 'arraybuffer'
-      });
-
-      const imageBuffer = Buffer.from(imageResponse.data);
-      const contentType =
-        imageResponse.headers['content-type'] || 'image/jpeg';
-
-      const fileName = `product-${cleanItemNo}-${Date.now()}.jpg`;
-
-      productImageUpload = await uploadBufferToGCS(
-        imageBuffer,
-        fileName,
-        'product-images',
-        contentType
-      );
+      const imageResponse = await axios.get(finalImageUrl, { responseType: 'arraybuffer' });
+      productImageUpload = await uploadBufferToGCS(Buffer.from(imageResponse.data), `product-${cleanItemNo}-${Date.now()}.jpg`, 'product-images', imageResponse.headers['content-type'] || 'image/jpeg');
     }
 
-    // ================== GENERATE BOXES ==================
-    const boxIndexes = Array.from({ length: numBoxes }, (_, i) => i + 1);
-
+    /* ================== GENERATE BOXES & QR ================== */
     const generatedBoxes = await Promise.all(
-      boxIndexes.map(async (index) => {
-        const boxSerialNo = String(index).padStart(3, '0');
-
-        const qrCodeData = JSON.stringify({
-          itemNo: cleanItemNo,
-          boxSerialNo,
-          totalBoxes: numBoxes,
-          length,
-          noOfSticks,
-          operator: operator.name,
-          helper: helper.name,
-          mixture: mixture.name,
-          shift,
-          company,
-          machineNumber: machineNumber || '',
-          mixtureMachine: mixtureMachine || '',
-          createdAt: new Date().toISOString()
+      Array.from({ length: numBoxes }, async (_, i) => {
+        const boxSerialNo = String(i + 1).padStart(3, '0');
+        const qrData = JSON.stringify({
+          itemNo: cleanItemNo, boxSerialNo, totalBoxes: numBoxes,
+          helperEid: helper.eid, operatorEid: operator.eid, mixtureEid: mixture.eid,
+          shift, company, machineNumber, mixtureMachine, createdAt: new Date().toISOString()
         });
 
-        const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
-          type: 'png',
-          errorCorrectionLevel: 'H',
-          margin: 1,
-          width: 500
-        });
+        const qrBuffer = await QRCode.toBuffer(qrData, { type: 'png', width: 500 });
+        const qrUpload = await uploadBufferToGCS(qrBuffer, `qr-${cleanItemNo}-${boxSerialNo}.png`, 'qr-codes', 'image/png');
 
-        const qrCodeFileName = `qr-${cleanItemNo}-${boxSerialNo}.png`;
-
-        const qrCodeUpload = await uploadBufferToGCS(
-          qrCodeBuffer,
-          qrCodeFileName,
-          'qr-codes',
-          'image/png'
-        );
-
-        return {
-          boxSerialNo,
-          qrCodeUrl: qrCodeUpload.url
-        };
+        return { boxSerialNo, qrCodeUrl: qrUpload.url };
       })
     );
 
-    // ================== CREATE ITEM ==================
+    /* ================== CREATE MAIN ITEM ================== */
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
       noOfSticks,
-      helpers: [
-        { _id: helper._id, name: helper.name, eid: helper.eid }
-      ],
-      mixtures: [
-        { _id: mixture._id, name: mixture.name, eid: mixture.eid }
-      ],
-      operators: [
-        { _id: operator._id, name: operator.name, eid: operator.eid }
-      ],
+      helpers: [{ employeeId: helper._id, role: helper.role, roleEid: helper.eid }],
+      operators: [{ employeeId: operator._id, role: operator.role, roleEid: operator.eid }],
+      mixtures: [{ employeeId: mixture._id, role: mixture.role, roleEid: mixture.eid }],
       shift,
       company,
-      machineNumber: machineNumber ? String(machineNumber) : null,
-      mixtureMachine: mixtureMachine ? String(mixtureMachine) : null,
+      machineNumber,
+      mixtureMachine,
       productImageUrl: productImageUpload.url,
       boxes: generatedBoxes,
       pendingBoxes: numBoxes,
       completedBoxes: 0
     });
 
-    return res.status(201).json(newMainItem);
+    /* ================== TRIGGER NOTIFICATIONS ================== */
+    const notificationMsg = `New Assignment: ${cleanItemNo} assigned to you for ${shift} shift. Total boxes: ${numBoxes}`;
+    const staffIds = [helperId, operatorId, mixtureId];
+
+    const notifications = staffIds.map(id => ({
+      recipientId: id,
+      message: notificationMsg
+    }));
+
+    await StaffNotification.insertMany(notifications);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Item created and staff notified successfully',
+      data: { _id: newMainItem._id, itemNo: newMainItem.itemNo }
+    });
 
   } catch (error) {
-    console.error(
-      'Create Item with Boxes Error:',
-      error.message,
-      error.stack
-    );
-    return res.status(500).json({
-      error: error.message || 'Failed to create item and its boxes'
-    });
+    console.error('Creation Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
+
 
 // exports.createItemWithBoxes = async (req, res) => {
 //   try {
@@ -519,37 +452,137 @@ exports.getAllItemsForList = async (req, res) => {
       },
 
       // --- 🔍 FIXED LOOKUP: TRIM + LOWERCASE ON BOTH SIDES ---
-      {
-        $lookup: {
-          from: "productuploads",
-          let: { itemNoClean: "$itemNoTrimLower" },
-          pipeline: [
-            {
-              $addFields: {
-                nameTrimLower: {
-                  $toLower: { $trim: { input: "$name" } }
+    // ================== HELPER LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "helpers.employeeId",
+    foreignField: "_id",
+    as: "helperDetails"
+  }
+},
+{
+  $addFields: {
+    helpers: {
+      $map: {
+        input: "$helpers",
+        as: "h",
+        in: {
+          employeeId: "$$h.employeeId",
+          role: "$$h.role",
+          roleEid: "$$h.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$helperDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$h.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
                 }
-              }
-            },
-            {
-              $match: {
-                $expr: {
-                  $eq: ["$nameTrimLower", "$$itemNoClean"]
-                }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                description: 1,
-                about: 1
-              }
+              },
+              in: "$$emp.name"
             }
-          ],
-          as: "productDetails"
+          }
         }
-      },
+      }
+    }
+  }
+},
+
+// ================== OPERATOR LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "operators.employeeId",
+    foreignField: "_id",
+    as: "operatorDetails"
+  }
+},
+{
+  $addFields: {
+    operators: {
+      $map: {
+        input: "$operators",
+        as: "o",
+        in: {
+          employeeId: "$$o.employeeId",
+          role: "$$o.role",
+          roleEid: "$$o.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$operatorDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$o.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
+                }
+              },
+              in: "$$emp.name"
+            }
+          }
+        }
+      }
+    }
+  }
+},
+
+// ================== MIXTURE LOOKUP ==================
+{
+  $lookup: {
+    from: "employees",
+    localField: "mixtures.employeeId",
+    foreignField: "_id",
+    as: "mixtureDetails"
+  }
+},
+{
+  $addFields: {
+    mixtures: {
+      $map: {
+        input: "$mixtures",
+        as: "m",
+        in: {
+          employeeId: "$$m.employeeId",
+          role: "$$m.role",
+          roleEid: "$$m.roleEid",
+          name: {
+            $let: {
+              vars: {
+                emp: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$mixtureDetails",
+                        as: "e",
+                        cond: { $eq: ["$$e._id", "$$m.employeeId"] }
+                      }
+                    },
+                    0
+                  ]
+                }
+              },
+              in: "$$emp.name"
+            }
+          }
+        }
+      }
+    }
+  }
+},
 
       { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
 
@@ -595,188 +628,109 @@ exports.getAllItemsForList = async (req, res) => {
 
 // ... your existing exports.getAllItemsForList function ...
 
+const StaffNotification = require('../models/StaffNotification');
+
 exports.getEmployeeAssignedProducts = async (req, res) => {
   try {
     const { employeeId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Employee ID format."
-      });
+      return res.status(400).json({ success: false, message: "Invalid Employee ID format." });
     }
 
+    const targetId = new mongoose.Types.ObjectId(employeeId);
+
+    /* ================== 1. FETCH NOTIFICATIONS ================== */
+    // Look for unread notifications for this specific employee
+    const unreadNotifications = await StaffNotification.find({ 
+      recipientId: targetId, 
+      isRead: false 
+    }).sort({ createdAt: -1 });
+
+    const notificationSummary = {
+      count: unreadNotifications.length,
+      latestMessage: unreadNotifications.length > 0 
+        ? unreadNotifications[0].message 
+        : "No new assignments"
+    };
+
+    /* ================== 2. FETCH ASSIGNMENTS ================== */
     const items = await MainItem.aggregate([
-      // Match MainItems that include the employee
       {
         $match: {
           $or: [
-            { "helpers._id": new mongoose.Types.ObjectId(employeeId) },
-            { "operators._id": new mongoose.Types.ObjectId(employeeId) },
-            { "mixtures._id": new mongoose.Types.ObjectId(employeeId) }
+            { "helpers.employeeId": targetId },
+            { "operators.employeeId": targetId },
+            { "mixtures.employeeId": targetId }
           ]
         }
       },
-
       { $sort: { createdAt: -1 } },
+      { $addFields: { boxCount: { $size: { $ifNull: ["$boxes", []] } } } },
 
-      // Add boxCount
-      {
-        $addFields: {
-          boxCount: { $size: { $ifNull: ["$boxes", []] } }
-        }
-      },
+      // Staff Lookups
+      { $lookup: { from: "employees", localField: "helpers.employeeId", foreignField: "_id", as: "hDet" } },
+      { $lookup: { from: "employees", localField: "operators.employeeId", foreignField: "_id", as: "oDet" } },
+      { $lookup: { from: "employees", localField: "mixtures.employeeId", foreignField: "_id", as: "mDet" } },
 
-      // Lookup product by itemNo = product.name (case-insensitive)
+      // Product Lookup
       {
         $lookup: {
           from: "productuploads",
-          let: {
-            itemNoLower: {
-              $toLower: { $trim: { input: "$itemNo" } }
-            }
-          },
+          let: { iNo: { $toLower: { $trim: { input: "$itemNo" } } } },
           pipeline: [
-            {
-              $addFields: {
-                nameLower: {
-                  $toLower: { $trim: { input: "$name" } }
-                }
-              }
-            },
-            {
-              $match: {
-                $expr: { $eq: ["$nameLower", "$$itemNoLower"] }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                about: 1,
-                description: 1,
-                productImageUrl: 1
-              }
-            }
+            { $addFields: { nLow: { $toLower: { $trim: { input: "$name" } } } } },
+            { $match: { $expr: { $eq: ["$nLow", "$$iNo"] } } }
           ],
-          as: "productDetails"
+          as: "pDet"
         }
       },
 
-      // Lookup operator machine
-      {
-        $lookup: {
-          from: "machines",
-          let: { machineNum: { $trim: { input: "$machineNumber" } } },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $regexMatch: {
-                    input: { $toLower: "$name" },
-                    regex: { $toLower: "$$machineNum" }
-                  }
-                }
-              }
-            },
-            {
-              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
-            }
-          ],
-          as: "machineDetails"
-        }
-      },
-
-      // Lookup mixture machine
-      {
-        $lookup: {
-          from: "machines",
-          let: { mixMachineNum: { $trim: { input: "$mixtureMachine" } } },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $regexMatch: {
-                    input: { $toLower: "$name" },
-                    regex: { $toLower: "$$mixMachineNum" }
-                  }
-                }
-              }
-            },
-            {
-              $project: { _id: 1, name: 1, companyName: 1, type: 1 }
-            }
-          ],
-          as: "mixtureMachineDetails"
-        }
-      },
-
-      // Ensure final shape is safe for React UI
       {
         $project: {
-          _id: 1,
-          mainItemId: "$_id",
-          itemNo: 1,
-          length: 1,
-          noOfSticks: 1,
-          helpers: 1,
-          operators: 1,
-          mixtures: 1,
-          shift: 1,
-          company: 1,
-          productImageUrl: 1,
-          pendingBoxes: 1,
-          completedBoxes: 1,
-          machineNumber: 1,
-          mixtureMachine: 1,
-          boxCount: 1,
-
-          product: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$productDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$productDetails.name", 0] }, "N/A"] },
-            about: { $ifNull: [{ $arrayElemAt: ["$productDetails.about", 0] }, "N/A"] },
-            description: { $ifNull: [{ $arrayElemAt: ["$productDetails.description", 0] }, "N/A"] },
-            productImageUrl: { $ifNull: [{ $arrayElemAt: ["$productDetails.productImageUrl", 0] }, null] }
+          itemNo: 1, length: 1, noOfSticks: 1, shift: 1, company: 1,
+          pendingBoxes: 1, completedBoxes: 1, boxCount: 1, productImageUrl: 1,
+          helpers: {
+            $map: {
+              input: "$helpers", as: "h",
+              in: { 
+                employeeId: "$$h.employeeId", role: "$$h.role", roleEid: "$$h.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$hDet", as: "s", cond: { $eq: ["$$s._id", "$$h.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
+              }
+            }
           },
-
-          machine: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$machineDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$machineDetails.name", 0] }, "N/A"] },
-            companyName: { $ifNull: [{ $arrayElemAt: ["$machineDetails.companyName", 0] }, "N/A"] },
-            type: { $ifNull: [{ $arrayElemAt: ["$machineDetails.type", 0] }, "N/A"] }
+          operators: {
+            $map: {
+              input: "$operators", as: "o",
+              in: { 
+                employeeId: "$$o.employeeId", role: "$$o.role", roleEid: "$$o.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$oDet", as: "s", cond: { $eq: ["$$s._id", "$$o.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
+              }
+            }
           },
-
-          mixtureMachineDetails: {
-            _id: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails._id", 0] }, null] },
-            name: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.name", 0] }, "N/A"] },
-            companyName: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.companyName", 0] }, "N/A"] },
-            type: { $ifNull: [{ $arrayElemAt: ["$mixtureMachineDetails.type", 0] }, "N/A"] }
-          }
+          mixtures: {
+            $map: {
+              input: "$mixtures", as: "m",
+              in: { 
+                employeeId: "$$m.employeeId", role: "$$m.role", roleEid: "$$m.roleEid",
+                name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$mDet", as: "s", cond: { $eq: ["$$s._id", "$$m.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
+              }
+            }
+          },
+          product: { $arrayElemAt: ["$pDet", 0] }
         }
       }
     ]);
 
-    if (!items.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No items found for this employee."
-      });
-    }
-
     res.status(200).json({
       success: true,
+      notification: notificationSummary, // This will now show the count
       count: items.length,
-      message: "Items assigned to employee fetched successfully",
       data: items
     });
 
   } catch (error) {
-    console.error("Error fetching assigned products for employee:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch assigned products",
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
