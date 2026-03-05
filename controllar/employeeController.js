@@ -254,7 +254,7 @@ exports.getEmployeesByFilter = async (req, res) => {
         { otherRoles: selectedRole }       // Case 2: Electrician, Admin, etc. (Array search)
       ]
     });
-
+``
     if (employees.length === 0) {
       return res.status(404).json({ message: "No employees found for this role." });
     }
@@ -419,18 +419,21 @@ const HARDCODED_USERS = [
   },
 ];
 
+
+
 exports.loginEmployee = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    // 1️⃣ Frontend se Mobile, Password aur selected Role lena
+    const { mobile, password, role } = req.body;
 
-    if (!mobile || !password) {
+    if (!mobile || !password || !role) {
       return res.status(400).json({
         success: false,
-        message: "Mobile and password are required",
+        message: "Mobile, password and role are required",
       });
     }
 
-    // 1️⃣ Find employee
+    // 2️⃣ Find employee (Aapka Purana Logic)
     const employee = await Employee.findOne({ mobile: mobile.trim() });
 
     if (!employee || !employee.status) {
@@ -440,14 +443,29 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 2️⃣ Check password (plain OR bcrypt based)
+    /* ---------------------------------------------------------
+       3️⃣ ROLE VERIFICATION (Naya Logic)
+       Check karega ki select kiya hua 'role' asliyat mein 
+       employee.role mein hai ya employee.otherRoles mein.
+       --------------------------------------------------------- */
+    const isStandardRole = employee.role.includes(role); // e.g., 'Helper'
+    const isOtherRole = employee.otherRoles.includes(role); // e.g., 'Electrician'
+
+    if (!isStandardRole && !isOtherRole) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: You are not registered as a ${role}`,
+      });
+    }
+
+    // 4️⃣ Check password (Aapka Purana Logic - supports Plain & Bcrypt)
     let isMatch = false;
 
-    // If you are hashing password → use this
     if (employee.password && employee.password.startsWith("$2")) {
+      // Agar password hash hai (bcrypt)
       isMatch = await bcrypt.compare(password, employee.password);
     } else {
-      // current system (plain password)
+      // Agar password plain text hai
       isMatch = employee.password === password;
     }
 
@@ -458,7 +476,8 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 3️⃣ Generate token
+    // 5️⃣ Generate token (Aapka Purana Logic)
+    const JWT_SECRET = process.env.JWT_SECRET || "YOUR_SECRET_KEY"; // Apni key use karein
     const token = jwt.sign(
       {
         employeeId: employee._id,
@@ -470,11 +489,12 @@ exports.loginEmployee = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // 4️⃣ Response
+    // 6️⃣ Response (Aapke Saare Purane Fields)
     return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
+      loginAs: role, // Extra field: Kis role se login hua
       employee: {
         _id: employee._id,
         name: employee.name,
@@ -483,7 +503,8 @@ exports.loginEmployee = async (req, res) => {
         adharNumber: employee.adharNumber,
         adharImageUrl: employee.adharImageUrl,
         profilePic: employee.profilePic,
-        role: employee.role,
+        role: employee.role, // Original Roles: ["Other"]
+        otherRoles: employee.otherRoles, // Other Roles: ["Electrician"]
         eid: employee.eid,
         status: employee.status,
       },
@@ -497,5 +518,3 @@ exports.loginEmployee = async (req, res) => {
     });
   }
 };
-
-
