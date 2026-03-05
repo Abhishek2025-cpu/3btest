@@ -386,6 +386,110 @@ exports.createProduct = async (req, res) => {
 
 const axios = require("axios");
 
+// exports.getAllProducts = async (req, res) => {
+//   try {
+//     // 1️⃣ Total count
+//     const totalProducts = await Product.countDocuments();
+
+//     // 2️⃣ Date 15 days ago
+//     const fifteenDaysAgo = new Date();
+//     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+//     // 3️⃣ Recent products
+//     const recentProductsDB = await Product.find({
+//       createdAt: { $gte: fifteenDaysAgo }
+//     })
+//       .populate("categoryId", "name")
+//       .sort({ createdAt: -1 })
+//       .lean();
+
+//     // 4️⃣ Old products
+//     const oldProductsDB = await Product.find({
+//       createdAt: { $lt: fifteenDaysAgo }
+//     })
+//       .populate("categoryId", "name")
+//       .sort({ position: 1 })
+//       .lean();
+
+//     // 5️⃣ Merge products
+//     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
+
+//     // 6️⃣ Fetch dimensions
+//     const dimRes = await axios.get(
+//       "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+//     );
+
+//     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+//     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+
+//     // ⭐ 7️⃣ Fetch ALL orders once
+//     const allOrders = await Order.find()
+//       .populate("userId", "name")
+//       .lean();
+
+//     // 8️⃣ Translate
+//     const translatedProducts = await translateResponse(
+//       req,
+//       productsFromDB,
+//       productFieldsToTranslate
+//     );
+
+//     // 9️⃣ Add dimensions + orders array
+//     const formattedProducts = translatedProducts.map(p => {
+//       const hasCategory =
+//         p.categoryId && typeof p.categoryId === "object" && p.categoryId.name;
+
+//       // 🔍 Find all orders containing this product
+//       const productOrders = [];
+
+//       allOrders.forEach(order => {
+//         order.products.forEach(prod => {
+//           if (prod.productId?.toString() === p._id.toString()) {
+//             productOrders.push({
+//               customerName: order.userId?.name || "Unknown",
+//               qty: prod.quantity,
+//               orderStatus: prod.currentStatus,
+//               orderDate: order.createdAt
+//             });
+//           }
+//         });
+//       });
+
+//       return {
+//         ...p,
+
+//         // dimension mapping
+//         dimensions: Array.isArray(p.dimensions)
+//           ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
+//           : [],
+
+//         // ⭐ ADD THIS (your requirement)
+//         orders: productOrders,
+
+//         // category fixes
+//         categoryName: hasCategory ? p.categoryId.name : null,
+//         categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
+//       };
+//     });
+
+//     // 🔟 Response
+//     res.status(200).json({
+//       success: true,
+//       message: "✅ Products fetched successfully",
+//       totalProducts,
+//       recentProducts: recentProductsDB.length,
+//       products: formattedProducts
+//     });
+
+//   } catch (err) {
+//     console.error("❌ Error fetching products:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "❌ Failed to fetch products",
+//       error: err.message
+//     });
+//   }
+// };
 exports.getAllProducts = async (req, res) => {
   try {
 
@@ -499,6 +603,7 @@ exports.getAllProducts = async (req, res) => {
 };
 
 
+<<<<<<< HEAD
 // exports.getAllProducts = async (req, res) => {
 //   try {
 //     // 1️⃣ Total count
@@ -604,6 +709,8 @@ exports.getAllProducts = async (req, res) => {
 //   }
 // };
 
+=======
+>>>>>>> c2661a915e559c892f4912754f7a907c2a492508
 exports.getSingleProduct = async (req, res) => {
   try {
     // 1️⃣ Sanitize ID (Remove spaces/newlines)

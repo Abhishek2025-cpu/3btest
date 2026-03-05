@@ -13,46 +13,80 @@ const bcrypt = require("bcryptjs");
 
 
 function generateEid() {
-  // EID = 3B + 4 random digits
-  const random4 = Math.floor(1000 + Math.random() * 9000);
-  return `3B${random4}`;
+  // Safer EID (low collision)
+  return `3B${Date.now().toString().slice(-4)}`;
 }
 
 function generatePassword(name, adhar) {
-  const namePart = (name || '').slice(0, 4).toLowerCase();
-  const adharPart = (adhar || '').slice(0, 4); // FIRST 4 digits
+  name = (name || '').toLowerCase();
 
+  let namePart = '';
+  let i = 0;
+
+  while (namePart.length < 4 && i < name.length) {
+    if (name[i] !== ' ') {
+      namePart += name[i];
+    }
+    i++;
+  }
+
+  const adharPart = (adhar || '').slice(0, 4);
   return `${namePart}${adharPart}`;
 }
 
-
-
 exports.createEmployee = async (req, res) => {
   try {
-    const { name, mobile, dob, adharNumber, roles } = req.body;
+    let { name, mobile, dob, adharNumber, roles } = req.body;
 
-    if (!name || !mobile || !roles || roles.length === 0) {
+    /* -------------------- BASIC VALIDATION -------------------- */
+    if (!name || !mobile || !roles) {
       return res.status(400).json({
-        message: "Name, Mobile and at least one role are required."
+        message: "Name, Mobile and Roles are required."
       });
     }
 
-    // Aadhaar required
-    if (!req.files || !req.files.adharImage) {
-      return res.status(400).json({ message: "Adhar image is required." });
+    /* -------------------- ROLES PARSING -------------------- */
+    if (typeof roles === "string") {
+      try {
+        roles = JSON.parse(roles);
+      } catch {
+        roles = [roles];
+      }
     }
 
+    if (!Array.isArray(roles) || roles.length === 0) {
+      return res.status(400).json({
+        message: "Roles must be a non-empty array."
+      });
+    }
+
+    /* -------------------- FILE VALIDATION -------------------- */
+    if (!req.files?.adharImage?.length) {
+      return res.status(400).json({
+        message: "Adhar image is required."
+      });
+    }
+
+    /* -------------------- DUPLICATE CHECK -------------------- */
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
-      return res.status(400).json({ message: "Mobile number already exists." });
+      return res.status(400).json({
+        message: "Mobile number already exists."
+      });
     }
 
-    const dobDate = dob ? new Date(dob) : null;
-    if (dob && isNaN(dobDate.getTime())) {
-      return res.status(400).json({ message: "Invalid DOB format." });
+    /* -------------------- DOB VALIDATION -------------------- */
+    let dobDate = null;
+    if (dob) {
+      dobDate = new Date(dob);
+      if (isNaN(dobDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid DOB format."
+        });
+      }
     }
 
-    // Upload Aadhaar
+    /* -------------------- UPLOAD ADHAR -------------------- */
     const adharFile = req.files.adharImage[0];
     const adharUpload = await uploadBufferToGCS(
       adharFile.buffer,
@@ -61,9 +95,9 @@ exports.createEmployee = async (req, res) => {
       adharFile.mimetype
     );
 
-    // Optional profile pic
+    /* -------------------- UPLOAD PROFILE PIC -------------------- */
     let profilePic = null;
-    if (req.files.profilePic) {
+    if (req.files?.profilePic?.length) {
       const profileFile = req.files.profilePic[0];
       const profileUpload = await uploadBufferToGCS(
         profileFile.buffer,
@@ -78,13 +112,14 @@ exports.createEmployee = async (req, res) => {
       };
     }
 
-    // 🔐 Generate credentials for each role
+    /* -------------------- CREATE ROLE ACCOUNTS -------------------- */
     const roleAccounts = roles.map(role => ({
       role,
       eid: generateEid(),
       password: generatePassword(name, adharNumber)
     }));
 
+    /* -------------------- CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({
       name,
       mobile,
@@ -95,6 +130,7 @@ exports.createEmployee = async (req, res) => {
       roles: roleAccounts
     });
 
+    /* -------------------- RESPONSE -------------------- */
     res.status(201).json({
       message: "Employee created successfully",
       credentials: employee.roles.map(r => ({
@@ -108,10 +144,11 @@ exports.createEmployee = async (req, res) => {
   } catch (error) {
     console.error("Create Employee Error:", error);
     res.status(500).json({
-      message: "Failed to create employee due to a server error."
+      message: error.message || "Failed to create employee due to a server error."
     });
   }
 };
+
 
 
 

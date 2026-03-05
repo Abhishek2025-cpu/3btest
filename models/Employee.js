@@ -9,21 +9,6 @@ const employeeSchema = new mongoose.Schema({
     unique: true,
   },
 
-  role: {
-    type: String,
-    required: true,
-  },
-
-  eid: {
-    type: String,
-    required: true,
-  },
-
-  password: {
-    type: String,
-    required: true,
-  },
-
   status: {
     type: Boolean,
     default: true,
@@ -37,6 +22,23 @@ const employeeSchema = new mongoose.Schema({
     url: { type: String, default: null },
     fileId: { type: String, default: null },
   },
+
+  roles: [
+    {
+      role: {
+        type: String,
+        required: true,
+      },
+      eid: {
+        type: String,
+        required: true,
+      },
+      password: {
+        type: String,
+        required: true,
+      },
+    }
+  ],
 
 }, { timestamps: true });
 

@@ -4,67 +4,92 @@ const Company = require('../models/company');
 const OtherCategory = require('../models/otherCategory'); // Import the category model
 const sharp = require('sharp');
 const { uploadBufferToGCS, deleteFromGCS } = require('../utils/gcloud'); // Import delete utility
-
+const mongoose = require('mongoose');
 const GCS_BUCKET_NAME = 'company-assets-bucket'; // Use a constant for the bucket name
 
 // POST - Add a new company under a specific category
+// POST - Add a new company under a specific category
+// controllers/company.controller.js
+
+
+
+// POST - Add a new company (name + logo only)
 exports.addCompany = async (req, res) => {
-  console.log("--- [DEBUG] Received request to add Company ---");
+  console.log('--- [DEBUG] Received request to add Company ---');
+
   try {
-    const { name, categoryId } = req.body;
+    const { name } = req.body;
 
     // --- VALIDATION ---
-    if (!name || !categoryId) {
-      return res.status(400).json({ message: 'Company name and categoryId are required.' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ message: 'Company logo image is required. Use key "logo".' });
+    if (!name) {
+      return res.status(400).json({
+        message: 'Company name is required.'
+      });
     }
 
-    // Check if the provided category exists
-    const categoryExists = await OtherCategory.findById(categoryId);
-    if (!categoryExists) {
-        return res.status(404).json({ message: 'The specified category was not found.' });
+    if (!req.file) {
+      return res.status(400).json({
+        message: 'Company logo image is required. Use key "logo".'
+      });
     }
-    
-    // Process and upload the logo
-    console.log(`[DEBUG] Processing logo: ${req.file.originalname}`);
+
+    // --- PROCESS & UPLOAD LOGO ---
     const compressedBuffer = await sharp(req.file.buffer)
-      .resize({ width: 400, height: 400, fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+      .resize({
+        width: 400,
+        height: 400,
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 0 }
+      })
       .png({ quality: 90 })
       .toBuffer();
 
     const fileName = `logos/company-logo-${Date.now()}-${name.replace(/\s+/g, '-')}`;
-    const gcsResult = await uploadBufferToGCS(compressedBuffer, fileName, GCS_BUCKET_NAME);
-    
-    if (!gcsResult || !gcsResult.id || !gcsResult.url) {
-        throw new Error(`GCS upload failed for company logo.`);
+
+    const gcsResult = await uploadBufferToGCS(
+      compressedBuffer,
+      fileName,
+      GCS_BUCKET_NAME
+    );
+
+    if (!gcsResult?.id || !gcsResult?.url) {
+      throw new Error('GCS upload failed for company logo.');
     }
 
-    // --- CREATE NEW COMPANY with category reference ---
+    // --- CREATE COMPANY ---
     const newCompany = new Company({
       name,
-      category: categoryId, // Link to the category
-      logo: { id: gcsResult.id, url: gcsResult.url }
+      logo: {
+        id: gcsResult.id,
+        url: gcsResult.url
+      }
     });
 
     await newCompany.save();
-    
-    // Populate the category details before sending the response
-    await newCompany.populate('category', 'name'); 
 
-    console.log("[DEBUG] ✅ Successfully saved new company.");
-    res.status(201).json({ message: '✅ Company created successfully', company: newCompany });
+    console.log('✅ Company created successfully');
+
+    return res.status(201).json({
+      message: '✅ Company created successfully',
+      company: newCompany
+    });
 
   } catch (error) {
-    console.error("❌ --- FATAL ERROR in addCompany --- ❌");
+    console.error('❌ addCompany error:', error);
+
     if (error.code === 11000) {
-        return res.status(409).json({ message: 'A company with this name already exists.' });
+      return res.status(409).json({
+        message: 'A company with this name already exists.'
+      });
     }
-    console.error(error);
-    res.status(500).json({ message: '❌ Company creation failed', error: error.message });
+
+    return res.status(500).json({
+      message: '❌ Company creation failed',
+      error: error.message
+    });
   }
 };
+
 
 // GET - Get all companies, with optional filtering by category
 exports.getAllCompanies = async (req, res) => {
