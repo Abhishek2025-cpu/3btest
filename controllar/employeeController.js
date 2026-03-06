@@ -502,7 +502,7 @@ exports.loginEmployee = async (req, res) => {
     }
 
     // 5️⃣ Generate token 
-    // Yahan JWT_SECRET seedhe use kiya gaya hai (binna process.env ke)
+
     const token = jwt.sign(
       {
         employeeId: employee._id,
@@ -520,7 +520,7 @@ exports.loginEmployee = async (req, res) => {
       success: true,
       message: "Login successful",
       token,
-      loginAs: role, // Extra field: Kis role se login hua
+      loginAs: role, 
       employee: {
         _id: employee._id,
         name: employee.name,

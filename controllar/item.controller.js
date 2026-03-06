@@ -689,7 +689,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       {
         $project: {
           itemNo: 1, length: 1, noOfSticks: 1, shift: 1, company: 1,
-          pendingBoxes: 1, completedBoxes: 1, boxCount: 1, productImageUrl: 1,
+          pendingBoxes: 1, completedBoxes: 1, boxCount: 1, productImageUrl: 1, machineNumber: 1,
           helpers: {
             $map: {
               input: "$helpers", as: "h",
