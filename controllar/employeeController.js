@@ -502,7 +502,7 @@ exports.loginEmployee = async (req, res) => {
     }
 
     // 5️⃣ Generate token (Aapka Purana Logic)
-    const JWT_SECRET = process.env.JWT_SECRET || "YOUR_SECRET_KEY"; // Apni key use karein
+    const JWT_SECRET = process.env.JWT_SECRET 
     const token = jwt.sign(
       {
         employeeId: employee._id,
