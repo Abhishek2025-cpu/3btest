@@ -30,7 +30,10 @@ router.patch('/employees/:id/status', updateEmployeeStatus);
 
 router.get('/employees/:id', getEmployeeById);
 
-router.put('/update-employees/:id', upload.single('adharImage'), updateEmployee);
+router.put('/update/:id', upload.fields([
+  { name: 'adharImage', maxCount: 1 },
+  { name: 'profilePic', maxCount: 1 }
+]),updateEmployee);
 router.delete('/delete-employees/:id', deleteEmployee);
 router.post('/login', loginEmployee);
 

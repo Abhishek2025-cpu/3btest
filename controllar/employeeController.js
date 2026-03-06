@@ -274,7 +274,7 @@ exports.getEmployeesByFilter = async (req, res) => {
 exports.updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    let { name, mobile, role, dob, adharNumber, password } = req.body;
+    let { name, mobile, role, dob,otherRoles, adharNumber, password } = req.body;
 
     // 1. Find the employee to update
     const employee = await Employee.findById(id);
@@ -289,6 +289,17 @@ exports.updateEmployee = async (req, res) => {
     } else {
       role = employee.role; // Agar role nahi bheja to purana wala hi rahega
     }
+
+      if (role.includes('Other')) {
+      if (typeof otherRoles === 'string') {
+        otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
+      } else if (!otherRoles) {
+        otherRoles = employee.otherRoles; // Purana hi rehne dein agar nahi bheja gaya
+      }
+    } else {
+      otherRoles = []; // Agar 'Other' role nahi hai, toh ise khali kar dein
+    }
+    
     // 2. Validate mobile number (only if changed)
     if (mobile && mobile !== employee.mobile) {
       const existingEmployee = await Employee.findOne({ mobile, _id: { $ne: id } });
@@ -307,18 +318,32 @@ exports.updateEmployee = async (req, res) => {
       dobDate = parsedDate;
     }
 
-    // 4. Handle Adhar Image Upload
-    let adharImageUrl = employee.adharImageUrl;
-    if (req.file) {
-      const { url } = await uploadBufferToGCS(
-        req.file.buffer,
-        req.file.originalname,
+        /* -------------------- 4. FILE UPLOADS (FIXED LOGIC) -------------------- */
+    // Hum seedha employee object ko update karenge variable ke chakkar mein nahi padenge
+    if (req.files?.adharImage?.length) {
+      const adharFile = req.files.adharImage[0];
+      const adharUpload = await uploadBufferToGCS(
+        adharFile.buffer,
+        adharFile.originalname,
         'adhar-images',
-        req.file.mimetype
+        adharFile.mimetype
       );
-      adharImageUrl = url;
+      employee.adharImageUrl = adharUpload.url; // Seedha object update kiya
     }
 
+    if (req.files?.profilePic?.length) {
+      const profileFile = req.files.profilePic[0];
+      const profileUpload = await uploadBufferToGCS(
+        profileFile.buffer,
+        profileFile.originalname,
+        'employee/profile-pics',
+        profileFile.mimetype
+      );
+      employee.profilePic = {
+        url: profileUpload.url,
+        fileId: profileUpload.id,
+      };
+    }
     // 5. If password is provided, use it, else regenerate automatically
     let finalPassword = password;
     if (!password) {
@@ -335,9 +360,9 @@ exports.updateEmployee = async (req, res) => {
     employee.role = role || employee.role;
     employee.dob = dobDate;
     employee.adharNumber = adharNumber || employee.adharNumber;
-    employee.adharImageUrl = adharImageUrl;
-    employee.password = finalPassword; // <-- updating password manually if given
 
+    employee.password = finalPassword; // <-- updating password manually if given
+    employee.otherRoles = otherRoles;
     await employee.save();
 
     res.status(200).json({
