@@ -458,7 +458,7 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find employee (Aapka Purana Logic)
+    // 2️⃣ Find employee
     const employee = await Employee.findOne({ mobile: mobile.trim() });
 
     if (!employee || !employee.status) {
@@ -469,12 +469,12 @@ exports.loginEmployee = async (req, res) => {
     }
 
     /* ---------------------------------------------------------
-       3️⃣ ROLE VERIFICATION (Naya Logic)
+       3️⃣ ROLE VERIFICATION 
        Check karega ki select kiya hua 'role' asliyat mein 
        employee.role mein hai ya employee.otherRoles mein.
        --------------------------------------------------------- */
-    const isStandardRole = employee.role.includes(role); // e.g., 'Helper'
-    const isOtherRole = employee.otherRoles.includes(role); // e.g., 'Electrician'
+    const isStandardRole = employee.role && employee.role.includes(role);
+    const isOtherRole = employee.otherRoles && employee.otherRoles.includes(role);
 
     if (!isStandardRole && !isOtherRole) {
       return res.status(403).json({
@@ -483,7 +483,7 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 4️⃣ Check password (Aapka Purana Logic - supports Plain & Bcrypt)
+    // 4️⃣ Check password (Plain OR Bcrypt based)
     let isMatch = false;
 
     if (employee.password && employee.password.startsWith("$2")) {
@@ -501,20 +501,21 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 5️⃣ Generate token (Aapka Purana Logic)
-    const JWT_SECRET = process.env.JWT_SECRET 
+    // 5️⃣ Generate token 
+    // Yahan JWT_SECRET seedhe use kiya gaya hai (binna process.env ke)
     const token = jwt.sign(
       {
         employeeId: employee._id,
         mobile: employee.mobile,
         role: employee.role,
+        loginAs: role, // Token mein save karna ki kis role se login kiya hai
         eid: employee.eid,
       },
-      JWT_SECRET,
+      JWT_SECRET, 
       { expiresIn: "7d" }
     );
 
-    // 6️⃣ Response (Aapke Saare Purane Fields)
+    // 6️⃣ Response
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -528,8 +529,8 @@ exports.loginEmployee = async (req, res) => {
         adharNumber: employee.adharNumber,
         adharImageUrl: employee.adharImageUrl,
         profilePic: employee.profilePic,
-        role: employee.role, // Original Roles: ["Other"]
-        otherRoles: employee.otherRoles, // Other Roles: ["Electrician"]
+        role: employee.role, 
+        otherRoles: employee.otherRoles, 
         eid: employee.eid,
         status: employee.status,
       },
