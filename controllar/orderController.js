@@ -233,7 +233,7 @@ return {
   subtotal,
   image,
   orderId: generateOrderId(),
-  categoryId: item.categoryId || null, // ✔ optional field
+
 };
 
       })

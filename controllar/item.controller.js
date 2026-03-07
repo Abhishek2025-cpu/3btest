@@ -66,13 +66,19 @@ exports.createItemWithBoxes = async (req, res) => {
     );
 
     /* ================== CREATE MAIN ITEM ================== */
+const combineRoles = (emp) => {
+  const roles = Array.isArray(emp.role) ? emp.role : [emp.role];
+  const others = Array.isArray(emp.otherRoles) ? emp.otherRoles : [];
+  return [...roles, ...others];
+};
+
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
       length,
       noOfSticks,
-      helpers: [{ employeeId: helper._id, role: helper.role, roleEid: helper.eid }],
-      operators: [{ employeeId: operator._id, role: operator.role, roleEid: operator.eid }],
-      mixtures: [{ employeeId: mixture._id, role: mixture.role, roleEid: mixture.eid }],
+      helpers: [{ employeeId: helper._id, role: helper.role[0], roleEid: helper.eid }],
+      operators: [{ employeeId: operator._id, role: operator.role[0], roleEid: operator.eid }],
+      mixtures: [{ employeeId: mixture._id, role: mixture.role[0], roleEid: mixture.eid }],
       shift,
       company,
       machineNumber,
