@@ -105,9 +105,6 @@ async function adjustPositionsForUpdate(oldPosition, newPosition, excludedProduc
 }
 
 
-
-
-
 // exports.createProduct = async (req, res) => {
 //   try {
 //     const {
@@ -598,6 +595,8 @@ exports.getAllProducts = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
 
 exports.getSingleProduct = async (req, res) => {
   try {

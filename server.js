@@ -1,7 +1,10 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const router = express.Router();
 const connectDB = require('./config/db');
+const employeeRoutes = require('./routes/employeesRoutes'); 
+
 
 dotenv.config();
 const app = express();
@@ -64,6 +67,7 @@ app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
 app.use('/api/machines', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
+app.use('/api/staff', employeeRoutes); 
 
 const mixtureTableRoutes = require("./routes/mixtureTableRoutes");
 app.use("/api/mixture-tables", mixtureTableRoutes);
@@ -79,6 +83,7 @@ app.use('/api/workers', workerRoutes);
 
 const inventoryRoutes = require("./routes/inventoryRoutes");
 app.use("/api/inventory", inventoryRoutes);
+
 
 /* ===========================
    HEALTH & TEST ROUTES

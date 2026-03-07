@@ -35,14 +35,35 @@ async function generateEID() {
 }
 
 
+
 exports.createEmployee = async (req, res) => {
   try {
-    let { name, mobile, dob, adharNumber, role } = req.body;
+    let { name, mobile, dob, adharNumber, role, otherRoles } = req.body;
 
-    /* -------------------- VALIDATION -------------------- */
- 
+    /* -------------------- 1. ROLE & OTHER ROLES PARSING -------------------- */
+    // Role ko array mein convert karein (Kyunki multipart/form-data se string aata hai)
+    if (role) {
+      if (typeof role === 'string') {
+        role = role.split(',').map(r => r.trim());
+      }
+    } else {
+      return res.status(400).json({ message: "Role is required." });
+    }
 
-    /* -------------------- DUPLICATE CHECK -------------------- */
+    // "Other" roles ka logic
+    if (role.includes('Other')) {
+      if (typeof otherRoles === 'string') {
+        // "electrician, plumber" -> ["electrician", "plumber"]
+        otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
+      } else if (!otherRoles) {
+        otherRoles = [];
+      }
+    } else {
+      // Agar role mein 'Other' nahi hai, toh any otherRoles data ko empty kar do
+      otherRoles = [];
+    }
+
+    /* -------------------- 2. DUPLICATE CHECK -------------------- */
     const existingEmployee = await Employee.findOne({ mobile });
     if (existingEmployee) {
       return res.status(400).json({
@@ -50,18 +71,16 @@ exports.createEmployee = async (req, res) => {
       });
     }
 
-    /* -------------------- DOB -------------------- */
+    /* -------------------- 3. DOB HANDLING -------------------- */
     let dobDate = null;
     if (dob) {
       dobDate = new Date(dob);
       if (isNaN(dobDate.getTime())) {
-        return res.status(400).json({
-          message: "Invalid DOB format.",
-        });
+        return res.status(400).json({ message: "Invalid DOB format." });
       }
     }
 
-    /* -------------------- FILE UPLOAD -------------------- */
+    /* -------------------- 4. FILE UPLOAD (ADHAR) -------------------- */
     if (!req.files?.adharImage?.length) {
       return res.status(400).json({
         message: "Adhar image is required.",
@@ -76,8 +95,8 @@ exports.createEmployee = async (req, res) => {
       adharFile.mimetype
     );
 
-    /* -------------------- PROFILE PIC -------------------- */
-    let profilePic = null;
+    /* -------------------- 5. FILE UPLOAD (PROFILE PIC) -------------------- */
+    let profilePic = { url: null, fileId: null };
     if (req.files?.profilePic?.length) {
       const profileFile = req.files.profilePic[0];
       const profileUpload = await uploadBufferToGCS(
@@ -92,12 +111,12 @@ exports.createEmployee = async (req, res) => {
         fileId: profileUpload.id,
       };
     }
-    const eid = await generateEID();
 
-    /* -------------------- PASSWORD GENERATION -------------------- */
+    /* -------------------- 6. GENERATE EID & PASSWORD -------------------- */
+    const eid = await generateEID();
     const password = generatePassword(name, adharNumber);
 
-    /* -------------------- CREATE EMPLOYEE -------------------- */
+    /* -------------------- 7. CREATE EMPLOYEE -------------------- */
     const employee = await Employee.create({
       name,
       mobile,
@@ -105,31 +124,36 @@ exports.createEmployee = async (req, res) => {
       adharNumber: adharNumber || "",
       adharImageUrl: adharUpload.url,
       profilePic,
-      role,
-      password,
-      eid,  // will be hashed automatically
+      role,         // Array format: ["Other"] or ["Helper", "Other"]
+      otherRoles,   // Array format: ["electrician"]
+      password,     // Mongoose schema pre-save hook handles hashing
+      eid, 
     });
 
-    /* -------------------- RESPONSE -------------------- */
+    /* -------------------- 8. RESPONSE -------------------- */
     res.status(201).json({
       message: "Employee created successfully",
       credentials: {
         mobile: employee.mobile,
-        password: password, // send only once
+        password: password, // Send plain password only once
       },
       employee: {
         _id: employee._id,
+        eid: employee.eid,
         name: employee.name,
         mobile: employee.mobile,
-        role: employee.role,
+        role: employee.role,             // Ab yahan ["Other"] dikhega
+        otherRoles: employee.otherRoles, // Ab yahan ["electrician"] dikhega
         status: employee.status,
+        dob: employee.dob,
+        profilePic: employee.profilePic
       },
     });
+
   } catch (error) {
     console.error("Create Employee Error:", error);
     res.status(500).json({
-      message:
-        error.message || "Failed to create employee due to a server error.",
+      message: error.message || "Failed to create employee due to a server error.",
     });
   }
 };
@@ -213,6 +237,36 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+exports.getEmployeesByFilter = async (req, res) => {
+  try {
+    // Frontend se 'role' query parameter mein aayega 
+    // Example: ?selectedRole=Helper ya ?selectedRole=Electrician
+    const { selectedRole } = req.query; 
+
+    if (!selectedRole) {
+      return res.status(400).json({ error: "Please provide a role to filter." });
+    }
+
+    // MongoDB Query: 
+    // Hum check karenge ki selectedRole 'role' field mein hai YA 'otherRoles' array ke andar hai
+    const employees = await Employee.find({
+      $or: [
+        { role: selectedRole },             // Case 1: Helper, Operator, Mixture
+        { otherRoles: selectedRole }       // Case 2: Electrician, Admin, etc. (Array search)
+      ]
+    });
+``
+    if (employees.length === 0) {
+      return res.status(404).json({ message: "No employees found for this role." });
+    }
+
+    res.status(200).json(employees);
+  } catch (error) {
+    console.error("Filter Error:", error);
+    res.status(500).json({ error: "Failed to fetch employees" });
+  }
+};
+
 /**
  * Updates an existing employee's details.
  * EID is considered immutable and is not changed.
@@ -221,7 +275,7 @@ exports.getEmployeeById = async (req, res) => {
 exports.updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, mobile, role, dob, adharNumber, password } = req.body;
+    let { name, mobile, role, dob,otherRoles, adharNumber, password } = req.body;
 
     // 1. Find the employee to update
     const employee = await Employee.findById(id);
@@ -229,6 +283,24 @@ exports.updateEmployee = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found.' });
     }
 
+      if (role) {
+      if (typeof role === 'string') {
+        role = role.split(',').map(r => r.trim());
+      }
+    } else {
+      role = employee.role; // Agar role nahi bheja to purana wala hi rahega
+    }
+
+      if (role.includes('Other')) {
+      if (typeof otherRoles === 'string') {
+        otherRoles = otherRoles.split(',').map(r => r.trim()).filter(Boolean);
+      } else if (!otherRoles) {
+        otherRoles = employee.otherRoles; // Purana hi rehne dein agar nahi bheja gaya
+      }
+    } else {
+      otherRoles = []; // Agar 'Other' role nahi hai, toh ise khali kar dein
+    }
+    
     // 2. Validate mobile number (only if changed)
     if (mobile && mobile !== employee.mobile) {
       const existingEmployee = await Employee.findOne({ mobile, _id: { $ne: id } });
@@ -247,18 +319,32 @@ exports.updateEmployee = async (req, res) => {
       dobDate = parsedDate;
     }
 
-    // 4. Handle Adhar Image Upload
-    let adharImageUrl = employee.adharImageUrl;
-    if (req.file) {
-      const { url } = await uploadBufferToGCS(
-        req.file.buffer,
-        req.file.originalname,
+        /* -------------------- 4. FILE UPLOADS (FIXED LOGIC) -------------------- */
+    // Hum seedha employee object ko update karenge variable ke chakkar mein nahi padenge
+    if (req.files?.adharImage?.length) {
+      const adharFile = req.files.adharImage[0];
+      const adharUpload = await uploadBufferToGCS(
+        adharFile.buffer,
+        adharFile.originalname,
         'adhar-images',
-        req.file.mimetype
+        adharFile.mimetype
       );
-      adharImageUrl = url;
+      employee.adharImageUrl = adharUpload.url; // Seedha object update kiya
     }
 
+    if (req.files?.profilePic?.length) {
+      const profileFile = req.files.profilePic[0];
+      const profileUpload = await uploadBufferToGCS(
+        profileFile.buffer,
+        profileFile.originalname,
+        'employee/profile-pics',
+        profileFile.mimetype
+      );
+      employee.profilePic = {
+        url: profileUpload.url,
+        fileId: profileUpload.id,
+      };
+    }
     // 5. If password is provided, use it, else regenerate automatically
     let finalPassword = password;
     if (!password) {
@@ -275,9 +361,9 @@ exports.updateEmployee = async (req, res) => {
     employee.role = role || employee.role;
     employee.dob = dobDate;
     employee.adharNumber = adharNumber || employee.adharNumber;
-    employee.adharImageUrl = adharImageUrl;
-    employee.password = finalPassword; // <-- updating password manually if given
 
+    employee.password = finalPassword; // <-- updating password manually if given
+    employee.otherRoles = otherRoles;
     await employee.save();
 
     res.status(200).json({
@@ -359,18 +445,21 @@ const HARDCODED_USERS = [
   },
 ];
 
+
+
 exports.loginEmployee = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    // 1️⃣ Frontend se Mobile, Password aur selected Role lena
+    const { mobile, password, role } = req.body;
 
-    if (!mobile || !password) {
+    if (!mobile || !password || !role) {
       return res.status(400).json({
         success: false,
-        message: "Mobile and password are required",
+        message: "Mobile, password and role are required",
       });
     }
 
-    // 1️⃣ Find employee
+    // 2️⃣ Find employee
     const employee = await Employee.findOne({ mobile: mobile.trim() });
 
     if (!employee || !employee.status) {
@@ -380,14 +469,29 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 2️⃣ Check password (plain OR bcrypt based)
+    /* ---------------------------------------------------------
+       3️⃣ ROLE VERIFICATION 
+       Check karega ki select kiya hua 'role' asliyat mein 
+       employee.role mein hai ya employee.otherRoles mein.
+       --------------------------------------------------------- */
+    const isStandardRole = employee.role && employee.role.includes(role);
+    const isOtherRole = employee.otherRoles && employee.otherRoles.includes(role);
+
+    if (!isStandardRole && !isOtherRole) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: You are not registered as a ${role}`,
+      });
+    }
+
+    // 4️⃣ Check password (Plain OR Bcrypt based)
     let isMatch = false;
 
-    // If you are hashing password → use this
     if (employee.password && employee.password.startsWith("$2")) {
+      // Agar password hash hai (bcrypt)
       isMatch = await bcrypt.compare(password, employee.password);
     } else {
-      // current system (plain password)
+      // Agar password plain text hai
       isMatch = employee.password === password;
     }
 
@@ -398,23 +502,26 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // 3️⃣ Generate token
+    // 5️⃣ Generate token 
+
     const token = jwt.sign(
       {
         employeeId: employee._id,
         mobile: employee.mobile,
         role: employee.role,
+        loginAs: role, // Token mein save karna ki kis role se login kiya hai
         eid: employee.eid,
       },
-      JWT_SECRET,
+      JWT_SECRET, 
       { expiresIn: "7d" }
     );
 
-    // 4️⃣ Response
+    // 6️⃣ Response
     return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
+      loginAs: role, 
       employee: {
         _id: employee._id,
         name: employee.name,
@@ -423,7 +530,8 @@ exports.loginEmployee = async (req, res) => {
         adharNumber: employee.adharNumber,
         adharImageUrl: employee.adharImageUrl,
         profilePic: employee.profilePic,
-        role: employee.role,
+        role: employee.role, 
+        otherRoles: employee.otherRoles, 
         eid: employee.eid,
         status: employee.status,
       },
@@ -437,5 +545,3 @@ exports.loginEmployee = async (req, res) => {
     });
   }
 };
-
-

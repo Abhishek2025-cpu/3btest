@@ -31,11 +31,17 @@ const employeeSchema = new mongoose.Schema(
     },
 
     // ✅ SINGLE ROLE
-    role: {
-      type: String,
-      required: true,
-    },
-
+      role: {
+    type: [String],
+    required: true,
+    enum: ['Helper', 'Mixture', 'Operator', 'Other'], // Fix options
+  },
+  
+  // Doosra Dropdown (Sirf tab use hoga jab "Other" select ho)
+  otherRoles: {
+    type: [String], // Array kyunki multiple roles aa sakte hain
+    default: [],
+  },
     // ✅ SINGLE PASSWORD (HASHED)
     password: {
       type: String,
