@@ -12,7 +12,7 @@ const axios = require('axios');
 
 const generateOrderId = () => {
   const prefix = '#3b';
-  const random = Math.floor(100000000000 + Math.random() * 900000000000); // 12 digits
+  const random = Math.floor(100000000000 + Math.random() * 900000000000); 
   return `${prefix}${random}`;
 };
 

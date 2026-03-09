@@ -1118,48 +1118,58 @@ exports.deleteProductImage = async (req, res) => {
 };
 
 
-// Product Name ke base par search karne ki API
 exports.searchProductsByName = async (req, res) => {
   try {
-    const { name } = req.query; // Frontend se ?name=3B 095 bhejenge
+    const { name } = req.query;
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "❌ Search query (name) is required",
+        message: "Search query (name) is required",
       });
     }
 
-    // 1. Database mein Name se search (Regex use kiya hai taaki partial search bhi chale)
-    // Agar user "095" likhega toh bhi "3B 095" mil jayega
+    // 1. Find products by name (case-insensitive)
     const searchRegex = new RegExp(name, 'i');
     const productsDB = await Product.find({ name: searchRegex })
       .populate("categoryId", "name")
       .lean();
 
-    // 2. Dimensions Fetch karein (Mapping ke liye)
-    const dimRes = await axios.get(
-      "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
-    ).catch(() => ({ data: [] }));
+    if (productsDB.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No products found matching that name",
+        products: []
+      });
+    }
 
-    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
-    const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+    // 2. Fetch dimensions from external API (with fallback)
+    let dimMap = new Map();
+    try {
+      const dimRes = await axios.get(
+        "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+      );
+      const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+      dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+    } catch (dimErr) {
+      console.warn("⚠️ Dimensions API failed, returning raw IDs");
+    }
 
-    // 3. Translate the results (Languages handle karne ke liye)
+    // 3. Translate the results
     const translatedProducts = await translateResponse(
       req,
       productsDB,
       productFieldsToTranslate
     );
 
-    // 4. Data format karein (Dimensions ID ko values mein badalna)
+    // 4. Format Data (Dimensions + Category)
     const formattedProducts = translatedProducts.map(p => {
       const hasCategory = p.categoryId && typeof p.categoryId === "object";
       
       return {
         ...p,
         dimensions: Array.isArray(p.dimensions)
-          ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
+          ? p.dimensions.map(id => dimMap.get(id?.toString()) || id) // Return value or raw ID if not found
           : [],
         categoryName: hasCategory ? p.categoryId.name : null,
         categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
