@@ -31,7 +31,7 @@ async function generateEID() {
   const count = await Employee.countDocuments();
   const nextNumber = count + 1;
 
-  return `EMP${String(nextNumber).padStart(3, "0")}`;
+  return `3B${String(nextNumber).padStart(3, "0")}`;
 }
 
 
@@ -157,6 +157,7 @@ exports.createEmployee = async (req, res) => {
     });
   }
 };
+
 
 
 
