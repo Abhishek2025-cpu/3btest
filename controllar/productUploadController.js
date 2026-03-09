@@ -911,15 +911,13 @@ exports.updateProduct = async (req, res) => {
     if (updates.totalPiecesPerBox) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
     if (updates.discountPercentage) updates.discountPercentage = Number(updates.discountPercentage);
 
-    // Step 1: Fetch existing product
+    
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
-      return res.status(404).json({ success: false, message: '❌ Product not found' });
+      return res.status(404).json({ success: false, message: ' Product not found' });
     }
 
-    // -------------------------------------------------
-    // ✅ POSITION UPDATE LOGIC — FINAL CORRECT VERSION
-    // -------------------------------------------------
+   
     if (updates.position !== undefined) {
       const requestedPosition = Number(updates.position);
 
@@ -1115,6 +1113,71 @@ exports.deleteProductImage = async (req, res) => {
       success: false,
       message: "❌ Failed to delete image.",
       error: err.message,
+    });
+  }
+};
+
+
+// Product Name ke base par search karne ki API
+exports.searchProductsByName = async (req, res) => {
+  try {
+    const { name } = req.query; // Frontend se ?name=3B 095 bhejenge
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "❌ Search query (name) is required",
+      });
+    }
+
+    // 1. Database mein Name se search (Regex use kiya hai taaki partial search bhi chale)
+    // Agar user "095" likhega toh bhi "3B 095" mil jayega
+    const searchRegex = new RegExp(name, 'i');
+    const productsDB = await Product.find({ name: searchRegex })
+      .populate("categoryId", "name")
+      .lean();
+
+    // 2. Dimensions Fetch karein (Mapping ke liye)
+    const dimRes = await axios.get(
+      "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+    ).catch(() => ({ data: [] }));
+
+    const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+    const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+
+    // 3. Translate the results (Languages handle karne ke liye)
+    const translatedProducts = await translateResponse(
+      req,
+      productsDB,
+      productFieldsToTranslate
+    );
+
+    // 4. Data format karein (Dimensions ID ko values mein badalna)
+    const formattedProducts = translatedProducts.map(p => {
+      const hasCategory = p.categoryId && typeof p.categoryId === "object";
+      
+      return {
+        ...p,
+        dimensions: Array.isArray(p.dimensions)
+          ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
+          : [],
+        categoryName: hasCategory ? p.categoryId.name : null,
+        categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `✅ Found ${formattedProducts.length} products`,
+      products: formattedProducts
+    });
+
+  } catch (err) {
+    console.error("❌ Search Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "❌ Failed to search products",
+      error: err.message
     });
   }
 };

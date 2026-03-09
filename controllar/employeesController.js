@@ -1,20 +1,20 @@
-const Employee = require('../models/Employee'); // Apne Employee model ka sahi path dein
+const Employee = require('../models/Employee'); 
 
 const getAllRoles = async (req, res) => {
   try {
-    // 1. Database se saare unique 'otherRoles' nikalna
+   
     const customRoles = await Employee.distinct('otherRoles');
 
-    // 2. Agar koi empty string ("") ya null aagayi ho toh usko filter out karna
+  
     const cleanedCustomRoles = customRoles.filter(role => role && role.trim() !== '');
 
-    // 3. Final structure tayyar karna jahan 'Other' ke andar array hoga
+   
     const finalRoles = [
       'Helper', 
       'Mixture', 
       'Operator', 
       {
-        Other: cleanedCustomRoles // DB wale saare roles is array me aayenge
+        Other: cleanedCustomRoles 
       }
     ];
 

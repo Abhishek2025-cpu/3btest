@@ -18,6 +18,8 @@ router.get('/all', productController.getAllProducts);
 router.get('/scan/:productId', productController.getProductByQr);
 router.get('/:id', productController.getSingleProduct);
 
+router.get('/search', productController.searchProductsByName);
+
 router.put('/update/:productId', uploadProduct.fields([
   { name: 'images', maxCount: 10 }
 ]), productController.updateProduct);
