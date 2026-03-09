@@ -1129,7 +1129,7 @@ exports.searchProductsByName = async (req, res) => {
       });
     }
 
-    // 1. Find products by name (case-insensitive)
+   
     const searchRegex = new RegExp(name, 'i');
     const productsDB = await Product.find({ name: searchRegex })
       .populate("categoryId", "name")
@@ -1143,7 +1143,7 @@ exports.searchProductsByName = async (req, res) => {
       });
     }
 
-    // 2. Fetch dimensions from external API (with fallback)
+    
     let dimMap = new Map();
     try {
       const dimRes = await axios.get(
@@ -1152,7 +1152,7 @@ exports.searchProductsByName = async (req, res) => {
       const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
       dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
     } catch (dimErr) {
-      console.warn("⚠️ Dimensions API failed, returning raw IDs");
+      console.warn(" Dimensions API failed, returning raw IDs");
     }
 
     // 3. Translate the results
