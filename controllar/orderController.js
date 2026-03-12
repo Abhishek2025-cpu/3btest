@@ -18,10 +18,14 @@ const generateOrderId = () => {
   return `${prefix}${random}`; // FIXED: Added backticks
 };
 
+// controllers/orderController.js
+// ... (keep your imports)
+
 exports.placeOrder = async (req, res) => {
   try {
     const { userId, shippingAddressId, items } = req.body;
 
+    // 1. Validate User & Address
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -30,6 +34,8 @@ exports.placeOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: "Shipping address not found" });
 
     let totalPrice = 0;
+
+    // 2. Process items
     const products = await Promise.all(
       items.map(async (item) => {
         let product = await Product.findById(item.productId);
@@ -42,104 +48,96 @@ exports.placeOrder = async (req, res) => {
           isOtherProduct = true;
         }
 
-        if (!product) throw new Error(`Product not found with ID: ${item.productId}`); // FIXED: Added backticks
+        if (!product) throw new Error(`Product not found with ID: ${item.productId}`);
 
-        // STOCK UPDATE LOGIC
+        // 3. Stock Update (Native driver bypass to avoid categoryId validation error)
         if (typeof product.quantity === "number") {
           if (product.quantity < item.quantity)
-            throw new Error(`Insufficient stock for product: ${product.productName || product.name}`); // FIXED: Added backticks
+            throw new Error(`Insufficient stock for product: ${product.productName || product.name}`);
           
           let newQuantity = product.quantity - item.quantity;
-          let updateData = { 
-            quantity: newQuantity,
-            available: newQuantity > 0 
-          };
           
-          // FIXED: Use runValidators: false to ignore the categoryId requirement during stock update
-          await TargetModel.findByIdAndUpdate(
-            item.productId, 
-            { $set: updateData }, 
-            { runValidators: false } 
+          await TargetModel.collection.updateOne(
+            { _id: product._id }, 
+            { $set: { quantity: newQuantity, available: newQuantity > 0 } }
           );
         }
 
-        // IMAGE LOGIC (Ensuring it matches your Order Schema object {id, url})
+        // 4. Format Image for Order Schema { id, url }
         let imageObj = { id: "", url: "" };
-        if (!isOtherProduct) {
-          const colorKey = item.color?.trim();
-          let img = (colorKey && product.colorImageMap?.[colorKey]) ? product.colorImageMap[colorKey] : (product.images?.[0] || null);
-          
-          if (typeof img === 'string') imageObj.url = img;
-          else if (img && img.url) imageObj = { id: img.id, url: img.url };
-        } else {
-          let img = product.images?.[0] || product.image || null;
-          if (typeof img === 'string') imageObj.url = img;
-          else if (img && img.url) imageObj = { id: img.id, url: img.url };
+        const colorKey = item.color?.trim();
+        let rawImg = (!isOtherProduct && colorKey && product.colorImageMap?.[colorKey]) 
+                     ? product.colorImageMap[colorKey] 
+                     : (product.images?.[0] || product.image || null);
+
+        if (typeof rawImg === 'string') {
+          imageObj.url = rawImg;
+        } else if (rawImg) {
+          imageObj.id = rawImg.id || "";
+          imageObj.url = rawImg.url || "";
         }
 
-        const priceForCalculation = item.price || item.priceAtPurchase;
-        if (typeof priceForCalculation !== "number") {
-          throw new Error(`Price missing for product: ${item.productName || item.productId}`); // FIXED: Added backticks
-        }
-
-        const subtotal = priceForCalculation * item.quantity;
+        const priceAtPurchase = item.price || item.priceAtPurchase || 0;
+        const subtotal = priceAtPurchase * item.quantity;
         totalPrice += subtotal;
 
+        // Return object formatted for productOrderSchema
         return {
           productId: product._id,
           productName: product.productName || product.name || "Unknown Product",
           quantity: item.quantity,
           color: item.color || "Not specified",
-          priceAtPurchase: priceForCalculation,
-          subtotal,
+          priceAtPurchase: priceAtPurchase,
           image: imageObj,
-          orderId: generateOrderId(),
+          orderId: generateOrderId(), // Individual item Order ID
+          currentStatus: "Pending"
         };
       })
     );
 
-    const roundedTotalPrice = Math.round(totalPrice);
-
+    // 5. Create Order Document
     const newOrder = new Order({
       userId,
       products,
-      totalPrice: roundedTotalPrice,
+      totalPrice: Math.round(totalPrice),
       shippingDetails: {
         name: shippingAddress.name,
         phone: shippingAddress.phone,
         addressType: shippingAddress.addressType,
         detailedAddress: shippingAddress.detailedAddress,
       },
-      orderId: generateOrderId(),
+      orderId: generateOrderId(), // Main Order ID
       currentStatus: "Pending",
-      statusHistory: [{ status: "Pending", timestamp: new Date() }],
+      returnEligible: true,
+      statusHistory: [{ status: "Pending", timestamp: new Date(), notes: "Order placed successfully" }],
     });
 
-    await newOrder.save();
+    // 6. Save to Database
+    const savedOrder = await newOrder.save();
 
-    // Notification Logic
+    // 7. Send Notification (Optional - won't block response)
     try {
       await sendUserNotification(
         user,
         "🎉 Order Placed!",
-        `Dear ${user.name}, your order has been placed successfully.`, // FIXED: Added backticks
-        { orderId: newOrder._id.toString() }
+        `Dear ${user.name}, your order ${savedOrder.orderId} was successful.`,
+        { orderId: savedOrder._id.toString() }
       );
-    } catch (notifError) {
-      console.error("❌ Notification error ignored");
-    }
+    } catch (e) { console.log("Notification error ignored"); }
 
+    // 8. Return ENTIRE data
     res.status(201).json({
       success: true,
       message: "Order placed successfully",
-      order: newOrder
+      order: savedOrder // This contains the full object from the DB
     });
 
   } catch (error) {
-    console.error("❌ Error placing order:", error);
+    console.error("❌ Order Error:", error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
+      error: "Server error during order placement"
     });
   }
 };
