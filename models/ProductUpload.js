@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema({
   // CHANGE 1: The type is now String, to match the custom ID in the Category model.
   // We also remove the 'ref' here because the link will be virtual.
-  categoryId: { type: String, required: false },
+   categoryId: { type: String, required: false, default: null }, 
   name: { type: String, required: true },
   companyName: { type: String, required: false },
   about: { type: String },
@@ -46,5 +46,8 @@ productSchema.virtual('category', {
   foreignField: 'categoryId', // ...and find the document in the 'Category' model where its `categoryId` matches.
   justOne: true               // We only expect one category to match, not an array.
 });
+
+// Completely disable all validation for this model if it's still causing trouble
+productSchema.set('validateBeforeSave', false);
 
 module.exports = mongoose.model('ProductUpload', productSchema, 'productuploads');

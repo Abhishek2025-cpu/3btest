@@ -4,6 +4,7 @@ const router = express.Router();
 const productController = require('../controllar/productUploadController');//updated with
 const { uploadProduct } = require('../middleware/upload');
 
+router.get('/search', productController.searchProductsByName); 
 
 router.post('/add',
   uploadProduct.fields([
@@ -17,6 +18,8 @@ router.get('/get-movement', productController.getProductMovements);
 router.get('/all', productController.getAllProducts);
 router.get('/scan/:productId', productController.getProductByQr);
 router.get('/:id', productController.getSingleProduct);
+
+
 
 router.put('/update/:productId', uploadProduct.fields([
   { name: 'images', maxCount: 10 }

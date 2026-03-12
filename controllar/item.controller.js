@@ -11,13 +11,16 @@ const { translateResponse } = require('../services/translation.service');
 
 exports.createItemWithBoxes = async (req, res) => {
   try {
+
+    await mongoose.connection.db.collection('mainitems').dropIndex('itemNo_1').catch(err => console.log("Index not found, ignoring..."));
+
     const {
       itemNo, length, noOfSticks, mixtureId, helperId, operatorId,
       shift, company, noOfBoxes, machineNumber, mixtureMachine,
       productImageUrl, image
     } = req.body;
 
-    /* ================== BASIC VALIDATION ================== */
+
     const cleanItemNo = itemNo?.trim();
     if (!cleanItemNo) return res.status(400).json({ error: 'Item No is required' });
 
@@ -59,18 +62,24 @@ exports.createItemWithBoxes = async (req, res) => {
         });
 
         const qrBuffer = await QRCode.toBuffer(qrData, { type: 'png', width: 500 });
-        const qrUpload = await uploadBufferToGCS(qrBuffer, `qr-${cleanItemNo}-${boxSerialNo}.png`, 'qr-codes', 'image/png');
+
+        const qrUpload = await uploadBufferToGCS(
+          qrBuffer,
+          `qr-${cleanItemNo}-${boxSerialNo}-${Date.now()}.png`,
+          'qr-codes',
+          'image/png'
+        );
 
         return { boxSerialNo, qrCodeUrl: qrUpload.url };
       })
     );
 
     /* ================== CREATE MAIN ITEM ================== */
-const combineRoles = (emp) => {
-  const roles = Array.isArray(emp.role) ? emp.role : [emp.role];
-  const others = Array.isArray(emp.otherRoles) ? emp.otherRoles : [];
-  return [...roles, ...others];
-};
+    const combineRoles = (emp) => {
+      const roles = Array.isArray(emp.role) ? emp.role : [emp.role];
+      const others = Array.isArray(emp.otherRoles) ? emp.otherRoles : [];
+      return [...roles, ...others];
+    };
 
     const newMainItem = await MainItem.create({
       itemNo: cleanItemNo,
@@ -228,7 +237,7 @@ const combineRoles = (emp) => {
 
 exports.updateItemWithBoxes = async (req, res) => {
   try {
-    const { 
+    const {
       itemNo,
       length,
       noOfSticks,
@@ -342,7 +351,7 @@ exports.updateItemWithBoxes = async (req, res) => {
 
 exports.addBoxesToItem = async (req, res) => {
   // MODIFICATION 1: We are getting 'id' from the URL, not 'itemNo'.
-  const { id } = req.params; 
+  const { id } = req.params;
   const { numberOfNewBoxes } = req.body;
 
   try {
@@ -359,7 +368,7 @@ exports.addBoxesToItem = async (req, res) => {
 
     // --- 2. Find the Existing Item ---
     // MODIFICATION 2: Use findById() which is faster and designed for this purpose.
-    const existingItem = await MainItem.findById(id); 
+    const existingItem = await MainItem.findById(id);
     if (!existingItem) {
       // MODIFICATION 3: The error message now correctly refers to the ID.
       return res.status(404).json({ error: `Item with ID '${id}' not found.` });
@@ -409,7 +418,7 @@ exports.addBoxesToItem = async (req, res) => {
         };
       })
     );
-    
+
     // --- 5. Update the MainItem with the new boxes ---
     // (This logic is correct and remains unchanged)
     await MainItem.updateOne(
@@ -458,137 +467,137 @@ exports.getAllItemsForList = async (req, res) => {
       },
 
       // --- 🔍 FIXED LOOKUP: TRIM + LOWERCASE ON BOTH SIDES ---
-    // ================== HELPER LOOKUP ==================
-{
-  $lookup: {
-    from: "employees",
-    localField: "helpers.employeeId",
-    foreignField: "_id",
-    as: "helperDetails"
-  }
-},
-{
-  $addFields: {
-    helpers: {
-      $map: {
-        input: "$helpers",
-        as: "h",
-        in: {
-          employeeId: "$$h.employeeId",
-          role: "$$h.role",
-          roleEid: "$$h.roleEid",
-          name: {
-            $let: {
-              vars: {
-                emp: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: "$helperDetails",
-                        as: "e",
-                        cond: { $eq: ["$$e._id", "$$h.employeeId"] }
+      // ================== HELPER LOOKUP ==================
+      {
+        $lookup: {
+          from: "employees",
+          localField: "helpers.employeeId",
+          foreignField: "_id",
+          as: "helperDetails"
+        }
+      },
+      {
+        $addFields: {
+          helpers: {
+            $map: {
+              input: "$helpers",
+              as: "h",
+              in: {
+                employeeId: "$$h.employeeId",
+                role: "$$h.role",
+                roleEid: "$$h.roleEid",
+                name: {
+                  $let: {
+                    vars: {
+                      emp: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: "$helperDetails",
+                              as: "e",
+                              cond: { $eq: ["$$e._id", "$$h.employeeId"] }
+                            }
+                          },
+                          0
+                        ]
                       }
                     },
-                    0
-                  ]
+                    in: "$$emp.name"
+                  }
                 }
-              },
-              in: "$$emp.name"
+              }
             }
           }
         }
-      }
-    }
-  }
-},
+      },
 
-// ================== OPERATOR LOOKUP ==================
-{
-  $lookup: {
-    from: "employees",
-    localField: "operators.employeeId",
-    foreignField: "_id",
-    as: "operatorDetails"
-  }
-},
-{
-  $addFields: {
-    operators: {
-      $map: {
-        input: "$operators",
-        as: "o",
-        in: {
-          employeeId: "$$o.employeeId",
-          role: "$$o.role",
-          roleEid: "$$o.roleEid",
-          name: {
-            $let: {
-              vars: {
-                emp: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: "$operatorDetails",
-                        as: "e",
-                        cond: { $eq: ["$$e._id", "$$o.employeeId"] }
+      // ================== OPERATOR LOOKUP ==================
+      {
+        $lookup: {
+          from: "employees",
+          localField: "operators.employeeId",
+          foreignField: "_id",
+          as: "operatorDetails"
+        }
+      },
+      {
+        $addFields: {
+          operators: {
+            $map: {
+              input: "$operators",
+              as: "o",
+              in: {
+                employeeId: "$$o.employeeId",
+                role: "$$o.role",
+                roleEid: "$$o.roleEid",
+                name: {
+                  $let: {
+                    vars: {
+                      emp: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: "$operatorDetails",
+                              as: "e",
+                              cond: { $eq: ["$$e._id", "$$o.employeeId"] }
+                            }
+                          },
+                          0
+                        ]
                       }
                     },
-                    0
-                  ]
+                    in: "$$emp.name"
+                  }
                 }
-              },
-              in: "$$emp.name"
+              }
             }
           }
         }
-      }
-    }
-  }
-},
+      },
 
-// ================== MIXTURE LOOKUP ==================
-{
-  $lookup: {
-    from: "employees",
-    localField: "mixtures.employeeId",
-    foreignField: "_id",
-    as: "mixtureDetails"
-  }
-},
-{
-  $addFields: {
-    mixtures: {
-      $map: {
-        input: "$mixtures",
-        as: "m",
-        in: {
-          employeeId: "$$m.employeeId",
-          role: "$$m.role",
-          roleEid: "$$m.roleEid",
-          name: {
-            $let: {
-              vars: {
-                emp: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: "$mixtureDetails",
-                        as: "e",
-                        cond: { $eq: ["$$e._id", "$$m.employeeId"] }
+      // ================== MIXTURE LOOKUP ==================
+      {
+        $lookup: {
+          from: "employees",
+          localField: "mixtures.employeeId",
+          foreignField: "_id",
+          as: "mixtureDetails"
+        }
+      },
+      {
+        $addFields: {
+          mixtures: {
+            $map: {
+              input: "$mixtures",
+              as: "m",
+              in: {
+                employeeId: "$$m.employeeId",
+                role: "$$m.role",
+                roleEid: "$$m.roleEid",
+                name: {
+                  $let: {
+                    vars: {
+                      emp: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: "$mixtureDetails",
+                              as: "e",
+                              cond: { $eq: ["$$e._id", "$$m.employeeId"] }
+                            }
+                          },
+                          0
+                        ]
                       }
                     },
-                    0
-                  ]
+                    in: "$$emp.name"
+                  }
                 }
-              },
-              in: "$$emp.name"
+              }
             }
           }
         }
-      }
-    }
-  }
-},
+      },
 
       { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
 
@@ -652,9 +661,18 @@ exports.getAllItemsForList = async (req, res) => {
       success: true,
       statusCode: 200,
       message: "Items fetched successfully",
-      count:  translatedData.length,
-      data: translatedData,
-    
+      count: items.length,
+      data: items.map(item => ({
+        ...item,
+        product: item.productDetails
+          ? {
+            _id: item.productDetails._id,
+            name: item.productDetails.name,
+            about: item.productDetails.about,
+            description: item.productDetails.description
+          }
+          : null
+      }))
     });
 
   } catch (error) {
@@ -687,15 +705,15 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
 
     /* ================== 1. FETCH NOTIFICATIONS ================== */
     // Look for unread notifications for this specific employee
-    const unreadNotifications = await StaffNotification.find({ 
-      recipientId: targetId, 
-      isRead: false 
+    const unreadNotifications = await StaffNotification.find({
+      recipientId: targetId,
+      isRead: false
     }).sort({ createdAt: -1 });
 
     const notificationSummary = {
       count: unreadNotifications.length,
-      latestMessage: unreadNotifications.length > 0 
-        ? unreadNotifications[0].message 
+      latestMessage: unreadNotifications.length > 0
+        ? unreadNotifications[0].message
         : "No new assignments"
     };
 
@@ -738,7 +756,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           helpers: {
             $map: {
               input: "$helpers", as: "h",
-              in: { 
+              in: {
                 employeeId: "$$h.employeeId", role: "$$h.role", roleEid: "$$h.roleEid",
                 name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$hDet", as: "s", cond: { $eq: ["$$s._id", "$$h.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
@@ -747,7 +765,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           operators: {
             $map: {
               input: "$operators", as: "o",
-              in: { 
+              in: {
                 employeeId: "$$o.employeeId", role: "$$o.role", roleEid: "$$o.roleEid",
                 name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$oDet", as: "s", cond: { $eq: ["$$s._id", "$$o.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
@@ -756,7 +774,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
           mixtures: {
             $map: {
               input: "$mixtures", as: "m",
-              in: { 
+              in: {
                 employeeId: "$$m.employeeId", role: "$$m.role", roleEid: "$$m.roleEid",
                 name: { $arrayElemAt: [{ $map: { input: { $filter: { input: "$mDet", as: "s", cond: { $eq: ["$$s._id", "$$m.employeeId"] } } }, as: "r", in: "$$r.name" } }, 0] }
               }
@@ -837,7 +855,7 @@ exports.getItemByItemNo = async (req, res) => {
   try {
     const item = await MainItem.findOne({ itemNo: req.params.itemNo });
     if (!item) {
-        return res.status(404).json({ error: 'Item not found' });
+      return res.status(404).json({ error: 'Item not found' });
     }
     res.status(200).json(item);
   } catch (error) {

@@ -911,15 +911,13 @@ exports.updateProduct = async (req, res) => {
     if (updates.totalPiecesPerBox) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
     if (updates.discountPercentage) updates.discountPercentage = Number(updates.discountPercentage);
 
-    // Step 1: Fetch existing product
+    
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
-      return res.status(404).json({ success: false, message: '❌ Product not found' });
+      return res.status(404).json({ success: false, message: ' Product not found' });
     }
 
-    // -------------------------------------------------
-    // ✅ POSITION UPDATE LOGIC — FINAL CORRECT VERSION
-    // -------------------------------------------------
+   
     if (updates.position !== undefined) {
       const requestedPosition = Number(updates.position);
 
@@ -1115,6 +1113,81 @@ exports.deleteProductImage = async (req, res) => {
       success: false,
       message: "❌ Failed to delete image.",
       error: err.message,
+    });
+  }
+};
+
+
+exports.searchProductsByName = async (req, res) => {
+  try {
+    const { name } = req.query;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query (name) is required",
+      });
+    }
+
+   
+    const searchRegex = new RegExp(name, 'i');
+    const productsDB = await Product.find({ name: searchRegex })
+      .populate("categoryId", "name")
+      .lean();
+
+    if (productsDB.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No products found matching that name",
+        products: []
+      });
+    }
+
+    
+    let dimMap = new Map();
+    try {
+      const dimRes = await axios.get(
+        "https://threebappbackend.onrender.com/api/dimensions/get-dimensions"
+      );
+      const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
+      dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
+    } catch (dimErr) {
+      console.warn(" Dimensions API failed, returning raw IDs");
+    }
+
+    // 3. Translate the results
+    const translatedProducts = await translateResponse(
+      req,
+      productsDB,
+      productFieldsToTranslate
+    );
+
+    // 4. Format Data (Dimensions + Category)
+    const formattedProducts = translatedProducts.map(p => {
+      const hasCategory = p.categoryId && typeof p.categoryId === "object";
+      
+      return {
+        ...p,
+        dimensions: Array.isArray(p.dimensions)
+          ? p.dimensions.map(id => dimMap.get(id?.toString()) || id) // Return value or raw ID if not found
+          : [],
+        categoryName: hasCategory ? p.categoryId.name : null,
+        categoryId: hasCategory ? p.categoryId._id.toString() : p.categoryId
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: ` Found ${formattedProducts.length} products`,
+      products: formattedProducts
+    });
+
+  } catch (err) {
+    console.error("❌ Search Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "❌ Failed to search products",
+      error: err.message
     });
   }
 };
