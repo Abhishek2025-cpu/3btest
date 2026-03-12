@@ -1178,7 +1178,7 @@ exports.searchProductsByName = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `✅ Found ${formattedProducts.length} products`,
+      message: ` Found ${formattedProducts.length} products`,
       products: formattedProducts
     });
 

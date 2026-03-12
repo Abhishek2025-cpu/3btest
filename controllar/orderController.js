@@ -22,7 +22,7 @@ exports.placeOrder = async (req, res) => {
   try {
     const { userId, shippingAddressId, items } = req.body;
 
-    // 1️⃣ Get user and shipping address
+    // 1️ Get user and shipping address
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -30,27 +30,36 @@ exports.placeOrder = async (req, res) => {
     if (!shippingAddress)
       return res.status(404).json({ success: false, message: "Shipping address not found" });
 
-    // 2️⃣ Process items and calculate total
+    //  Process items and calculate total
     let totalPrice = 0;
     const products = await Promise.all(
       items.map(async (item) => {
         let product = await Product.findById(item.productId);
+        let TargetModel = Product; 
         let isOtherProduct = false;
+
         if (!product) {
           product = await OtherProduct.findById(item.productId);
+          TargetModel = OtherProduct;
           isOtherProduct = true;
         }
+
         if (!product) throw new Error(`Product not found with ID: ${item.productId}`);
 
+        // स्टॉक अपडेट लॉजिक
         if (typeof product.quantity === "number") {
           if (product.quantity < item.quantity)
             throw new Error(`Insufficient stock for product: ${product.productName || product.name}`);
-          product.quantity -= item.quantity;
-          if (product.quantity <= 0) {
-            product.quantity = 0;
-            product.available = false;
+          
+          let newQuantity = product.quantity - item.quantity;
+          let updateData = { quantity: newQuantity };
+          
+          if (newQuantity <= 0) {
+            updateData.quantity = 0;
+            updateData.available = false;
           }
-          await product.save();
+
+          await TargetModel.findByIdAndUpdate(item.productId, { $set: updateData });
         }
 
         let image = null;
@@ -69,18 +78,17 @@ exports.placeOrder = async (req, res) => {
 
         const subtotal = priceForCalculation * item.quantity;
         totalPrice += subtotal;
-return {
-  productId: product._id,
-  productName: product.productName || product.name || "Unknown Product",
-  quantity: item.quantity,
-  color: item.color || "Not specified",
-  priceAtPurchase: priceForCalculation,
-  subtotal,
-  image,
-  orderId: generateOrderId(),
 
-};
-
+        return {
+          productId: product._id,
+          productName: product.productName || product.name || "Unknown Product",
+          quantity: item.quantity,
+          color: item.color || "Not specified",
+          priceAtPurchase: priceForCalculation,
+          subtotal,
+          image,
+          orderId: generateOrderId(),
+        };
       })
     );
 
@@ -103,7 +111,7 @@ return {
     });
     await newOrder.save();
 
-    // 4️⃣ Send notification using the service
+    // 4️⃣ Send notification
     try {
       await sendUserNotification(
         user,

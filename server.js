@@ -4,6 +4,8 @@ const cors = require('cors');
 const router = express.Router();
 const connectDB = require('./config/db');
 const employeeRoutes = require('./routes/employeesRoutes'); 
+const labelRoutes = require('./routes/labelClientRoutes');
+
 
 
 dotenv.config();
@@ -67,6 +69,7 @@ app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
 app.use('/api/machines', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
+app.use('/api/label-clients', labelRoutes);
 app.use('/api/staff', employeeRoutes); 
 
 const mixtureTableRoutes = require("./routes/mixtureTableRoutes");
