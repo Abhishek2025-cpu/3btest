@@ -80,20 +80,6 @@ exports.placeOrder = async (req, res) => {
         const priceAtPurchase = item.price || item.priceAtPurchase || 0;
         const subtotal = priceAtPurchase * item.quantity;
         totalPrice += subtotal;
-<<<<<<< HEAD
-        return {
-          productId: product._id,
-          productName: product.productName || product.name || "Unknown Product",
-          quantity: item.quantity,
-          color: item.color || "Not specified",
-          priceAtPurchase: priceForCalculation,
-          subtotal,
-          image,
-          orderId: generateOrderId(),
-
-        };
-=======
->>>>>>> bd138f570d923129584dc14a30299cac6b8b2021
 
         // Return object formatted for productOrderSchema
         return {
