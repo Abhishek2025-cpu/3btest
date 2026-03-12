@@ -62,7 +62,7 @@ app.use('/api/fcm', require('./routes/fcmRoutes'));
 app.use('/api', require('./routes/pushRoutes'));
 app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api/billings', require('./routes/billingRoutes'));
-app.use('/api/machines', require('./routes/machineRoutes'));
+app.use('s', require('./routes/machineRoutes'));
 app.use('/api/operator', require('./routes/operatorRoutes'));
 
 const mixtureTableRoutes = require("./routes/mixtureTableRoutes");

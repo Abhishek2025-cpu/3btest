@@ -5,7 +5,7 @@ const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const Notification = require('../models/Notification');
 const ReturnRequest = require('../models/ReturnRequest');
-
+const { translateResponse } = require("../services/translation.service")
 const Company = require('../models/company');
 const { sendUserNotification } = require("../services/notificationService");
 const axios = require('axios');
@@ -224,17 +224,17 @@ exports.placeOrder = async (req, res) => {
 
         const subtotal = priceForCalculation * item.quantity;
         totalPrice += subtotal;
-return {
-  productId: product._id,
-  productName: product.productName || product.name || "Unknown Product",
-  quantity: item.quantity,
-  color: item.color || "Not specified",
-  priceAtPurchase: priceForCalculation,
-  subtotal,
-  image,
-  orderId: generateOrderId(),
+        return {
+          productId: product._id,
+          productName: product.productName || product.name || "Unknown Product",
+          quantity: item.quantity,
+          color: item.color || "Not specified",
+          priceAtPurchase: priceForCalculation,
+          subtotal,
+          image,
+          orderId: generateOrderId(),
 
-};
+        };
 
       })
     );
@@ -393,6 +393,7 @@ exports.getOrders = async (req, res) => {
       })
     );
 
+
     res.status(200).json({
       success: true,
       count: formattedOrders.length,
@@ -407,9 +408,6 @@ exports.getOrders = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 exports.getOrdersByUserId = async (req, res) => {

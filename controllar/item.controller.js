@@ -5,7 +5,7 @@ const MainItem = require('../models/item.model');
 const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
-
+const { translateResponse } = require('../services/translation.service');
 
 
 
@@ -600,22 +600,61 @@ exports.getAllItemsForList = async (req, res) => {
       }
     ]);
 
+   let formattedItems = items.map(item => ({
+      ...item,
+      product: item.productDetails
+        ? {
+            _id: item.productDetails._id,
+            name: item.productDetails.name,
+            about: item.productDetails.about,
+            description: item.productDetails.description, 
+            shift: item.productDetails.shift
+
+          }
+        : null
+    }));
+
+    
+  const fieldsToTranslate = [
+      
+      'shift',                
+      'status',               
+      'itemNo',               
+      'remarks',              
+      'notes',                
+      'category',             
+      
+      
+      'product.name',         
+      'product.about',        
+      'product.description',  
+      'product.unit',         
+      'product.material',     
+      
+      
+      'helpers.role',         
+      'helpers.name',         
+      
+      
+      'operators.role',       
+      'operators.name',       
+      
+      
+      'mixtures.role',        
+      'mixtures.name'
+    ];
+
+    
+    const translatedData = await translateResponse(req, formattedItems, fieldsToTranslate);
+
+
     return res.status(200).json({
       success: true,
       statusCode: 200,
       message: "Items fetched successfully",
-      count: items.length,
-      data: items.map(item => ({
-        ...item,
-        product: item.productDetails
-          ? {
-              _id: item.productDetails._id,
-              name: item.productDetails.name,
-              about: item.productDetails.about,
-              description: item.productDetails.description
-            }
-          : null
-      }))
+      count:  translatedData.length,
+      data: translatedData,
+    
     });
 
   } catch (error) {
@@ -740,20 +779,30 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
   }
 };
 
-
-
-
-
-// CORRECTED CODE (includes the 'boxes' array)
 exports.getAllItems = async (req, res) => {
   try {
-    // Fetch all items and include their full details, including the 'boxes' array.
-    // The sort({ createdAt: -1 }) will show the newest items first.
     const items = await MainItem.find().sort({ createdAt: -1 });
-    res.status(200).json(items);
+    const fieldsToTranslate = [
+      'shift', 
+      'status', 
+      'itemNo', 
+      'remarks', 
+      'notes',
+      'helpers.role',
+      'operators.role',
+      'mixtures.role',
+      'boxes.boxType'
+    ];
+    const translatedItems = await translateResponse(req, items, fieldsToTranslate);
+    res.status(200).json(translatedItems);
+
   } catch (error) {
     console.error("Failed to fetch items:", error);
-    res.status(500).json({ error: 'Failed to fetch items' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch items',
+      error: error.message 
+    });
   }
 };
 
