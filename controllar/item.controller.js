@@ -662,17 +662,18 @@ exports.getAllItemsForList = async (req, res) => {
       statusCode: 200,
       message: "Items fetched successfully",
       count: items.length,
-      data: items.map(item => ({
-        ...item,
-        product: item.productDetails
-          ? {
-            _id: item.productDetails._id,
-            name: item.productDetails.name,
-            about: item.productDetails.about,
-            description: item.productDetails.description
-          }
-          : null
-      }))
+      // data: items.map(item => ({
+      //   ...item,
+      //   product: item.productDetails
+      //     ? {
+      //       _id: item.productDetails._id,
+      //       name: item.productDetails.name,
+      //       about: item.productDetails.about,
+      //       description: item.productDetails.description
+      //     }
+      //     : null
+      // }))
+      data: translatedData
     });
 
   } catch (error) {
