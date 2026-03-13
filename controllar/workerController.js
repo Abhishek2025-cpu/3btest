@@ -3,7 +3,7 @@ const Employee = require('../models/Employee');
 const Machine = require('../models/Machine');
 const Item = require('../models/item.model'); 
 const { uploadBufferToGCS } = require("../utils/gcloud");
-
+const {translateResponse} = require("../services/translation.service")
 
 // Create a new worker entry
 // controller
@@ -169,13 +169,22 @@ exports.getWorkersByEmployeeId = async (req, res) => {
     const workers = await Worker.find({ employee: id })
       .populate('employee', 'name mobile role')
       .populate('machine', 'name')
-      .populate('item', 'itemNo length');
+      .populate('item', 'itemNo length').lean();
 
     if (!workers || workers.length === 0) {
       return sendResponse(res, false, 404, 'No workers found for this employee');
     }
 
-    sendResponse(res, true, 200, 'Employee tasks fetched successfully', workers);
+
+     const fieldsToTranslate = [
+      'employee.name',  // <--- Employee ka naam add kar diya
+      'employee.role', 
+      'machine.name'
+    ];
+
+    const translatedWorkers = await translateResponse(req, workers, fieldsToTranslate);
+
+    sendResponse(res, true, 200, 'Employee tasks fetched successfully',  translatedWorkers);
   } catch (error) {
     sendResponse(res, false, 500, error.message);
   }

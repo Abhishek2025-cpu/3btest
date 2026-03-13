@@ -711,13 +711,15 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       isRead: false
     }).sort({ createdAt: -1 });
 
-    const notificationSummary = {
+    let notificationSummary = {
       count: unreadNotifications.length,
       latestMessage: unreadNotifications.length > 0
         ? unreadNotifications[0].message
         : "No new assignments"
     };
 
+     notificationSummary = await translateResponse(req, notificationSummary, ['latestMessage']);
+    
     /* ================== 2. FETCH ASSIGNMENTS ================== */
     const items = await MainItem.aggregate([
       {
@@ -786,11 +788,22 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       }
     ]);
 
+      const fieldsToTranslate = [
+      'shift', 
+      'company', 
+      'helpers.name', 
+      'operators.name', 
+      'mixtures.name'
+    ];
+
+
+    const translatedItems = await translateResponse(req, items, fieldsToTranslate);
+
     res.status(200).json({
       success: true,
       notification: notificationSummary, // This will now show the count
-      count: items.length,
-      data: items
+      count: translatedItems.length,
+      data:translatedItems 
     });
 
   } catch (error) {

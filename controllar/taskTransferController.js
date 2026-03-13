@@ -120,7 +120,7 @@ exports.getTaskTransfers = async (req, res) => {
       .populate("fromEmployee", "name email")
       .populate("toEmployee", "name email")
       .populate("transferredBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }).lean();
 
     // 2. Translation ke liye fields specify karein
     const fieldsToTranslate = [
