@@ -217,7 +217,7 @@ exports.updateEmployeeStatus = async (req, res) => {
 
 exports.getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find();
+    const employees = await Employee.find().select("+password");
 
     res.status(200).json(employees);
   } catch (error) {
