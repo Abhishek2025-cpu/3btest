@@ -5,11 +5,11 @@ const Product = require('../models/ProductUpload');
 const OtherProduct = require('../models/otherProduct');
 const Notification = require('../models/Notification');
 const ReturnRequest = require('../models/ReturnRequest');
-
 const Company = require('../models/company');
+const { translateResponse } = require("../services/translation.service");
+
 const { sendUserNotification } = require("../services/notificationService");
 const axios = require('axios');
-
 
 
 const generateOrderId = () => {
@@ -237,11 +237,21 @@ exports.getOrders = async (req, res) => {
         return populatedOrder;
       })
     );
+const fieldsToTranslate = [
+      'currentStatus',
+      'products.productName',
+      'products.color',
+      'products.currentStatus',
+      'products.materialName',
+      'products.company.name'
+    ];
+
+    const translatedOrders = await translateResponse(req, formattedOrders, fieldsToTranslate);
 
     res.status(200).json({
       success: true,
-      count: formattedOrders.length,
-      orders: formattedOrders,
+      count:  translatedOrders.length,
+      orders: translatedOrders,
     });
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -252,9 +262,6 @@ exports.getOrders = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 exports.getOrdersByUserId = async (req, res) => {

@@ -1,7 +1,7 @@
 const Machine = require("../models/Machine");
 const Employee = require("../models/Employee");
 const cloudinary = require("cloudinary").v2;
-
+const {translateResponse} = require("../services/translation.service");
 const sharp = require('sharp');
 
 const MachineAssignment = require('../models/MachineAssignment');
@@ -288,8 +288,11 @@ exports.addMachine = async (req, res) => {
 // Get all machines
 exports.getMachines = async (req, res) => {
   try {
-    const machines = await Machine.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: machines });
+    const machines = await Machine.find().sort({ createdAt: -1 }).lean();
+
+      const fieldsToTranslate = ['name', 'companyName', 'type'];
+        const translatedData = await translateResponse(req, machines, fieldsToTranslate);
+    res.json({ success: true, data: translatedData });
   } catch (error) {
     console.error("Get Machines Error:", error);
     res.status(500).json({ success: false, message: "❌ Server error" });

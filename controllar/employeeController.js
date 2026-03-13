@@ -4,7 +4,7 @@ const axios = require('axios');
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-
+const { translateResponse } = require('../services/translation.service'); 
 
 
 function generatePassword(name, adhar) {
@@ -217,9 +217,11 @@ exports.updateEmployeeStatus = async (req, res) => {
 
 exports.getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select("+password");
+    const employees = await Employee.find().select("-password").lean();
+    const fieldsToTranslate = ['name', 'role', 'otherRoles'];
 
-    res.status(200).json(employees);
+    const translatedEmployees = await translateResponse(req, employees, fieldsToTranslate);
+    res.status(200).json(translatedEmployees);
   } catch (error) {
     console.error("GET EMPLOYEES ERROR:", error);
     res.status(500).json({ error: 'Failed to fetch employees' });
