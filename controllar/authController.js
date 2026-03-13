@@ -277,8 +277,11 @@ exports.login = async (req, res) => {
 
 exports.getUserProfiles = async (req, res) => {
   try {
-    const users = await User.find().select('-__v -createdAt -updatedAt'); // optional: exclude metadata fields
-    res.status(200).json({ message: 'User profiles fetched successfully', users });
+    const users = await User.find().select('-__v -createdAt -updatedAt').lean(); // optional: exclude metadata fields
+    
+      const fieldsToTranslate = ['name', 'role'];
+       const translatedUsers = await translateResponse(req, users, fieldsToTranslate);
+    res.status(200).json({ message: 'User profiles fetched successfully', users: translatedUsers });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch user profiles', error: error.message });
   }
