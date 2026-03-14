@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const MixtureTable = require("../models/mixturetables");
 const MainItem = require("../models/item.model");
-
+const {translateResponse} = require("../services/translation.service")
 // -------------------------
 // ADD NEW MIXTURE FORM
 // -------------------------
@@ -133,11 +133,24 @@ exports.getMixtureFormsByMixtureId = async (req, res) => {
       });
     }
 
+
+     const fieldsToTranslate = [
+      "itemName", 
+      "machineNo", 
+      "date", 
+      "shift", 
+      "time", 
+      "mixtureId.name", // Populated Employee name
+      "mixtureId.eid"   // Populated Employee ID (agar string hai)
+    ];
+
+     const translatedData = await translateResponse(req, forms, fieldsToTranslate);
+
     return res.status(200).json({
       success: true,
       message: `Mixture forms for mixture ${mixtureId} fetched successfully.`,
-      count: forms.length,
-      data: forms
+      count: translatedData.length,
+      data: translatedData
     });
 
   } catch (err) {
@@ -296,11 +309,21 @@ exports.getAllTransfers = async (req, res) => {
       .populate("mainItemId", "itemNo shift company")
       .populate("fromMixtureId", "name eid")
       .populate("toMixtureId", "name eid")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }).lean();
+
+  const fieldsToTranslate = [
+      "mainItemId.company",
+      "mainItemId.shift",
+      "fromMixtureId.name",
+      "toMixtureId.name"
+    ];
+
+
+     const translatedTransfers = await translateResponse(req, transfers, fieldsToTranslate);
 
     return res.status(200).json({
       success: true,
-      data: transfers,
+      data:translatedTransfers,
     });
   } catch (error) {
     console.error("Error fetching transfers:", error);
