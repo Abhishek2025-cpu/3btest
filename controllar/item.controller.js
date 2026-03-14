@@ -6,7 +6,7 @@ const Employee = require('../models/Employee');
 const { uploadBufferToGCS } = require('../utils/gcloud');
 const Product = require('../models/ProductUpload');
 const { translateResponse } = require('../services/translation.service');
-
+const bwipjs = require('bwip-js');
 
 
 exports.createItemWithBoxes = async (req, res) => {
@@ -70,7 +70,25 @@ exports.createItemWithBoxes = async (req, res) => {
           'image/png'
         );
 
-        return { boxSerialNo, qrCodeUrl: qrUpload.url };
+const barCodeBuffer = await bwipjs.toBuffer({
+            bcid: 'code128',       // Barcode type (Code 128 is standard)
+            text: `${cleanItemNo}-${boxSerialNo}`, // Barcode me kya likha hoga
+            scale: 3,              // Resolution
+            height: 10,            // Bar height in mm
+            includetext: true,      // Neeche readable text dikhana hai ya nahi
+            textxalign: 'center',
+        });
+
+        // Barcode ko GCS pe upload karna
+        const barCodeUpload = await uploadBufferToGCS(
+          barCodeBuffer,
+          `barcode-${cleanItemNo}-${boxSerialNo}-${Date.now()}.png`,
+          'bar-codes', // Folder name in GCS
+          'image/png'
+        );
+
+
+        return { boxSerialNo, qrCodeUrl: qrUpload.url, barCodeUrl: barCodeUpload.url };
       })
     );
 

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const boxSchema = new mongoose.Schema({
   boxSerialNo: { type: String, required: true },
   qrCodeUrl: { type: String, required: true },
+  barCodeUrl : {type: String, required: true},
   stockStatus: {
     type: String,
     enum: ['In Stock', 'Stock Out'],
