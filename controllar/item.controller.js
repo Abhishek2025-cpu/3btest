@@ -70,13 +70,13 @@ exports.createItemWithBoxes = async (req, res) => {
           'image/png'
         );
 
-const barCodeBuffer = await bwipjs.toBuffer({
-            bcid: 'code128',       // Barcode type (Code 128 is standard)
-            text: `${cleanItemNo}-${boxSerialNo}`, // Barcode me kya likha hoga
-            scale: 3,              // Resolution
-            height: 10,            // Bar height in mm
-            includetext: true,      // Neeche readable text dikhana hai ya nahi
-            textxalign: 'center',
+        const barCodeBuffer = await bwipjs.toBuffer({
+          bcid: 'code128',       // Barcode type (Code 128 is standard)
+          text: `${cleanItemNo}-${boxSerialNo}`, // Barcode me kya likha hoga
+          scale: 3,              // Resolution
+          height: 10,            // Bar height in mm
+          includetext: true,      // Neeche readable text dikhana hai ya nahi
+          textxalign: 'center',
         });
 
         // Barcode ko GCS pe upload karna
@@ -627,51 +627,51 @@ exports.getAllItemsForList = async (req, res) => {
       }
     ]);
 
-   let formattedItems = items.map(item => ({
+    let formattedItems = items.map(item => ({
       ...item,
       product: item.productDetails
         ? {
-            _id: item.productDetails._id,
-            name: item.productDetails.name,
-            about: item.productDetails.about,
-            description: item.productDetails.description, 
-            shift: item.productDetails.shift
+          _id: item.productDetails._id,
+          name: item.productDetails.name,
+          about: item.productDetails.about,
+          description: item.productDetails.description,
+          shift: item.productDetails.shift
 
-          }
+        }
         : null
     }));
 
-    
-  const fieldsToTranslate = [
-      
-      'shift',                
-      'status',               
-      'itemNo',               
-      'remarks',              
-      'notes',                
-      'category',             
-      
-      
-      'product.name',         
-      'product.about',        
-      'product.description',  
-      'product.unit',         
-      'product.material',     
-      
-      
-      'helpers.role',         
-      'helpers.name',         
-      
-      
-      'operators.role',       
-      'operators.name',       
-      
-      
-      'mixtures.role',        
+
+    const fieldsToTranslate = [
+
+      'shift',
+      'status',
+      'itemNo',
+      'remarks',
+      'notes',
+      'category',
+
+
+      'product.name',
+      'product.about',
+      'product.description',
+      'product.unit',
+      'product.material',
+
+
+      'helpers.role',
+      'helpers.name',
+
+
+      'operators.role',
+      'operators.name',
+
+
+      'mixtures.role',
       'mixtures.name'
     ];
 
-    
+
     const translatedData = await translateResponse(req, formattedItems, fieldsToTranslate);
 
 
@@ -736,8 +736,8 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
         : "No new assignments"
     };
 
-     notificationSummary = await translateResponse(req, notificationSummary, ['latestMessage']);
-    
+    notificationSummary = await translateResponse(req, notificationSummary, ['latestMessage']);
+
     /* ================== 2. FETCH ASSIGNMENTS ================== */
     const items = await MainItem.aggregate([
       {
@@ -806,11 +806,11 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       }
     ]);
 
-      const fieldsToTranslate = [
-      'shift', 
-      'company', 
-      'helpers.name', 
-      'operators.name', 
+    const fieldsToTranslate = [
+      'shift',
+      'company',
+      'helpers.name',
+      'operators.name',
       'mixtures.name'
     ];
 
@@ -821,7 +821,7 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       success: true,
       notification: notificationSummary, // This will now show the count
       count: translatedItems.length,
-      data:translatedItems 
+      data: translatedItems
     });
 
   } catch (error) {
@@ -833,10 +833,10 @@ exports.getAllItems = async (req, res) => {
   try {
     const items = await MainItem.find().sort({ createdAt: -1 });
     const fieldsToTranslate = [
-      'shift', 
-      'status', 
-      'itemNo', 
-      'remarks', 
+      'shift',
+      'status',
+      'itemNo',
+      'remarks',
       'notes',
       'helpers.role',
       'operators.role',
@@ -848,10 +848,10 @@ exports.getAllItems = async (req, res) => {
 
   } catch (error) {
     console.error("Failed to fetch items:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to fetch items',
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -927,3 +927,66 @@ exports.updateStockStatus = async (req, res) => {
   }
 };
 
+exports.getItemByBarcodeScan = async (req, res) => {
+    try {
+
+        const { barcode } = req.params; 
+
+        if (!barcode) {
+            return res.status(400).json({ success: false, message: "No barcode scanned" });
+        }
+
+        // 1. Barcode string ko split karein (Kyuki Create API mein format yahi hai)
+        const lastHyphenIndex = barcode.lastIndexOf('-');
+        if (lastHyphenIndex === -1) {
+            return res.status(400).json({ success: false, message: "Invalid Barcode Format" });
+        }
+
+        const itemNo = barcode.substring(0, lastHyphenIndex);
+        const boxSerialNo = barcode.substring(lastHyphenIndex + 1);
+
+        // 2. Database mein query karein
+        // Hum itemNo aur boxSerialNo dono match karenge taaki sahi box mile
+        const item = await MainItem.findOne({
+            itemNo: itemNo,
+            "boxes.boxSerialNo": boxSerialNo
+        }).populate('helpers.employeeId operators.employeeId mixtures.employeeId');
+
+        if (!item) {
+            return res.status(404).json({
+                success: false,
+                message: "Database mein ye item ya box nahi mila."
+            });
+        }
+
+        // 3. Scanned string ke basis par wahi specific box nikalna (Jisme uski _id bhi hogi)
+        const specificBox = item.boxes.find(box => box.boxSerialNo === boxSerialNo);
+
+        // 4. Final Response (Isme aapko box ki _id bhi mil jayegi)
+        return res.status(200).json({
+            success: true,
+            message: "Scan successful",
+            boxId: specificBox._id, // Ye rahi us box ki unique ID
+            data: {
+                scannedBox: specificBox,
+                itemDetails: {
+                    _id: item._id,
+                    itemNo: item.itemNo,
+                    length: item.length,
+                    noOfSticks: item.noOfSticks,
+                    shift: item.shift,
+                    company: item.company,
+                    machineNumber: item.machineNumber,
+                    productImageUrl: item.productImageUrl,
+                    helpers: item.helpers,
+                    operators: item.operators,
+                    mixtures: item.mixtures
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Scan Error:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
