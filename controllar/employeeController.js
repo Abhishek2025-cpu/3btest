@@ -217,7 +217,7 @@ exports.updateEmployeeStatus = async (req, res) => {
 
 exports.getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select("-password").lean();
+    const employees = await Employee.find().lean();
     const fieldsToTranslate = ['name', 'role', 'otherRoles'];
 
     const translatedEmployees = await translateResponse(req, employees, fieldsToTranslate);
