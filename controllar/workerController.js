@@ -169,7 +169,8 @@ exports.getWorkersByEmployeeId = async (req, res) => {
     const workers = await Worker.find({ employee: id })
       .populate('employee', 'name mobile role')
       .populate('machine', 'name')
-      .populate('item', 'itemNo length').lean();
+      .populate('item', 'itemNo length')
+      .populate('').lean();
 
     if (!workers || workers.length === 0) {
       return sendResponse(res, false, 404, 'No workers found for this employee');

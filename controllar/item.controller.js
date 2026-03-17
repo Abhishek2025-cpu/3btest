@@ -811,7 +811,11 @@ exports.getEmployeeAssignedProducts = async (req, res) => {
       'company',
       'helpers.name',
       'operators.name',
-      'mixtures.name'
+      'mixtures.name',
+      'operators.role',
+      'mixtures.role',
+      'helpers.role'
+
     ];
 
 
