@@ -180,7 +180,11 @@ exports.getWorkersByEmployeeId = async (req, res) => {
      const fieldsToTranslate = [
       'employee.name',  // <--- Employee ka naam add kar diya
       'employee.role', 
-      'machine.name'
+      'machine.name',
+      'shift',
+      'description',
+      'machine',
+      
     ];
 
     const translatedWorkers = await translateResponse(req, workers, fieldsToTranslate);

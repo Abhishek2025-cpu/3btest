@@ -315,7 +315,8 @@ exports.getAllTransfers = async (req, res) => {
       "mainItemId.company",
       "mainItemId.shift",
       "fromMixtureId.name",
-      "toMixtureId.name"
+      "toMixtureId.name",
+      'reason'
     ];
 
 

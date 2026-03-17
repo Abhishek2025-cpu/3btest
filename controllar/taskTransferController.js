@@ -127,7 +127,8 @@ exports.getTaskTransfers = async (req, res) => {
       "mainItemId.company",
       "fromEmployee.name",
       "toEmployee.name",
-      "transferredBy.name"
+      "transferredBy.name",
+      'reason'
     ];
 
     // 3. Translated Data generate karein
