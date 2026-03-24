@@ -8,7 +8,7 @@ const ReturnRequest = require('../models/ReturnRequest');
 const Company = require('../models/company');
 const { translateResponse } = require("../services/translation.service");
 
-const { sendUserNotification } = require("../services/notificationService");
+const { sendNotification } = require("../services/notificationService");
 const axios = require('axios');
 
 
