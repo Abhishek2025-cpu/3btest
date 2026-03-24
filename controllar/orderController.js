@@ -115,15 +115,26 @@ exports.placeOrder = async (req, res) => {
     // 6. Save to Database
     const savedOrder = await newOrder.save();
 
-    // 7. Send Notification (Optional - won't block response)
-    try {
-      await sendUserNotification(
-        user,
-        "🎉 Order Placed!",
-        `Dear ${user.name}, your order ${savedOrder.orderId} was successful.`,
-        { orderId: savedOrder._id.toString() }
-      );
-    } catch (e) { console.log("Notification error ignored"); }
+  // 7. Send Notification (non-blocking)
+try {
+  console.log("📢 Sending notification...");
+  console.log("User tokens:", user.fcmTokens);
+
+  if (user.fcmTokens && user.fcmTokens.length > 0) {
+    sendNotification(
+      user._id,
+      user.fcmTokens,
+      "🎉 Order Placed!",
+      `Dear ${user.name}, your order ${savedOrder.orderId} was successful.`,
+      { orderId: savedOrder._id.toString() }
+    ).catch(err => console.error("❌ Notification error:", err));
+  } else {
+    console.log("⚠️ No FCM tokens found for user");
+  }
+
+} catch (e) {
+  console.error("❌ Notification trigger error:", e);
+}
 
     // 8. Return ENTIRE data
     res.status(201).json({
