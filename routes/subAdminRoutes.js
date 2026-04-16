@@ -24,7 +24,9 @@ const { checkPermission } = require('../middleware/checkPermission');
  */
 router.post(
   '/register',
-  checkPermission('admins'),
+  // ❌ REMOVE THIS
+  // checkPermission('admins'),
+
   uploadVerificationDoc,
   registerSubAdmin
 );

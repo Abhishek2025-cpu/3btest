@@ -46,11 +46,14 @@ exports.registerSubAdmin = async (req, res) => {
       subAdminData: subAdmin
     });
   } catch (error) {
-  console.error("REGISTER ERROR:", error); // 👈 ADD THIS
+  console.log("❌ ERROR OBJECT:", error);
+  console.log("❌ ERROR MESSAGE:", error.message);
+  console.log("❌ ERROR STACK:", error.stack);
 
-  res.status(500).json({
-    message: 'Server Error',
-    error: error.message
+  return res.status(500).json({
+    message: "Server error",
+    error: error.message,
+    stack: error.stack
   });
 }
 };
