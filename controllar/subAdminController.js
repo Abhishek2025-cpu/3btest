@@ -105,17 +105,10 @@ exports.loginSubAdmin = async (req, res) => {
 
 // @desc    Get all sub-admins
 // @route   GET /api/subadmins/
+// @desc    Get all sub-admins
+// @route   GET /api/subadmins/
 exports.getAllSubAdmins = async (req, res) => {
   try {
-    const user = req.user;
-
-    // 🔐 Permission check
-    if (!user?.permissions?.admins) {
-      return res.status(403).json({
-        message: "Access denied - No admin permission"
-      });
-    }
-
     const subAdmins = await SubAdmin.find({})
       .select("-password") // 🔥 never send password
       .sort({ createdAt: -1 });
@@ -132,17 +125,10 @@ exports.getAllSubAdmins = async (req, res) => {
 
 // @desc    Get a single sub-admin by their database _id
 // @route   GET /api/subadmins/:id
+// @desc    Get a single sub-admin by their database _id
+// @route   GET /api/subadmins/:id
 exports.getSubAdminById = async (req, res) => {
   try {
-    const user = req.user;
-
-    // 🔐 Permission check
-    if (!user?.permissions?.admins) {
-      return res.status(403).json({
-        message: "Access denied - No admin permission"
-      });
-    }
-
     const subAdmin = await SubAdmin.findById(req.params.id)
       .select("-password");
 
