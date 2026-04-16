@@ -1,116 +1,47 @@
 const express = require('express');
 const router = express.Router();
 
-const productController = require('../controllar/productUploadController');
+const productController = require('../controllar/productUploadController');//updated with
 const { uploadProduct } = require('../middleware/upload');
-const { checkPermission } = require('../middleware/checkPermission');
 
-/**
- * 🔐 SEARCH PRODUCTS
- */
-router.get(
-  '/search',
-  checkPermission('products.allProducts'),
-  productController.searchProductsByName
-);
+router.get('/search', productController.searchProductsByName); 
 
-/**
- * 🔐 ADD PRODUCT
- */
-router.post(
-  '/add',
-  checkPermission('products.allProducts'),
+router.post('/add',
   uploadProduct.fields([
-    { name: 'images', maxCount: 50 },
-    { name: 'colorImages', maxCount: 50 }
+    { name: 'images', maxCount: 50 },       
+    { name: 'colorImages', maxCount: 50 }   
   ]),
   productController.createProduct
 );
 
-/**
- * 🔐 GET MOVEMENTS
- */
-router.get(
-  '/get-movement',
-  checkPermission('products.allProducts'),
-  productController.getProductMovements
-);
+router.get('/get-movement', productController.getProductMovements);
+router.get('/all', productController.getAllProducts);
+router.get('/scan/:productId', productController.getProductByQr);
+router.get('/:id', productController.getSingleProduct);
 
-/**
- * 🔐 GET ALL PRODUCTS
- */
-router.get(
-  '/all',
-  checkPermission('products.allProducts'),
-  productController.getAllProducts
-);
 
-/**
- * 🔐 SCAN PRODUCT
- */
-router.get(
-  '/scan/:productId',
-  checkPermission('products.scanQR'),
-  productController.getProductByQr
-);
 
-/**
- * 🔐 SINGLE PRODUCT
- */
-router.get(
-  '/:id',
-  checkPermission('products.allProducts'),
-  productController.getSingleProduct
-);
+router.put('/update/:productId', uploadProduct.fields([
+  { name: 'images', maxCount: 10 }
+]), productController.updateProduct);
 
-/**
- * 🔐 UPDATE PRODUCT
- */
-router.put(
-  '/update/:productId',
-  checkPermission('products.allProducts'),
-  uploadProduct.fields([{ name: 'images', maxCount: 10 }]),
-  productController.updateProduct
-);
-
-/**
- * 🔐 DELETE PRODUCT
- */
+router.delete('/delete/:productId', productController.deleteProduct);
 router.delete(
-  '/delete/:productId',
-  checkPermission('products.allProducts'),
-  productController.deleteProduct
-);
-
-/**
- * 🔐 DELETE PRODUCT IMAGE
- */
-router.delete(
-  '/products/:productId/images/:imageId',
-  checkPermission('products.otherProducts'),
+  "/products/:productId/images/:imageId",
   productController.deleteProductImage
 );
+router.get('/filter-sort', productController.filterAndSortProducts);
 
-/**
- * 🔐 FILTER & SORT
- */
-router.get(
-  '/filter-sort',
-  checkPermission('products.allProducts'),
-  productController.filterAndSortProducts
-);
-
-/**
- * 🔐 CREATE MOVEMENT
- */
 router.post(
   '/movement',
-  checkPermission('products.allProducts'),
   uploadProduct.fields([
     { name: 'productImages', maxCount: 5 },
     { name: 'colorImages', maxCount: 5 }
   ]),
   productController.createProductMovement
 );
+
+
+
 
 module.exports = router;

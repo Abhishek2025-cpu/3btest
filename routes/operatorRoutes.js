@@ -1,52 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const { uploadProduct } = require('../middleware/upload'); // multer middleware
 
-const { uploadProduct } = require('../middleware/upload');
 
-const {
-  assignMachineWithOperator,
-  getOperatorAssignmentsByEmployee,
-  getAllAssignments,
-  updateEmployeeTask
-} = require('../controllar/machineController');
+const { assignMachineWithOperator,getOperatorAssignmentsByEmployee ,getAllAssignments,updateEmployeeTask } = require('../controllar/machineController');
 
-const { checkPermission } = require('../middleware/checkPermission');
-
-/**
- * 🔐 ASSIGN MACHINE TO OPERATOR
- */
+// POST route to assign machine
+// Use upload.array('operatorImages') for multiple images (optional)
 router.post(
   '/assign-machine',
-  checkPermission('machines.operatorTable'),
   uploadProduct.array('operatorImages', 10),
   assignMachineWithOperator
 );
 
-/**
- * 🔐 UPDATE EMPLOYEE TASK
- */
-router.put(
-  "/update/:id",
-  checkPermission('machines.operatorTable'),
-  updateEmployeeTask
-);
+router.put("/update/:id", updateEmployeeTask);
 
-/**
- * 🔐 GET ASSIGNMENTS BY EMPLOYEE
- */
-router.get(
-  '/get-assign-machine-operator',
-  checkPermission('machines.operatorTable'),
-  getOperatorAssignmentsByEmployee
-);
+router.get('/get-assign-machine-operator', getOperatorAssignmentsByEmployee);
 
-/**
- * 🔐 GET ALL ASSIGNMENTS
- */
-router.get(
-  "/get-All-Assignments",
-  checkPermission('machines.operatorTable'),
-  getAllAssignments
-);
+router.get("/get-All-Assignments",getAllAssignments);
 
 module.exports = router;

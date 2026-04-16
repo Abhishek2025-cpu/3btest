@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-
 const {
   createReturnRequest,
   getUserReturnRequests,
@@ -9,53 +8,26 @@ const {
   updateReturnRequestStatus,
 } = require('../controllar/returnController');
 
-const { uploadReturnRequestImages } = require('../middleware/uploadMiddleware');
+const { uploadReturnRequestImages } = require('../middleware/uploadMiddleware'); // use the correct file name
 
-const { checkPermission } = require('../middleware/checkPermission');
+// const { isAuthenticated, isAdmin } = require('../middleware/auth'); // Protect your routes!
 
-/**
- * 🔓 USER REQUEST RETURN
- */
+// === Customer Routes ===
+// Assuming you have middleware to get user from token
 router.post(
   '/request',
+  // isAuthenticated,
+  // MODIFICATION: Use the clean, specific middleware directly
   uploadReturnRequestImages,
   createReturnRequest
 );
+router.get('/my-requests/:userId', /* isAuthenticated, */ getUserReturnRequests);
 
-/**
- * 🔐 USER VIEW REQUESTS
- */
-router.get(
-  '/my-requests/:userId',
-  checkPermission('orders'),
-  getUserReturnRequests
-);
 
-/**
- * 🔐 ADMIN VIEW ALL
- */
-router.get(
-  '/admin/all',
-  checkPermission('orders'),
-  getAllReturnRequests
-);
+// === Admin Routes ===
+router.get('/admin/all', /* isAuthenticated, isAdmin, */ getAllReturnRequests);
+router.get('/admin/:id', /* isAuthenticated, isAdmin, */ getReturnRequestById);
+router.put('/admin/:id/status', /* isAuthenticated, isAdmin, */ updateReturnRequestStatus);
 
-/**
- * 🔐 ADMIN VIEW SINGLE
- */
-router.get(
-  '/admin/:id',
-  checkPermission('orders'),
-  getReturnRequestById
-);
-
-/**
- * 🔐 ADMIN UPDATE STATUS
- */
-router.put(
-  '/admin/:id/status',
-  checkPermission('orders'),
-  updateReturnRequestStatus
-);
 
 module.exports = router;

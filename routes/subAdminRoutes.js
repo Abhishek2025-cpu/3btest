@@ -17,7 +17,7 @@ const {
   uploadProfilePic
 } = require('../middleware/uploadMiddleware');
 
-const { checkPermission } = require('../middleware/checkPermission');
+
 
 /**
  * 🔐 REGISTER SUBADMIN (ONLY ADMIN)
@@ -50,7 +50,7 @@ router.put(
  */
 router.get(
   '/sub-admins',
-  checkPermission('admins'),
+
   getAllSubAdmins
 );
 
@@ -59,7 +59,7 @@ router.get(
  */
 router.get(
   '/sub-admin/:id',
-  checkPermission('admins'),
+
   getSubAdminById
 );
 
@@ -68,7 +68,7 @@ router.get(
  */
 router.put(
   '/update/:id',
-  checkPermission('admins'),
+
   uploadProfilePic,
   updateSubAdmin
 );
@@ -78,7 +78,7 @@ router.put(
  */
 router.patch(
   '/status/:id',
-  checkPermission('admins'),
+
   updateSubAdminStatus
 );
 
@@ -87,7 +87,7 @@ router.patch(
  */
 router.delete(
   '/delete/:id',
-  checkPermission('admins'),
+
   deleteSubAdmin
 );
 

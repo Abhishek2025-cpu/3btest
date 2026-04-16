@@ -1,66 +1,49 @@
+// routes/otherProduct.routes.js
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-
 const otherProductController = require('../controllar/otherProduct.controller');
-const { checkPermission } = require('../middleware/checkPermission');
 
+
+// Configure Multer for in-memory file storage
 const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 }
+const upload = multer({ 
+    storage: storage,
+    // Add file size limit for security
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
 });
 
-/**
- * 🔐 ADD OTHER PRODUCT
- */
+// Use upload.fields() to handle multiple file inputs with different names
+// The 'name' must match the key used in the form-data request.
 router.post(
-  '/:categoryId/products',
-  checkPermission('products.otherProducts'),
+  '/:categoryId/products', 
   upload.fields([
-    { name: 'images', maxCount: 10 },
-    { name: 'materialImages', maxCount: 10 }
-  ]),
+      { name: 'images', maxCount: 10 },        // For main product images
+      { name: 'materialImages', maxCount: 10 } // For the material variant images
+  ]), 
   otherProductController.addOtherProduct
 );
 
-/**
- * 🔐 GET SINGLE PRODUCT
- */
-router.get(
-  '/products/:productId',
-  checkPermission('products.otherProducts'),
-  otherProductController.getProductById
-);
+router.get('/products/:productId', otherProductController.getProductById);
 
-/**
- * 🔐 GET PRODUCTS BY CATEGORY
- */
+// GET /api/other-categories/:categoryId/products
 router.get(
   '/product/:categoryId',
-  checkPermission('products.otherProducts'),
   otherProductController.getProductsByCategoryId
 );
 
-/**
- * 🔐 UPDATE PRODUCT
- */
 router.put(
   '/update-product/:productId',
-  checkPermission('products.otherProducts'),
   upload.fields([
-    { name: 'images', maxCount: 10 },
-    { name: 'materialImages', maxCount: 10 }
+      { name: 'images', maxCount: 10 },        // For main product images
+      { name: 'materialImages', maxCount: 10 } // For the material variant images
   ]),
   otherProductController.updateOtherProduct
 );
 
-/**
- * 🔐 DELETE PRODUCT
- */
 router.delete(
   '/delete-product/:productId',
-  checkPermission('products.otherProducts'),
   otherProductController.deleteOtherProduct
 );
 

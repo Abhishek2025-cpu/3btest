@@ -1,80 +1,25 @@
 const express = require("express");
-
 const {
   addMixtureForm,
   getMixtureFormById,
   getAllMixtureForms,
   getMixtureFormsByMixtureId,
-  transferMainItemTasks,
+  transferMainItemTasks,   // <-- FIXED NAME
   getTransfersByMainItemId,
   getAllTransfers,
 } = require("../controllar/mixtureTableController");
 
 const router = express.Router();
 
-const { checkPermission } = require("../middleware/checkPermission");
+router.post("/add", addMixtureForm);
+router.get("/all", getAllMixtureForms);
+router.get("/:id", getMixtureFormById);
 
-/**
- * 🔐 ADD MIXTURE
- */
-router.post(
-  "/add",
-  checkPermission("machines.mixtureTable"),
-  addMixtureForm
-);
+router.get("/mixture/:mixtureId", getMixtureFormsByMixtureId);
 
-/**
- * 🔐 GET ALL MIXTURES
- */
-router.get(
-  "/all",
-  checkPermission("machines.mixtureTable"),
-  getAllMixtureForms
-);
+router.post("/transfer", transferMainItemTasks); // <-- FIXED
+router.get("/transfers/:mainItemId", getTransfersByMainItemId); // <-- FIXED PARAM NAME
+router.get("/transfer/all", getAllTransfers);
 
-/**
- * 🔐 GET MIXTURE BY ID
- */
-router.get(
-  "/:id",
-  checkPermission("machines.mixtureTable"),
-  getMixtureFormById
-);
-
-/**
- * 🔐 GET BY MIXTURE ID
- */
-router.get(
-  "/mixture/:mixtureId",
-  checkPermission("machines.mixtureTable"),
-  getMixtureFormsByMixtureId
-);
-
-/**
- * 🔐 TRANSFER TASKS
- */
-router.post(
-  "/transfer",
-  checkPermission("machines.mixtureTable"),
-  transferMainItemTasks
-);
-
-/**
- * 🔐 GET TRANSFERS BY MAIN ITEM
- */
-router.get(
-  "/transfers/:mainItemId",
-  checkPermission("machines.mixtureTable"),
-  getTransfersByMainItemId
-);
-
-/**
- * 🔐 GET ALL TRANSFERS
- */
-router.get(
-  "/transfer/all",
-  checkPermission("machines.mixtureTable"),
-  getAllTransfers
-);
 
 module.exports = router;

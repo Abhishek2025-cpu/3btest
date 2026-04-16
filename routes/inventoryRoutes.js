@@ -1,66 +1,34 @@
 const express = require("express");
 const router = express.Router();
-const multer = require("multer");
-
 const inventoryController = require("../controllar/inventoryController");
-const { checkPermission } = require("../middleware/checkPermission");
+const multer = require("multer");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-/**
- * 🔐 ADD INVENTORY ITEM
- */
+// Add item
 router.post(
   "/add",
-  checkPermission("products.inventory"),
   upload.single("productImage"),
   inventoryController.addInventoryItem
 );
 
-/**
- * 🔐 GET ALL INVENTORY ITEMS
- */
-router.get(
-  "/get",
-  checkPermission("products.inventory"),
-  inventoryController.getInventoryItems
-);
+// Get all items
+router.get("/get", inventoryController.getInventoryItems);
 
-/**
- * 🔐 GET SINGLE ITEM
- */
-router.get(
-  "/single/:id",
-  checkPermission("products.inventory"),
-  inventoryController.getInventoryItem
-);
-
-/**
- * 🔐 UPDATE INVENTORY ITEM
- */
+// Update item
 router.put(
   "/update/:id",
-  checkPermission("products.inventory"),
   upload.single("productImage"),
   inventoryController.updateInventoryItem
 );
 
-/**
- * 🔐 MOVE STOCK
- */
-router.patch(
-  "/move/:id",
-  checkPermission("products.inventory"),
-  inventoryController.moveInventoryStock
-);
+router.get("/single/:id", inventoryController.getInventoryItem);
 
-/**
- * 🔐 DELETE ITEM
- */
-router.delete(
-  "/delete/:id",
-  checkPermission("products.inventory"),
-  inventoryController.deleteInventoryItem
-);
+router.patch("/move/:id", inventoryController.moveInventoryStock);
+
+
+
+
+router.delete("/delete/:id", inventoryController.deleteInventoryItem);
 
 module.exports = router;
