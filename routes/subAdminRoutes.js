@@ -17,6 +17,8 @@ const {
   uploadProfilePic
 } = require('../middleware/uploadMiddleware');
 
+const { checkPermission } = require('../middleware/checkPermission');
+
 
 
 /**
@@ -50,7 +52,7 @@ router.put(
  */
 router.get(
   '/sub-admins',
-
+checkPermission('admins'),  
   getAllSubAdmins
 );
 
