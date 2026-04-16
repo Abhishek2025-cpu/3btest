@@ -1,5 +1,3 @@
-// /routes/subAdminRoutes.js
-
 const express = require('express');
 const router = express.Router();
 
@@ -11,33 +9,84 @@ const {
   updateSubAdmin,
   updateSubAdminStatus,
   deleteSubAdmin,
+  setPermissions
 } = require('../controllar/subAdminController');
 
-// Import the specific middleware functions you need by destructuring the export
 const {
   uploadVerificationDoc,
-  uploadProfilePic,
+  uploadProfilePic
 } = require('../middleware/uploadMiddleware');
 
-// CREATE: Register a new sub-admin. Uses the 'verificationDocument' middleware.
-router.post('/register', uploadVerificationDoc, registerSubAdmin);
+const { checkPermission } = require('../middleware/checkPermission');
 
-// VALIDATE: Verify a sub-admin's credentials. No file upload needed.
+/**
+ * 🔐 REGISTER SUBADMIN (ONLY ADMIN)
+ */
+router.post(
+  '/register',
+  checkPermission('admins'),
+  uploadVerificationDoc,
+  registerSubAdmin
+);
+
+/**
+ * 🔓 LOGIN (PUBLIC)
+ */
 router.post('/login', loginSubAdmin);
 
-// READ: Get all sub-admins.
-router.get('/sub-admins', getAllSubAdmins);
+/**
+ * 🔐 SET PERMISSIONS
+ */
+router.put(
+  '/set-permissions',
+  checkPermission('admins'),
+  setPermissions
+);
 
-// READ: Get a single sub-admin by their database _id.
-router.get('/sub-admin/:id', getSubAdminById);
+/**
+ * 🔐 GET ALL SUBADMINS
+ */
+router.get(
+  '/sub-admins',
+  checkPermission('admins'),
+  getAllSubAdmins
+);
 
-// UPDATE: Update a sub-admin's details. Uses the 'profilePicture' middleware.
-router.put('/update/:id', uploadProfilePic, updateSubAdmin);
+/**
+ * 🔐 GET SINGLE SUBADMIN
+ */
+router.get(
+  '/sub-admin/:id',
+  checkPermission('admins'),
+  getSubAdminById
+);
 
-// UPDATE: Change a sub-admin's status.
-router.patch('/status/:id', updateSubAdminStatus);
+/**
+ * 🔐 UPDATE SUBADMIN
+ */
+router.put(
+  '/update/:id',
+  checkPermission('admins'),
+  uploadProfilePic,
+  updateSubAdmin
+);
 
-// DELETE: Delete a sub-admin.
-router.delete('/delete/:id', deleteSubAdmin);
+/**
+ * 🔐 UPDATE STATUS
+ */
+router.patch(
+  '/status/:id',
+  checkPermission('admins'),
+  updateSubAdminStatus
+);
+
+/**
+ * 🔐 DELETE SUBADMIN
+ */
+router.delete(
+  '/delete/:id',
+  checkPermission('admins'),
+  deleteSubAdmin
+);
 
 module.exports = router;

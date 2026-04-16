@@ -50,6 +50,30 @@ exports.registerSubAdmin = async (req, res) => {
   }
 };
 
+exports.setPermissions = async (req, res) => {
+  try {
+    const { subAdminId, permissions } = req.body;
+
+    const subAdmin = await SubAdmin.findById(subAdminId);
+
+    if (!subAdmin) {
+      return res.status(404).json({ message: "SubAdmin not found" });
+    }
+
+    subAdmin.permissions = permissions;
+
+    await subAdmin.save();
+
+    res.json({
+      message: "Permissions updated successfully",
+      permissions: subAdmin.permissions
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // @desc    Authenticate a sub-admin & get their profile
 // @route   POST /api/subadmins/login
 exports.loginSubAdmin = async (req, res) => {

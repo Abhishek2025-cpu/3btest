@@ -1,76 +1,66 @@
 const express = require('express');
 const router = express.Router();
 
-// Adjust the path if your controller folder is named 'controllar'
-const otherCategoryController = require('../controllar/otherCategoryController'); 
-
-// Re-using your existing multer middleware for file uploads
+const otherCategoryController = require('../controllar/otherCategoryController');
 const { uploadProduct } = require('../middleware/upload');
 
-// JSDoc comments to explain each route
+const { checkPermission } = require('../middleware/checkPermission');
 
 /**
- * @route   POST /api/other-categories
- * @desc    Add a new "Other Category" with a name and images
- * @access  Public (or Private if you add auth middleware)
+ * 🔐 ADD OTHER CATEGORY
  */
 router.post(
-  '/add', 
-  uploadProduct.array('files'), // Use 'files' to match the key in Postman
+  '/add',
+  checkPermission('categories.otherCategories'),
+  uploadProduct.array('files'),
   otherCategoryController.addOtherCategory
 );
 
 /**
- * @route   GET /api/other-categories
- * @desc    Get all "Other Categories"
- * @access  Public
+ * 🔐 GET ALL OTHER CATEGORIES
  */
 router.get(
-  '/get', 
+  '/get',
+  checkPermission('categories.otherCategories'),
   otherCategoryController.getOtherCategories
 );
 
 /**
- * @route   GET /api/other-categories/:id
- * @desc    Get a single "Other Category" by its MongoDB _id
- * @access  Public
+ * 🔐 GET SINGLE CATEGORY
  */
 router.get(
-  '/get/:id', 
+  '/get/:id',
+  checkPermission('categories.otherCategories'),
   otherCategoryController.getOtherCategoryById
 );
 
 /**
- * @route   PUT /api/other-categories/:id
- * @desc    Update a category's name and/or add new images
- * @access  Public
+ * 🔐 UPDATE CATEGORY
  */
 router.put(
-  '/update/:id', 
-  uploadProduct.array('files'), // 'files' for adding new images
+  '/update/:id',
+  checkPermission('categories.otherCategories'),
+  uploadProduct.array('files'),
   otherCategoryController.updateOtherCategory
 );
 
 /**
- * @route   DELETE /api/other-categories/:id
- * @desc    Delete an entire "Other Category" and its images
- * @access  Public
+ * 🔐 DELETE CATEGORY
  */
 router.delete(
-  '/delete/:id', 
+  '/delete/:id',
+  checkPermission('categories.otherCategories'),
   otherCategoryController.deleteOtherCategory
 );
 
 /**
- * @route   DELETE /api/other-categories/:id/images
- * @desc    Delete one or more specific images from a category
- * @body    { "imageIds": ["mongo_subdocument_id_1", "mongo_subdocument_id_2"] }
- * @access  Public
+ * 🔐 DELETE CATEGORY IMAGES
+ * ⚠️ FIXED: missing leading slash in your original code
  */
 router.delete(
-  'delete/images/:id', 
+  '/delete/images/:id',
+  checkPermission('categories.otherCategories'),
   otherCategoryController.deleteOtherCategoryImages
 );
-
 
 module.exports = router;

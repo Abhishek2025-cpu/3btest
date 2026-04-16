@@ -45,10 +45,13 @@ const subAdminSchema = new mongoose.Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+
     permissions: {
-      type: [String],
-      default: ['can_view_dashboard'],
-    },
+  type: mongoose.Schema.Types.Mixed,
+  default: {}
+}
+,
+
   },
   {
     timestamps: true,
