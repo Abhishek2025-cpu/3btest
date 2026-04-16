@@ -41,7 +41,7 @@ router.post('/login', loginSubAdmin);
  */
 router.put(
   '/set-permissions',
-  checkPermission('admins'),
+
   setPermissions
 );
 
