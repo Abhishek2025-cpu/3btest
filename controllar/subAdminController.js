@@ -107,10 +107,26 @@ exports.loginSubAdmin = async (req, res) => {
 // @route   GET /api/subadmins/
 exports.getAllSubAdmins = async (req, res) => {
   try {
-    const subAdmins = await SubAdmin.find({}).sort({ createdAt: -1 });
+    const user = req.user;
+
+    // 🔐 Permission check
+    if (!user?.permissions?.admins) {
+      return res.status(403).json({
+        message: "Access denied - No admin permission"
+      });
+    }
+
+    const subAdmins = await SubAdmin.find({})
+      .select("-password") // 🔥 never send password
+      .sort({ createdAt: -1 });
+
     res.status(200).json(subAdmins);
+
   } catch (error) {
-    res.status(500).json({ message: 'Server Error', error: error.message });
+    res.status(500).json({
+      message: 'Server Error',
+      error: error.message
+    });
   }
 };
 
@@ -118,13 +134,31 @@ exports.getAllSubAdmins = async (req, res) => {
 // @route   GET /api/subadmins/:id
 exports.getSubAdminById = async (req, res) => {
   try {
-    const subAdmin = await SubAdmin.findById(req.params.id);
-    if (!subAdmin) {
-      return res.status(404).json({ message: 'Sub-admin not found.' });
+    const user = req.user;
+
+    // 🔐 Permission check
+    if (!user?.permissions?.admins) {
+      return res.status(403).json({
+        message: "Access denied - No admin permission"
+      });
     }
+
+    const subAdmin = await SubAdmin.findById(req.params.id)
+      .select("-password");
+
+    if (!subAdmin) {
+      return res.status(404).json({
+        message: 'Sub-admin not found'
+      });
+    }
+
     res.status(200).json(subAdmin);
+
   } catch (error) {
-    res.status(500).json({ message: 'Server Error', error: error.message });
+    res.status(500).json({
+      message: 'Server Error',
+      error: error.message
+    });
   }
 };
 
