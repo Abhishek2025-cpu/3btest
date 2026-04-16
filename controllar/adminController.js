@@ -42,63 +42,153 @@ exports.register = async (req, res) => {
 // ✅ Admin Login (Plain password check)
 
 
+const axios = require('axios');
+
+
+const API_KEY = 'ed737417-3faa-11f0-a562-0200cd936042'; // your 2Factor API
+
+const MASTER_ADMIN_NUMBER = '9341347322';
+
+
+
 exports.login = async (req, res) => {
   try {
-    const { number, password } = req.body;
+    const { number } = req.body;
 
-    if (!number || !password) {
-      return res.status(400).json({ message: 'Number and password are required' });
+    if (!number) {
+      return res.status(400).json({ message: 'Number is required' });
     }
 
-    let user = await Admin.findOne({ number }).select('+password');
+    let user = await Admin.findOne({ number });
     let role = 'admin';
 
     if (!user) {
-      user = await SubAdmin.findOne({ phone: number }).select('+password');
+      user = await SubAdmin.findOne({ phone: number });
       role = 'subadmin';
     }
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    // Password validation
-    let isMatch = false;
-    if (role === 'admin') {
-      isMatch = user.password === password;
-    } else {
-      isMatch = await bcrypt.compare(password, user.password);
+    // ✅ SEND REAL OTP
+    const otpRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/+91${number}/AUTOGEN`
+    );
+
+    console.log("2Factor Response:", otpRes.data); // debug
+
+    if (otpRes.data.Status !== 'Success') {
+      return res.status(400).json({
+        message: 'Failed to send OTP',
+        details: otpRes.data
+      });
     }
 
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    // 🔑 Generate token ONLY at login
-    const token = crypto.randomBytes(32).toString('hex');
-
-    // (Optional) store token for record/logging only
-    user.lastLoginToken = token;
-    user.lastLoginAt = new Date();
+    // Save sessionId
+    user.otp = otpRes.data.Details;
+    user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
 
-    const userObject = user.toObject();
-    delete userObject.password;
-    delete userObject.otp;
-    delete userObject.otpExpiry;
-
-    res.status(200).json({
-      message: 'Login successful',
-      role,
-      token, // 🔥 generated only once at login
-      user: userObject,
+    return res.status(200).json({
+      message: 'OTP sent successfully',
+      sessionId: otpRes.data.Details,
+      userId: user._id,
+      role
     });
 
   } catch (err) {
-    console.error('Login Error:', err);
+    console.error('Login Error:', err.response?.data || err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
+
+exports.verifyOtp = async (req, res) => {
+  try {
+    const { userId, otp, sessionId } = req.body;
+
+    if (!userId || !otp) {
+      return res.status(400).json({
+        message: 'userId and otp are required'
+      });
+    }
+
+    let user = await Admin.findById(userId);
+    let role = 'admin';
+
+    if (!user) {
+      user = await SubAdmin.findById(userId);
+      role = 'subadmin';
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ✅ MASTER ADMIN BYPASS
+    if (user.number === '9341347322' && otp === '123456') {
+      const token = crypto.randomBytes(32).toString('hex');
+
+      user.token = token;
+      user.lastLoginAt = new Date();
+      await user.save();
+
+      return res.status(200).json({
+        message: 'Master admin login successful',
+        token,
+        role,
+        user
+      });
+    }
+
+    // ✅ OTP EXPIRY CHECK
+    if (user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: 'OTP expired' });
+    }
+
+    // ✅ VERIFY OTP FROM 2FACTOR
+    const verifyRes = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
+    );
+
+    if (
+      verifyRes.data.Status !== 'Success' ||
+      verifyRes.data.Details !== 'OTP Matched'
+    ) {
+      return res.status(400).json({
+        message: 'Invalid OTP',
+        details: verifyRes.data
+      });
+    }
+
+    // ✅ GENERATE TOKEN
+    const token = crypto.randomBytes(32).toString('hex');
+
+    user.token = token;
+    user.lastLoginAt = new Date();
+    user.otp = null;
+    user.otpExpiry = null;
+
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    return res.status(200).json({
+      message: 'Login successful',
+      token,
+      role,
+      user: userObj
+    });
+
+  } catch (err) {
+    console.error('OTP Verify Error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 
 
 

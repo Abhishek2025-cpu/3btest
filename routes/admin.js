@@ -5,7 +5,11 @@ const memoryUpload = require('../utils/gcloud');
 
 // ✅ Admin Registration & Login
 router.post('/admin-register', adminController.register);
+
 router.post('/login', adminController.login);
+
+// 🔐 Step 2: Verify OTP (final login + token)
+router.post('/verify-otp', adminController.verifyOtp);
 
 // ✅ Profile Photo Update
 // router.patch(
