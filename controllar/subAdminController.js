@@ -84,22 +84,94 @@ exports.setPermissions = async (req, res) => {
 
 // @desc    Authenticate a sub-admin & get their profile
 // @route   POST /api/subadmins/login
-exports.loginSubAdmin = async (req, res) => {
+const axios = require("axios");
+
+const API_KEY = "ed737417-3faa-11f0-a562-0200cd936042";
+
+exports.sendLoginOtpSubAdmin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phone } = req.body;
 
-    const subAdmin = await SubAdmin.findOne({ email }).select('+password');
+    const subAdmin = await SubAdmin.findOne({ phone });
 
-    if (subAdmin && (await subAdmin.matchPassword(password))) {
-      // Password matches, send back profile data (excluding password)
-      const userProfile = subAdmin.toObject();
-      delete userProfile.password;
-      res.status(200).json(userProfile);
-    } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+    if (!subAdmin) {
+      return res.status(404).json({
+        message: "Sub-admin not found"
+      });
     }
+
+    // 🔥 Send OTP via 2Factor
+    const response = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/${phone}/AUTOGEN`
+    );
+
+    // 🔥 Save sessionId instead of OTP
+    subAdmin.otp = {
+      code: response.data.Details, // sessionId
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+    };
+
+    await subAdmin.save();
+
+    res.status(200).json({
+      message: "OTP sent successfully"
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Server Error', error: error.message });
+    console.log("OTP SEND ERROR:", error.response?.data || error.message);
+
+    res.status(500).json({
+      message: "Failed to send OTP",
+      error: error.message
+    });
+  }
+};
+
+exports.verifyLoginOtpSubAdmin = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    const subAdmin = await SubAdmin.findOne({ phone });
+
+    if (!subAdmin || !subAdmin.otp) {
+      return res.status(400).json({
+        message: "Invalid request"
+      });
+    }
+
+    const sessionId = subAdmin.otp.code;
+
+    // 🔥 Verify OTP via 2Factor
+    const response = await axios.get(
+      `https://2factor.in/API/V1/${API_KEY}/SMS/VERIFY/${sessionId}/${otp}`
+    );
+
+    if (response.data.Status !== "Success") {
+      return res.status(401).json({
+        message: "Invalid or expired OTP"
+      });
+    }
+
+    // ✅ Clear OTP after success
+    subAdmin.otp = undefined;
+    await subAdmin.save();
+
+    const userData = subAdmin.toObject();
+    delete userData.password;
+
+    res.status(200).json({
+      message: "Login successful",
+      role: "sub-admin", // ✅ REQUIRED
+      user: userData
+    });
+
+  } catch (error) {
+    console.log("OTP VERIFY ERROR:", error.response?.data || error.message);
+
+    res.status(500).json({
+      message: "OTP verification failed",
+      error: error.message
+    });
   }
 };
 

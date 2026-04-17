@@ -51,6 +51,10 @@ const subAdminSchema = new mongoose.Schema(
   default: {}
 }
 ,
+otp: {
+  code: String,
+  expiresAt: Date
+},
 
   },
   {

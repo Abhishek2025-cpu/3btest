@@ -9,7 +9,9 @@ const {
   updateSubAdmin,
   updateSubAdminStatus,
   deleteSubAdmin,
-  setPermissions
+  setPermissions,
+  sendLoginOtpSubAdmin,
+  verifyLoginOtpSubAdmin
 } = require('../controllar/subAdminController');
 
 const {
@@ -36,7 +38,12 @@ router.post(
 /**
  * 🔓 LOGIN (PUBLIC)
  */
-router.post('/login', loginSubAdmin);
+router.post('/send-otp', sendLoginOtpSubAdmin);
+
+/**
+ * 🔓 VERIFY OTP (LOGIN STEP 2)
+ */
+router.post('/verify-otp', verifyLoginOtpSubAdmin);
 
 /**
  * 🔐 SET PERMISSIONS
