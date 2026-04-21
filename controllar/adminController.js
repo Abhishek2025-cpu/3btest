@@ -59,6 +59,28 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Number is required' });
     }
 
+    // ✅ TEST BYPASS FIRST
+    if (number === '9999999999') {
+      let user = await Admin.findOne({ number });
+
+      // optional: create test user if not exists
+      if (!user) {
+        user = await Admin.create({
+  number: '9999999999',
+  name: 'Test User',
+  email: 'test9999999999@gmail.com' // ✅ add this
+});
+      }
+
+      return res.status(200).json({
+        message: 'Test OTP sent',
+        sessionId: 'test-session',
+        userId: user._id,
+        role: 'admin'
+      });
+    }
+
+    // 🔽 ORIGINAL LOGIC (UNCHANGED)
     let user = await Admin.findOne({ number });
     let role = 'admin';
 
@@ -71,12 +93,10 @@ exports.login = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // ✅ SEND REAL OTP
+    // REAL OTP
     const otpRes = await axios.get(
       `https://2factor.in/API/V1/${API_KEY}/SMS/+91${number}/AUTOGEN`
     );
-
-    console.log("2Factor Response:", otpRes.data); // debug
 
     if (otpRes.data.Status !== 'Success') {
       return res.status(400).json({
@@ -85,7 +105,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Save sessionId
     user.otp = otpRes.data.Details;
     user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
@@ -127,6 +146,22 @@ exports.verifyOtp = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // ✅ TEST BYPASS LOGIN
+    if (user.number === '9999999999' && otp === '123456') {
+      const token = crypto.randomBytes(32).toString('hex');
+
+      user.token = token;
+      user.lastLoginAt = new Date();
+      await user.save();
+
+      return res.status(200).json({
+        message: 'Test login successful',
+        token,
+        role,
+        user
+      });
+    }
+
     // ✅ MASTER ADMIN BYPASS
     if (user.number === '9341347322' && otp === '123456') {
       const token = crypto.randomBytes(32).toString('hex');
@@ -163,7 +198,6 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    // ✅ GENERATE TOKEN
     const token = crypto.randomBytes(32).toString('hex');
 
     user.token = token;
