@@ -15,6 +15,7 @@ const {
 } = require('../controllar/subAdminController');
 
 const {
+  upload,   // ✅ ADD THIS
   uploadVerificationDoc,
   uploadProfilePic
 } = require('../middleware/uploadMiddleware');
@@ -28,10 +29,10 @@ const {
  */
 router.post(
   '/register',
-  // ❌ REMOVE THIS
-  // checkPermission('admins'),
-
-  uploadVerificationDoc,
+  upload.fields([
+    { name: 'verificationDocument', maxCount: 1 },
+    { name: 'profilePicture', maxCount: 1 }
+  ]),
   registerSubAdmin
 );
 
