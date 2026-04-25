@@ -509,54 +509,45 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    // 1. Params handle karein
     const page = parseInt(req.query.page) || 1;
     const limit = req.query.limit ? parseInt(req.query.limit) : 10; 
     const showAll = req.query.all === 'true'; 
 
-    // 2. Date 15 days ago
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-    // 3. Parallel Fetching (Speed badhane ke liye)
-    const [recentProductsDB, oldProductsDB, dimRes, allOrders] = await Promise.all([
+    // 1. Fetch Products
+    const [recentProductsDB, oldProductsDB, dimRes] = await Promise.all([
       Product.find({ createdAt: { $gte: fifteenDaysAgo } }).populate("categoryId", "name").sort({ createdAt: -1 }).lean(),
       Product.find({ createdAt: { $lt: fifteenDaysAgo } }).populate("categoryId", "name").sort({ position: 1 }).lean(),
-      axios.get("https://threebappbackend.onrender.com/api/dimensions/get-dimensions").catch(() => ({ data: [] })),
-      Order.find().lean() // Note: Agar orders bahut zyada hain toh ye slow ho sakta hai
+      axios.get("https://threebappbackend.onrender.com/api/dimensions/get-dimensions").catch(() => ({ data: [] }))
     ]);
 
-    // 4. Merge Products
     let productsFromDB = [...recentProductsDB, ...oldProductsDB];
     const totalProducts = productsFromDB.length;
 
-    // 5. Pagination Logic
-    let paginatedProducts = [];
-    if (showAll) {
-      paginatedProducts = productsFromDB;
-    } else {
-      const skip = (page - 1) * limit;
-      paginatedProducts = productsFromDB.slice(skip, skip + limit);
-    }
+    let paginatedProducts = showAll ? productsFromDB : productsFromDB.slice((page - 1) * limit, page * limit);
 
-    // 6. Dimensions Map
+    // 2. OPTIMIZED ORDER FETCH (Only fetch orders for the products on the current page)
+    const productIdsOnPage = paginatedProducts.map(p => p._id);
+    const relatedOrders = await Order.find({ 
+      "products.productId": { $in: productIdsOnPage } 
+    }).lean();
+
+    // 3. Dimensions Map
     const allDimensions = Array.isArray(dimRes.data) ? dimRes.data : [];
     const dimMap = new Map(allDimensions.map(d => [d._id.toString(), d.value]));
 
-    // 7. Translation (Only for paginated items to save API cost/time)
-    const translatedProducts = await translateResponse(
-      req,
-      paginatedProducts,
-      productFieldsToTranslate
-    );
+    // 4. Translation
+    const translatedProducts = await translateResponse(req, paginatedProducts, productFieldsToTranslate);
 
-    // 8. Format Data
+    // 5. Format Data
     const formattedProducts = translatedProducts.map(p => {
       const hasCategory = p.categoryId && typeof p.categoryId === "object";
       
-      // Order filtering logic
+      // Filter orders only for this specific product
       const productOrders = [];
-      allOrders.forEach(order => {
+      relatedOrders.forEach(order => {
         order.products?.forEach(prod => {
           if (prod.productId?.toString() === p._id.toString()) {
             productOrders.push({
@@ -571,8 +562,9 @@ exports.getAllProducts = async (req, res) => {
 
       return {
         ...p,
+        // FIX: Fallback to the original value if ID is not found in dimMap
         dimensions: Array.isArray(p.dimensions)
-          ? p.dimensions.map(id => dimMap.get(id?.toString()) || null)
+          ? p.dimensions.map(id => dimMap.get(id?.toString()) || id) 
           : [],
         orders: productOrders,
         categoryName: hasCategory ? p.categoryId.name : null,
@@ -900,60 +892,68 @@ exports.getProductMovements = async (req, res) => {
 
 
 
-
 exports.updateProduct = async (req, res) => {
   try {
     const { productId } = req.params;
     const updates = req.body;
 
-    // Convert numeric strings
-    if (updates.pricePerPiece) updates.pricePerPiece = Number(updates.pricePerPiece);
-    if (updates.totalPiecesPerBox) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
-    if (updates.discountPercentage) updates.discountPercentage = Number(updates.discountPercentage);
-
-    
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
-      return res.status(404).json({ success: false, message: ' Product not found' });
+      return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-   
+    // 1. Convert numeric strings & handle Position
+    if (updates.pricePerPiece !== undefined) updates.pricePerPiece = Number(updates.pricePerPiece);
+    if (updates.totalPiecesPerBox !== undefined) updates.totalPiecesPerBox = Number(updates.totalPiecesPerBox);
+    if (updates.discountPercentage !== undefined) updates.discountPercentage = Number(updates.discountPercentage);
+
     if (updates.position !== undefined) {
       const requestedPosition = Number(updates.position);
-
       if (!isNaN(requestedPosition)) {
-        const finalPosition = await adjustPositionsForUpdate(
+        updates.position = await adjustPositionsForUpdate(
           existingProduct.position,
           requestedPosition,
           existingProduct._id
         );
-
-        existingProduct.position = finalPosition;
       }
-
-      delete updates.position; // prevent overriding later
-    }
-    // -------------------------------------------------
-
-    // Step 2: Recalculate MRP if both values provided
-    if (updates.pricePerPiece && updates.totalPiecesPerBox) {
-      updates.mrpPerBox = updates.pricePerPiece * updates.totalPiecesPerBox;
     }
 
-    // Step 3: Calculate final price
-    const mrp = updates.mrpPerBox || existingProduct.mrpPerBox;
-    const discount =
-      updates.discountPercentage !== undefined
-        ? updates.discountPercentage
-        : existingProduct.discountPercentage || 0;
+    // 2. RECALCULATE MRP (Fix: Use existing values if one is missing in updates)
+    const price = updates.pricePerPiece !== undefined ? updates.pricePerPiece : existingProduct.pricePerPiece;
+    const pieces = updates.totalPiecesPerBox !== undefined ? updates.totalPiecesPerBox : existingProduct.totalPiecesPerBox;
+    
+    // Always calculate mrpPerBox based on the latest available numbers
+    updates.mrpPerBox = price * pieces;
 
-    updates.finalPricePerBox = Math.round(mrp - (mrp * discount) / 100);
+    // 3. RECALCULATE Final Price
+    const currentMRP = updates.mrpPerBox;
+    const currentDiscount = updates.discountPercentage !== undefined 
+      ? updates.discountPercentage 
+      : (existingProduct.discountPercentage || 0);
 
-    // Step 4: Handle description
+    updates.finalPricePerBox = Math.round(currentMRP - (currentMRP * currentDiscount) / 100);
+
+    // 4. Handle Dimensions (Fix: Prevent blanking out)
+    if (updates.dimensions) {
+      // If dimensions are passed as a string (e.g., from FormData), parse them
+      if (typeof updates.dimensions === 'string') {
+        try {
+          updates.dimensions = JSON.parse(updates.dimensions);
+        } catch (e) {
+          updates.dimensions = [updates.dimensions]; 
+        }
+      }
+      // If it's an empty array or null, you might want to decide if you allow clearing it
+      if (!Array.isArray(updates.dimensions) || updates.dimensions.length === 0) {
+        delete updates.dimensions; // Don't update if empty to prevent "blanking"
+      }
+    }
+
+    // 5. Handle description
     if (updates.description) {
       if (typeof updates.description === 'object') {
         updates.description = {
-          ...existingProduct.description.toObject?.() || existingProduct.description,
+          ...(existingProduct.description?.toObject?.() || existingProduct.description || {}),
           ...updates.description,
         };
       } else {
@@ -961,12 +961,12 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // Step 5: Optional categoryId
-    if (updates.categoryId === '' || updates.categoryId === undefined || updates.categoryId === null) {
+    // 6. Handle categoryId
+    if (updates.categoryId === '' || updates.categoryId === null) {
       delete updates.categoryId;
     }
 
-    // Step 6: Handle new images
+    // 7. Handle new images
     if (req.files?.images?.length > 0) {
       const uploadedImages = await Promise.all(
         req.files.images.map((file) =>
@@ -976,10 +976,8 @@ exports.updateProduct = async (req, res) => {
       updates.images = uploadedImages;
     }
 
-    // Step 7: Apply remaining updates
+    // 8. Apply updates and SAVE
     Object.assign(existingProduct, updates);
-
-    // SAVE updated product
     await existingProduct.save();
 
     res.json({
