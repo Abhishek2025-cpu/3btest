@@ -1189,3 +1189,56 @@ exports.searchProductsByName = async (req, res) => {
     });
   }
 };
+
+exports.changeImagePosition = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { imageId, newPosition } = req.body; // newPosition is 1-based (e.g., 1 for 1st, 5 for 5th)
+
+    // 1. Find the product
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // 2. Find the current index of the image
+    const currentIndex = product.images.findIndex(img => img.id === imageId);
+
+    if (currentIndex === -1) {
+      return res.status(400).json({ success: false, message: 'Image ID not found in this product' });
+    }
+
+    // 3. Calculate target index (ensure it stays within bounds)
+    // Convert 1-based position to 0-based index
+    let targetIndex = Number(newPosition) - 1;
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex >= product.images.length) targetIndex = product.images.length - 1;
+
+    // 4. Perform the Shift (n+1 logic)
+    // Remove the image from its current spot
+    const [movedImage] = product.images.splice(currentIndex, 1);
+    
+    // Insert it into the new spot
+    // .splice(index, 0, element) handles the shifting of all other elements automatically
+    product.images.splice(targetIndex, 0, movedImage);
+
+    // 5. Save the product
+    // Note: Since images is an array of objects, we mark it as modified
+    product.markModified('images');
+    await product.save();
+
+    res.status(200).json({
+      success: true,
+      message: `✅ Image moved from position ${currentIndex + 1} to ${targetIndex + 1}`,
+      images: product.images // Return updated array to sync UI
+    });
+
+  } catch (err) {
+    console.error('❌ Change image position failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error', 
+      error: err.message 
+    });
+  }
+};

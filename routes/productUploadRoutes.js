@@ -41,6 +41,8 @@ router.post(
   productController.createProductMovement
 );
 
+router.patch('/:productId/change-image-position', productController.changeImagePosition);
+
 
 
 
