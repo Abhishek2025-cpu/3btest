@@ -1011,41 +1011,66 @@ exports.deleteProduct = async (req, res) => {
 
 exports.filterAndSortProducts = async (req, res) => {
   try {
-    const { categoryIds, sortBy, minPrice, maxPrice } = req.query;
+    let { categoryIds, sortBy, minPrice, maxPrice } = req.query;
 
     const filter = {};
 
-    // ✅ Handle multiple categories
+    // ✅ Handle multiple categories safely
     if (categoryIds) {
-      const categoriesArray = categoryIds.split(','); // e.g., ['cat1', 'cat2']
+      const categoriesArray = categoryIds
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+
       filter.categoryId = { $in: categoriesArray };
     }
 
-    // ✅ Handle price range
+    // ✅ Handle price range safely
     if (minPrice || maxPrice) {
       filter.finalPricePerBox = {};
-      if (minPrice) filter.finalPricePerBox.$gte = parseFloat(minPrice);
-      if (maxPrice) filter.finalPricePerBox.$lte = parseFloat(maxPrice);
+
+      if (minPrice && !isNaN(minPrice)) {
+        filter.finalPricePerBox.$gte = Number(minPrice);
+      }
+
+      if (maxPrice && !isNaN(maxPrice)) {
+        filter.finalPricePerBox.$lte = Number(maxPrice);
+      }
     }
 
     // ✅ Sorting logic
     let sort = {};
-    if (sortBy === 'lowToHigh') {
-      sort.finalPricePerBox = 1;
-    } else if (sortBy === 'highToLow') {
-      sort.finalPricePerBox = -1;
+
+    switch (sortBy) {
+      case 'lowToHigh':
+        sort.finalPricePerBox = 1;
+        break;
+      case 'highToLow':
+        sort.finalPricePerBox = -1;
+        break;
+      case 'newest':
+        sort.createdAt = -1;
+        break;
+      default:
+        sort.createdAt = -1; // fallback
     }
 
-    const products = await Product.find(filter).sort(sort).lean();
+    const products = await Product.find(filter)
+      .sort(sort)
+      .populate('category') // ✅ since you're using virtual
+      .lean();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: '✅ Products filtered and sorted successfully',
+      count: products.length,
       products
     });
+
   } catch (err) {
     console.error('❌ Error filtering/sorting products:', err);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: '❌ Failed to filter/sort products',
       error: err.message

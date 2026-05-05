@@ -17,6 +17,7 @@ router.post('/add',
 router.get('/get-movement', productController.getProductMovements);
 router.get('/all', productController.getAllProducts);
 router.get('/scan/:productId', productController.getProductByQr);
+router.get('/filter-sort', productController.filterAndSortProducts);
 router.get('/:id', productController.getSingleProduct);
 
 
@@ -30,7 +31,7 @@ router.delete(
   "/products/:productId/images/:imageId",
   productController.deleteProductImage
 );
-router.get('/filter-sort', productController.filterAndSortProducts);
+
 
 router.post(
   '/movement',
