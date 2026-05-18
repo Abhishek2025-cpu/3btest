@@ -3,43 +3,23 @@ const bcrypt = require('bcryptjs');
 
 const subAdminSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: [true, 'Name is required.'],
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: [true, 'Email is required.'],
-      unique: true,
-      trim: true,
-      lowercase: true,
-    },
-    password: {
-      type: String,
-      required: [true, 'Password is required.'],
-    },
-    phone: {
-      type: String,
-      required: [true, 'Phone number is required.'],
-      unique: true,
-    },
-    dob: {
-      type: Date,
-      required: [true, 'Date of Birth is required.'],
-    },
-    address: {
-      type: String,
-      default: '',
-    },
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    phone: { type: String, required: true, unique: true },
+    dob: { type: Date, required: true },
+    address: { type: String, default: '' },
+
     verificationDocument: {
       url: { type: String, required: true },
       id: { type: String, required: true },
     },
+
     profilePicture: {
       url: { type: String, default: '' },
       id: { type: String, default: '' },
     },
+
     status: {
       type: String,
       enum: ['active', 'inactive'],
@@ -47,19 +27,16 @@ const subAdminSchema = new mongoose.Schema(
     },
 
     permissions: {
-  type: mongoose.Schema.Types.Mixed,
-  default: {}
-}
-,
-otp: {
-  code: String,
-  expiresAt: Date
-},
-
+    type: mongoose.Schema.Types.Mixed,
+    default: false
   },
-  {
-    timestamps: true,
-  }
+
+    otp: {
+      code: String,
+      expiresAt: Date
+    }
+  },
+  { timestamps: true }
 );
 
 // Mongoose middleware to hash password before saving

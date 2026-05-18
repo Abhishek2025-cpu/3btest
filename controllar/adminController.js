@@ -210,12 +210,19 @@ exports.verifyOtp = async (req, res) => {
     const userObj = user.toObject();
     delete userObj.password;
 
-    return res.status(200).json({
-      message: 'Login successful',
-      token,
-      role,
-      user: userObj
-    });
+
+
+// if subadmin and permissions not assigned, send false
+if (role === 'subadmin' && userObj.permissions === undefined) {
+  userObj.permissions = false;
+}
+
+return res.status(200).json({
+  message: 'Login successful',
+  token,
+  role,
+  user: userObj
+});
 
   } catch (err) {
     console.error('OTP Verify Error:', err);
